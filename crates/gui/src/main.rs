@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use chrono::Timelike;
+use chrono::{Datelike, NaiveDate, Timelike};
 use clap::Parser;
 use eframe::egui::{self, Color32, Pos2, Rect, Vec2, Stroke, Rounding, Shape};
 use timetrace_core::{
@@ -58,6 +58,12 @@ impl Lang {
     fn enable(&self) -> &str { match self { Lang::En => "Enable", Lang::Zh => "启用" } }
     fn all(&self) -> &str { "All" }
     fn empty(&self) -> &str { match self { Lang::En => "No data yet", Lang::Zh => "暂无数据" } }
+    fn today_label(&self) -> &str { match self { Lang::En => "Today", Lang::Zh => "今天" } }
+    fn yesterday(&self) -> &str { match self { Lang::En => "Yesterday", Lang::Zh => "昨天" } }
+    fn week(&self) -> &str { match self { Lang::En => "Week", Lang::Zh => "本周" } }
+    fn month(&self) -> &str { match self { Lang::En => "Month", Lang::Zh => "本月" } }
+    fn from(&self) -> &str { match self { Lang::En => "From", Lang::Zh => "从" } }
+    fn to(&self) -> &str { match self { Lang::En => "to", Lang::Zh => "到" } }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -132,13 +138,40 @@ struct GuiApp {
     selected: Option<usize>,
     show_log: bool,
     icons: icons::IconCache,
+    range_start: NaiveDate,
+    range_end: NaiveDate,
+    range_preset: RangePreset,
 }
+
+#[derive(Clone, Copy, PartialEq)]
+enum RangePreset { Today, Yesterday, Week, Month, Custom }
 
 impl GuiApp {
     fn new(db: Arc<dyn DataStore>) -> Self {
+        let today = chrono::Local::now().date_naive();
         Self { startup: DataStore::get_all_startup_entries(&*db), db,
             panel: Panel::Dashboard, lang: Lang::Zh, start_filter: StartFilter::All,
-            selected: None, show_log: false, icons: icons::IconCache::new() }
+            selected: None, show_log: false, icons: icons::IconCache::new(),
+            range_start: today, range_end: today, range_preset: RangePreset::Today }
+    }
+
+    fn apply_preset(&mut self, preset: RangePreset) {
+        let today = chrono::Local::now().date_naive();
+        self.range_preset = preset;
+        match preset {
+            RangePreset::Today => { self.range_start = today; self.range_end = today; }
+            RangePreset::Yesterday => { self.range_start = today - chrono::Duration::days(1); self.range_end = self.range_start; }
+            RangePreset::Week => {
+                let weekday = today.weekday().num_days_from_monday();
+                self.range_start = today - chrono::Duration::days(weekday as i64);
+                self.range_end = today;
+            }
+            RangePreset::Month => {
+                self.range_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
+                self.range_end = today;
+            }
+            RangePreset::Custom => {}
+        }
     }
 }
 
@@ -180,26 +213,30 @@ impl eframe::App for GuiApp {
 impl GuiApp {
     fn dashboard(&mut self, ui: &mut egui::Ui) {
         let l = self.lang;
-        let today = chrono::Local::now().date_naive();
-        let mut split = DataStore::get_usage_split(&*self.db, today, today);
+        let start = self.range_start;
+        let end = self.range_end;
+        let mut split = DataStore::get_usage_split(&*self.db, start, end);
         let all_total = DataStore::total_tracked_seconds(&*self.db);
         let started = DataStore::recording_started_at(&*self.db);
 
-        // Merge the active session into its own entry (duration_secs is NULL until closed)
-        if let Some(active) = DataStore::get_active_session(&*self.db) {
-            let elapsed = (chrono::Utc::now() - active.started_at).num_seconds().max(0);
-            if elapsed > 0 {
-                let app_name = active.app_name.clone();
-                let mut found = false;
-                for s in split.iter_mut() {
-                    if s.app_name == app_name {
-                        s.active_seconds += elapsed;
-                        found = true;
-                        break;
+        // Merge the active session into its own entry — only when viewing today
+        let today = chrono::Local::now().date_naive();
+        if start == today && end == today {
+            if let Some(active) = DataStore::get_active_session(&*self.db) {
+                let elapsed = (chrono::Utc::now() - active.started_at).num_seconds().max(0);
+                if elapsed > 0 {
+                    let app_name = active.app_name.clone();
+                    let mut found = false;
+                    for s in split.iter_mut() {
+                        if s.app_name == app_name {
+                            s.active_seconds += elapsed;
+                            found = true;
+                            break;
+                        }
                     }
-                }
-                if !found {
-                    split.push(AppUsageSplit { app_name, active_seconds: elapsed, idle_seconds: 0 });
+                    if !found {
+                        split.push(AppUsageSplit { app_name, active_seconds: elapsed, idle_seconds: 0 });
+                    }
                 }
             }
         }
@@ -225,6 +262,36 @@ impl GuiApp {
             let days = (chrono::Utc::now() - s).num_days();
             ui.label(format!("{} {} ({}d)  |  {} {}h {}m", l.since(), s.format("%Y-%m-%d"), days, l.total(), all_total / 3600, (all_total % 3600) / 60));
         }
+
+        // ── Date range selector ──
+        ui.horizontal(|ui| {
+            for (label, preset) in [
+                (l.today_label(), RangePreset::Today),
+                (l.yesterday(), RangePreset::Yesterday),
+                (l.week(), RangePreset::Week),
+                (l.month(), RangePreset::Month),
+                ("Custom", RangePreset::Custom),
+            ] {
+                if ui.selectable_label(self.range_preset == preset, label).clicked() { self.apply_preset(preset); }
+            }
+            ui.separator();
+            if self.range_preset == RangePreset::Custom {
+                ui.label(format!("{} {}", l.from(), self.range_start.format("%m-%d")));
+                egui::ComboBox::from_id_salt("start_date").selected_text(self.range_start.format("%Y-%m-%d").to_string())
+                    .show_ui(ui, |ui| {
+                        let d0 = self.range_start - chrono::Duration::days(30);
+                        for i in 0..=30 {
+                            let d = d0 + chrono::Duration::days(i);
+                            if ui.selectable_label(d == self.range_start, d.format("%m-%d").to_string()).clicked() { self.range_start = d; }
+                        }
+                    });
+                ui.label(l.to());
+                ui.label(format!("{}", self.range_end.format("%m-%d")));
+            } else {
+                ui.label(format!("{}  {}", self.range_start.format("%m-%d"), self.range_end.format("%m-%d")));
+            }
+        });
+        ui.separator();
 
         // Wrap charts + list in scroll area so nothing gets cut
         egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
@@ -346,6 +413,10 @@ impl GuiApp {
 
         ui.add_space(10.0);
 
+        // ── Separator between charts and list ──
+        ui.separator();
+        ui.add_space(4.0);
+
         // ── App list + detail ──
         let sel_idx = self.selected;
         ui.horizontal(|ui| {
@@ -367,7 +438,7 @@ impl GuiApp {
                     ui.label("-->");
                     ui.vertical(|ui| {
                         ui.label(format!("{} {}", s.app_name, l.pages())); ui.separator();
-                        let titles = DataStore::get_window_titles(&*self.db, &s.app_name, today);
+                        let titles = DataStore::get_window_titles(&*self.db, &s.app_name, end);
                         if titles.is_empty() { ui.label(l.empty()); }
                         else {
                             let tot: i64 = titles.iter().map(|(_,d)| d).sum();

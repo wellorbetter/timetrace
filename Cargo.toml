@@ -35,6 +35,7 @@ crossterm = "0.29"
 eframe = "0.31"
 egui = "0.31"
 egui_plot = "0.31"
+egui_extras = { version = "0.31", features = ["datepicker"] }
 tray-icon = "0.19"
 winreg = "0.54"
 
