@@ -24,7 +24,7 @@ impl WindowResolver for Win32WindowResolver {
             GetWindowThreadProcessId(hwnd, Some(&mut pid));
             if pid == 0 { return None; }
 
-            let exe_path = get_process_path(pid)?;
+            let exe_path = get_process_path(pid).unwrap_or_else(|| format!("pid:{}", pid));
             let display_name = exe_path.rsplit('\\').next().unwrap_or(&exe_path)
                 .trim_end_matches(".exe").to_string();
             let title = get_window_title_text(hwnd);
@@ -37,19 +37,16 @@ impl WindowResolver for Win32WindowResolver {
 }
 
 unsafe fn get_process_path(pid: u32) -> Option<String> {
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()? };
+    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
     let _guard = HandleGuard(handle);
-
     let mut buffer = vec![0u16; 260];
     let mut size: u32 = buffer.len() as u32;
-
-    let result = unsafe { QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size) };
-    if result.is_err() {
-        return Some(format!("Process(PID:{})", pid));
+    if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size).is_ok() {
+        buffer.truncate(size as usize);
+        Some(String::from_utf16_lossy(&buffer))
+    } else {
+        Some(format!("process-{}", pid))
     }
-
-    buffer.truncate(size as usize);
-    Some(String::from_utf16_lossy(&buffer))
 }
 
 unsafe fn get_window_title_text(hwnd: HWND) -> Option<String> {

@@ -112,7 +112,6 @@ impl GuiApp {
                 ui.add_space(80.0);
                 ui.heading("TimeTrace");
                 ui.label("Tracking is active. Switch between apps to see data.");
-                ui.label(format!("Process ID: {}", std::process::id()));
             });
             return;
         }
@@ -246,13 +245,14 @@ impl GuiApp {
 
     // ── Startup ──
 
-    fn startup_panel(&self, ui: &mut egui::Ui) {
+    fn startup_panel(&mut self, ui: &mut egui::Ui) {
         let on = self.startup.iter().filter(|e| e.enabled).count();
         ui.heading(format!("Startup  |  {} entries, {} enabled", self.startup.len(), on));
         ui.separator();
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for e in &self.startup {
+            let mut to_toggle: Option<(usize, bool)> = None;
+            for (i, e) in self.startup.iter().enumerate() {
                 let st = if e.enabled { "ON " } else { "OFF" };
                 let st_color = if e.enabled { Color32::GREEN } else { Color32::GRAY };
                 ui.horizontal(|ui| {
@@ -260,7 +260,25 @@ impl GuiApp {
                     ui.label(trunc(&e.name, 28));
                     ui.label(format!("[{}]", e.source));
                     ui.label(trunc(&e.command, 40));
+                    if ui.small_button(if e.enabled { "Disable" } else { "Enable" }).clicked() {
+                        to_toggle = Some((i, !e.enabled));
+                    }
                 });
+            }
+            // Apply toggles after the loop (avoid borrow issues)
+            if let Some((i, enable)) = to_toggle {
+                let entry = &self.startup[i];
+                let scanner = WindowsStartupScanner::new();
+                if enable {
+                    if scanner.enable(entry).is_ok() {
+                        DataStore::set_startup_enabled(&*self.db, entry.id, true, None, None);
+                    }
+                } else {
+                    if let Ok(r) = scanner.disable(entry) {
+                        DataStore::set_startup_enabled(&*self.db, entry.id, false, r.backup_value.as_deref(), r.backup_path.as_deref());
+                    }
+                }
+                self.startup = DataStore::get_all_startup_entries(&*self.db);
             }
         });
     }
