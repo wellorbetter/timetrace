@@ -61,7 +61,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Launch TUI
     let mut terminal = ratatui::init();
     let process_query = Box::new(SysinfoProcessQuery::new());
+    // Auto-scan startup on first launch
     let mut app = App::new(db.clone(), process_query);
+    if app.needs_startup_scan() { app.do_startup_scan(); }
 
     while !app.should_quit() {
         terminal.draw(|frame| app.render(frame))?;

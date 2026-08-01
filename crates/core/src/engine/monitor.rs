@@ -56,8 +56,11 @@ where
                     session_start = Instant::now();
                 } else if !is_idle {
                     if let Some(fg) = foreground {
-                        let changed = current_app.as_ref().map_or(true, |c| c.exe_path != fg.exe_path);
-                        if changed {
+                        // Track per-window-title: "Edge — Bilibili" vs "Edge — GitHub"
+                        let same = current_app.as_ref().map_or(false, |c| {
+                            c.exe_path == fg.exe_path && c.window_title == fg.window_title
+                        });
+                        if !same {
                             let prev = current_app.take();
                             sink.accept(TrackedEvent::AppSwitched { previous: prev, current: fg.clone(), timestamp: chrono::Utc::now() });
                             current_app = Some(fg);

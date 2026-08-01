@@ -86,6 +86,10 @@ pub trait DataStore: Send + Sync {
     /// Returns 24 entries (one per hour), each with total seconds.
     fn get_hourly_breakdown(&self, app_name: &str, date: NaiveDate) -> [i64; 24];
 
+    /// Get per-window-title breakdown for an app on a date.
+    /// Returns Vec of (window_title, total_seconds).
+    fn get_window_titles(&self, app_path: &str, date: NaiveDate) -> Vec<(String, i64)>;
+
     // ── Startup CRUD ──
 
     /// Insert or update startup entries from a scan.
