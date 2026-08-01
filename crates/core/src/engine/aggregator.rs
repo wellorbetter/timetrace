@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{Local, Utc};
 use tracing::debug;
 
 use crate::contracts::events::{EventSink, TrackedEvent};
@@ -53,7 +53,7 @@ impl SessionAggregator {
             ended_at: None,
             duration_secs: None,
             is_idle: app.is_idle(),
-            date: now.date_naive(),
+            date: Local::now().date_naive(),
         };
         let id = self.db.insert_session(&session);
         self.current_session_id = Some(id);

@@ -86,10 +86,9 @@ impl EventSink for DebugAggregator {
             _ => {}
         }
         self.inner.accept(event);
-        // Verify DB write
         let today = chrono::Local::now().date_naive();
         let count = self.inner.db().get_sessions_by_date(today).len();
-        if count > 0 && count % 5 == 1 { log(&format!("db: {} sessions today", count)); }
+        log(&format!("db: {} sessions", count));
     }
 }
 
