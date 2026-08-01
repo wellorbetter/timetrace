@@ -263,11 +263,18 @@ impl GuiApp {
                         let active_rect = Rect::from_min_size(Pos2::new(x + 1.0, bottom - ah), Vec2::new(bar_w - 2.0, ah));
                         painter.rect_filled(active_rect, Rounding::same(if s.idle_seconds > 0 { 0 } else { 4 }), clr(&s.app_name));
                     }
-                    // Idle part stacked on top (gray, rounded top)
+                    // Idle part stacked on top — distinct hatched gray (different from white bg)
                     if s.idle_seconds > 0 {
                         let ih = s.idle_seconds as f32 / max_val * chart_h;
                         let idle_rect = Rect::from_min_size(Pos2::new(x + 1.0, bottom - total_h), Vec2::new(bar_w - 2.0, ih));
-                        painter.rect_filled(idle_rect, Rounding::same(4), m3::OUTLINE.gamma_multiply(0.45));
+                        // Diagonal hatch: base gray + lighter stripes
+                        painter.rect_filled(idle_rect, Rounding::same(4), Color32::from_gray(140).gamma_multiply(0.85));
+                        let stripe = Color32::from_gray(180).gamma_multiply(0.7);
+                        let n = (ih / 6.0) as i32;
+                        for k in 0..n.max(1) {
+                            let sy = idle_rect.bottom() - 4.0 - k as f32 * 6.0;
+                            painter.line_segment([Pos2::new(idle_rect.left() + 1.0, sy), Pos2::new(idle_rect.right() - 1.0, sy - 2.0)], Stroke::new(1.0, stripe));
+                        }
                     }
                     // Value label: inside bar if tall enough, else above
                     let mins = (s.active_seconds + s.idle_seconds) / 60;
@@ -288,13 +295,16 @@ impl GuiApp {
                 ui.set_width(pw);
                 ui.label(l.dist());
                 let size = (chart_h * 0.9).clamp(100.0, 150.0);
-                let (resp, painter) = ui.allocate_painter(Vec2::new(size, size), egui::Sense::hover());
-                let cx = resp.rect.center().x;
+                // Allocate extra width for right-side labels
+                let (resp, painter) = ui.allocate_painter(Vec2::new(size + 100.0, size), egui::Sense::hover());
+                let pie_left = resp.rect.left();
+                let cx = pie_left + size / 2.0;
                 let cy = resp.rect.center().y;
                 let r = size / 2.0 - 3.0;
                 let total = top8.iter().map(|s| s.active_seconds).sum::<i64>().max(1) as f32;
                 let mut angle = -TAU / 4.0;
 
+                // Draw wedges
                 for s in &top8 {
                     let sweep = (s.active_seconds as f32 / total) * TAU;
                     let color = clr(&s.app_name);
@@ -308,31 +318,29 @@ impl GuiApp {
                     painter.add(Shape::convex_polygon(pts, color, Stroke::NONE));
                     angle += sweep;
                 }
-                // Ring separator + percentage labels
+
+                // Leader lines to right-side labels
+                let label_x = pie_left + size + 6.0;
+                let mut label_y = resp.rect.top() + 6.0;
                 let mut a = -TAU / 4.0;
                 for s in &top8 {
                     let sweep = (s.active_seconds as f32 / total) * TAU;
                     let mid = a + sweep / 2.0;
                     let pct = (s.active_seconds as f32 / total * 100.0).round() as i32;
-                    if pct >= 5 {
-                        let lx = cx + (r * 0.62) * mid.cos();
-                        let ly = cy + (r * 0.62) * mid.sin();
-                        painter.text(Pos2::new(lx, ly), egui::Align2::CENTER_CENTER, format!("{}%", pct),
-                            egui::FontId::proportional(9.0), Color32::WHITE);
+                    if pct >= 4 {
+                        // Start point on slice edge
+                        let sx = cx + r * mid.cos();
+                        let sy = cy + r * mid.sin();
+                        // Label at top-right column
+                        let label = format!("{} {}%", trunc(&s.app_name, 10), pct);
+                        painter.text(Pos2::new(label_x, label_y), egui::Align2::LEFT_CENTER, &label,
+                            egui::FontId::proportional(9.0), m3::ON_SURFACE);
+                        painter.line_segment([Pos2::new(sx, sy), Pos2::new(label_x - 2.0, label_y)],
+                            Stroke::new(1.0, m3::OUTLINE.gamma_multiply(0.6)));
+                        label_y += 13.0;
                     }
                     a += sweep;
                 }
-
-                // Legend below pie
-                ui.add_space(4.0);
-                egui::Grid::new("pie_legend").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
-                    for s in &top8 {
-                        let (r, p) = ui.allocate_painter(Vec2::new(10.0, 10.0), egui::Sense::hover());
-                        p.rect_filled(r.rect, 2.0, clr(&s.app_name));
-                        ui.label(trunc(&s.app_name, 12));
-                        ui.end_row();
-                    }
-                });
             });
         });
 
@@ -474,28 +482,18 @@ fn extract_exe_name(cmd: &str) -> Option<String> {
 
 /// Extract the full exe path from a command line.
 fn extract_exe_path(cmd: &str) -> Option<String> {
-    let cleaned = cmd.trim_matches('"').trim();
-    if let Some(idx) = cleaned.to_lowercase().find(".exe") {
-        // Find the start of the path (after the last quote/space before the exe)
-        let end = idx + 4;
-        let mut start = 0;
-        // If there's a quote, use it as start
-        if let Some(q) = cleaned.find('"') { start = q + 1; }
-        // Walk back to the last space or quote
-        for (i, c) in cleaned[..end].char_indices().rev() {
-            if c == ' ' || c == '\"' || c == '"' {
-                start = i + 1;
-                break;
-            }
-        }
-        // Handle environment variables like %windir%
-        let path = &cleaned[start..end];
-        if path.starts_with('%') && path.contains("\\") {
-            return Some(expand_env(path));
-        }
-        return Some(path.to_string());
-    }
-    None
+    let lower = cmd.to_lowercase();
+    let idx = lower.find(".exe")?;
+    let end = idx + 4;
+    if end > cmd.len() { return None; }
+    let before = &cmd[..end];
+    // Start after the last quote or space before the exe (handles "C:\\x\\y.exe" args)
+    let start = before.rfind('"').map(|q| q + 1)
+        .or_else(|| before.rfind(' ').map(|s| s + 1))
+        .unwrap_or(0);
+    if start > end { return None; }
+    let path = &cmd[start..end];
+    if path.starts_with('%') { Some(expand_env(path)) } else { Some(path.to_string()) }
 }
 
 /// Expand %VAR% in a path using std::env::var.

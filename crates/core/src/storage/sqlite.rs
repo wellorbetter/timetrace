@@ -652,3 +652,89 @@ mod tests {
         assert_eq!(store.total_tracked_seconds(), 1000);
     }
 }
+
+#[cfg(test)]
+mod sqlite_tests {
+    use super::*;
+    use chrono::{Duration, Utc};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn temp_store() -> SqliteStore {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!("tt_sqlite_test_{}_{}.db", std::process::id(), n));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(&format!("{}-shm", path.display()));
+        SqliteStore::open(path).unwrap()
+    }
+
+    fn sess(app: &str, started: DateTime<Utc>, dur: i64, idle: bool) -> SessionRecord {
+        SessionRecord {
+            id: 0, app_path: format!("c:/{app}.exe"), app_name: app.into(),
+            window_title: None, started_at: started, ended_at: Some(started + Duration::seconds(dur)),
+            duration_secs: Some(dur), is_idle: idle, date: started.date_naive(),
+        }
+    }
+
+    #[test]
+    fn test_usage_split_active_and_idle() {
+        let store = temp_store();
+        let now = Utc::now();
+        let today = now.date_naive();
+        store.insert_session(&sess("code", now - Duration::hours(2), 3600, false));
+        store.insert_session(&sess("code", now - Duration::hours(1), 1800, true));
+        store.insert_session(&sess("edge", now - Duration::minutes(30), 900, false));
+
+        let split = store.get_usage_split(today, today);
+        assert_eq!(split.len(), 2);
+        let code = split.iter().find(|s| s.app_name == "code").unwrap();
+        assert_eq!(code.active_seconds, 3600);
+        assert_eq!(code.idle_seconds, 1800);
+    }
+
+    #[test]
+    fn test_zero_duration_sessions_excluded() {
+        let store = temp_store();
+        let now = Utc::now();
+        let today = now.date_naive();
+        store.insert_session(&sess("code", now, 0, false));   // 0s — excluded
+        store.insert_session(&sess("edge", now - Duration::minutes(5), 300, false));
+
+        let split = store.get_usage_split(today, today);
+        assert_eq!(split.len(), 1);
+        assert_eq!(split[0].app_name, "edge");
+    }
+
+    #[test]
+    fn test_window_titles_via_page_visits() {
+        let store = temp_store();
+        let now = Utc::now();
+        let today = now.date_naive();
+        let sid = store.insert_session(&sess("edge", now - Duration::minutes(20), 1200, false));
+
+        let v1 = store.start_page_visit(sid, "edge", Some("bilibili - Edge"), today);
+        let _v2 = store.start_page_visit(sid, "edge", Some("github - Edge"), today);
+        store.close_page_visit(v1, now + Duration::minutes(5));
+        store.close_page_visit(_v2, now + Duration::minutes(10));
+
+        let titles = store.get_window_titles("edge", today);
+        assert!(titles.iter().any(|(t, _)| t == "bilibili - Edge"), "bilibili missing: {titles:?}");
+        assert!(titles.iter().any(|(t, _)| t == "github - Edge"), "github missing: {titles:?}");
+    }
+
+    #[test]
+    fn test_recording_stats() {
+        let store = temp_store();
+        let now = Utc::now();
+        let today = now.date_naive();
+        let t1 = now - Duration::days(2);
+        store.insert_session(&sess("code", t1, 7200, false));
+        store.insert_session(&sess("code", now - Duration::hours(1), 600, true)); // idle excluded
+
+        assert_eq!(store.recording_started_at().unwrap().date_naive(), t1.date_naive());
+        assert_eq!(store.total_tracked_seconds(), 7200); // idle not counted
+        assert!(store.total_tracked_in_range(today, today) >= 0);
+    }
+}
