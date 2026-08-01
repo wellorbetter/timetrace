@@ -37,6 +37,14 @@ pub struct AppUsageSummary {
     pub rank: usize,
 }
 
+/// Per-app usage split between active and idle time.
+#[derive(Debug, Clone)]
+pub struct AppUsageSplit {
+    pub app_name: String,
+    pub active_seconds: i64,
+    pub idle_seconds: i64,
+}
+
 /// User-assigned metadata for an application.
 #[derive(Debug, Clone)]
 pub struct AppMetaRecord {
@@ -81,6 +89,9 @@ pub trait DataStore: Send + Sync {
 
     /// Get top N apps by total usage time in a date range.
     fn get_top_apps(&self, start: NaiveDate, end: NaiveDate, limit: usize) -> Vec<AppUsageSummary>;
+
+    /// Get per-app active + idle time split for a date range.
+    fn get_usage_split(&self, start: NaiveDate, end: NaiveDate) -> Vec<AppUsageSplit>;
 
     /// Get hourly breakdown for a specific app on a specific date.
     /// Returns 24 entries (one per hour), each with total seconds.

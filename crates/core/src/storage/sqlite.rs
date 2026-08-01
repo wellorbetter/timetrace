@@ -11,7 +11,7 @@ use rusqlite::{params, Connection};
 use tracing::{debug, warn};
 
 use crate::contracts::{
-    AppMetaRecord, AppUsageSummary, DataStore, SessionRecord, StartupEntryRecord,
+    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord, StartupEntryRecord,
 };
 use crate::storage::schema;
 
@@ -171,7 +171,7 @@ impl DataStore for SqliteStore {
             .prepare(
                 "SELECT app_name, COALESCE(SUM(duration_secs), 0) as total, COUNT(*) as sessions
                  FROM usage_sessions
-                 WHERE date >= ?1 AND date <= ?2 AND is_idle = 0 AND duration_secs IS NOT NULL
+                 WHERE date >= ?1 AND date <= ?2 AND is_idle = 0 AND duration_secs > 0
                  GROUP BY app_name
                  ORDER BY total DESC
                  LIMIT ?3",
@@ -196,6 +196,21 @@ impl DataStore for SqliteStore {
             s
         })
         .collect()
+    }
+
+    fn get_usage_split(&self, start: NaiveDate, end: NaiveDate) -> Vec<AppUsageSplit> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT app_name,
+                    COALESCE(SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END), 0)
+             FROM usage_sessions
+             WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0
+             GROUP BY app_name ORDER BY 2 DESC"
+        ).unwrap();
+        stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+            Ok(AppUsageSplit { app_name: row.get(0)?, active_seconds: row.get(1)?, idle_seconds: row.get(2)? })
+        }).unwrap().filter_map(|r| r.ok()).collect()
     }
 
     fn get_hourly_breakdown(&self, app_name: &str, date: NaiveDate) -> [i64; 24] {
@@ -477,6 +492,10 @@ impl DataStore for MemoryStore {
     }
 
     fn get_top_apps(&self, _start: NaiveDate, _end: NaiveDate, _limit: usize) -> Vec<AppUsageSummary> {
+        vec![]
+    }
+
+    fn get_usage_split(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<AppUsageSplit> {
         vec![]
     }
 

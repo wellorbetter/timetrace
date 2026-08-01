@@ -14,7 +14,7 @@ pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, 
 pub use contracts::idle::IdleDetector;
 pub use contracts::process::{ProcessInfo, ProcessQuery, ProcessStatus};
 pub use contracts::startup::{DisableResult, StartupEntryRecord, StartupScanner};
-pub use contracts::storage::{AppMetaRecord, AppUsageSummary, DataStore, SessionRecord};
+pub use contracts::storage::{AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord};
 pub use contracts::window::WindowResolver;
 pub use engine::{
     run_monitor_loop, SessionAggregator, SysinfoProcessQuery,
