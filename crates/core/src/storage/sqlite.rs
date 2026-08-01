@@ -142,15 +142,16 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT app_name, total_seconds, session_count
-                 FROM daily_summary WHERE date = ?1 ORDER BY total_seconds DESC",
+                "SELECT app_name, COALESCE(SUM(duration_secs), 0) as total, COUNT(*) as sessions
+                 FROM usage_sessions WHERE date = ?1 AND is_idle = 0 AND duration_secs IS NOT NULL
+                 GROUP BY app_name ORDER BY total DESC",
             )
             .unwrap();
         stmt.query_map(params![date.to_string()], |row| {
             Ok(AppUsageSummary {
                 app_name: row.get(0)?,
                 total_seconds: row.get(1)?,
-                session_count: row.get(2)?,
+                session_count: row.get::<_, i64>(2)? as i64,
                 rank: 0,
             })
         })
@@ -168,9 +169,9 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT app_name, SUM(total_seconds) as total, SUM(session_count) as sessions
-                 FROM daily_summary
-                 WHERE date >= ?1 AND date <= ?2 AND app_name != '__IDLE__'
+                "SELECT app_name, COALESCE(SUM(duration_secs), 0) as total, COUNT(*) as sessions
+                 FROM usage_sessions
+                 WHERE date >= ?1 AND date <= ?2 AND is_idle = 0 AND duration_secs IS NOT NULL
                  GROUP BY app_name
                  ORDER BY total DESC
                  LIMIT ?3",

@@ -13,16 +13,9 @@ path = "src/main.rs"
 timetrace-core = { path = "../core" }
 eframe.workspace = true
 egui.workspace = true
-egui_plot.workspace = true
-tray-icon.workspace = true
 clap.workspace = true
 chrono.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 dirs.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 seahash.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows.workspace = true
