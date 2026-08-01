@@ -11,23 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 timetrace-core = { path = "../core" }
-
-# ── TUI ──
-ratatui = "0.30"
-crossterm = "0.29"
-
-# ── CLI ──
-clap = { version = "4", features = ["derive"] }
-
-# ── Foundation ──
-chrono = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-seahash = "4"
-
-[profile.release]
-opt-level = "z"
-lto = true
-strip = "symbols"
-codegen-units = 1
-panic = "abort"
+ratatui.workspace = true
+crossterm.workspace = true
+clap.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+seahash.workspace = true

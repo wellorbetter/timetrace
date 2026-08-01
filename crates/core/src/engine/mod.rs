@@ -7,7 +7,7 @@ pub mod window_win32;
 
 pub use aggregator::SessionAggregator;
 pub use idle_win32::Win32IdleDetector;
-pub use monitor::{run_monitor_loop, ForegroundMonitor};
+pub use monitor::run_monitor_loop;
 pub use process_sysinfo::SysinfoProcessQuery;
 pub use startup_win32::WindowsStartupScanner;
 pub use window_win32::Win32WindowResolver;

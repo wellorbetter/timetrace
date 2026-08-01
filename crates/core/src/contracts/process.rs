@@ -38,7 +38,7 @@ impl std::fmt::Display for ProcessStatus {
 /// Implemented by `engine::process_sysinfo` using the `sysinfo` crate.
 pub trait ProcessQuery: Send + Sync {
     /// Refresh process list. Call before `list_processes()` to get fresh data.
-    fn refresh(&mut self);
+    fn refresh(&self);
 
     /// Returns all running processes with resource stats.
     /// Call `refresh()` first to update the data.

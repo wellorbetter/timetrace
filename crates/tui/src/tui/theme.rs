@@ -2,6 +2,7 @@
 //!
 //! Colors adapt to: system dark/light mode, time of day (warmth), and season.
 
+use chrono::{Datelike, Local, Timelike};
 use ratatui::style::Color;
 
 /// Complete color palette for the TUI.

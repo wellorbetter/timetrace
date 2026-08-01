@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use chrono::{Local, NaiveDate, Utc};
+use chrono::{Local, NaiveDate, Timelike, Utc};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -15,9 +15,9 @@ use ratatui::{
 };
 
 use timetrace_core::{
-    storage::{AppUsageSummary, DataStore},
-    process::{ProcessInfo, ProcessQuery},
-    startup::{StartupEntryRecord, StartupScanner},
+    AppUsageSummary, DataStore, SessionRecord,
+    ProcessInfo, ProcessQuery,
+    StartupEntryRecord, StartupScanner,
 };
 
 use super::theme::{current_palette, Palette};
@@ -112,10 +112,10 @@ impl App {
                 }
                 KeyCode::Char(' ') => {
                     if self.tab == Tab::Startup {
-                        let entries: Vec<_> = self.filtered_startup();
-                        if let Some(e) = entries.get(self.selected_row) {
-                            if e.enabled { self.disable_entry(e); }
-                            else { self.enable_entry(e); }
+                        let entry = self.filtered_startup().get(self.selected_row).map(|e| (*e).clone());
+                        if let Some(e) = entry {
+                            if e.enabled { self.disable_entry(&e); }
+                            else { self.enable_entry(&e); }
                         }
                     }
                 }
@@ -184,7 +184,7 @@ impl App {
     // ── Render ──
 
     pub fn render(&mut self, frame: &mut Frame) {
-        let p = &self.palette;
+        let p = self.palette.clone();
         let area = frame.area();
 
         let chunks = Layout::default()
@@ -206,9 +206,9 @@ impl App {
 
         // Content
         match self.tab {
-            Tab::Dashboard => self.render_dashboard(frame, chunks[1], p),
-            Tab::Processes => self.render_processes(frame, chunks[1], p),
-            Tab::Startup => self.render_startup(frame, chunks[1], p),
+            Tab::Dashboard => self.render_dashboard(frame, chunks[1], &p),
+            Tab::Processes => self.render_processes(frame, chunks[1], &p),
+            Tab::Startup => self.render_startup(frame, chunks[1], &p),
         }
 
         // Status bar
@@ -222,7 +222,7 @@ impl App {
             chunks[2],
         );
 
-        if !matches!(self.dialog, Dialog::None) { self.render_dialog(frame, p); }
+        if !matches!(self.dialog, Dialog::None) { self.render_dialog(frame, &p); }
     }
 
     // ── Dashboard ──
@@ -267,8 +267,8 @@ impl App {
         frame.render_widget(List::new(items), chunks[3]);
     }
 
-    fn build_timeline(&self, sessions: &[timetrace_core::storage::SessionRecord], width: usize, p: &Palette) -> Paragraph {
-        let mut hour_buckets: [Vec<&timetrace_core::storage::SessionRecord>; 24] = Default::default();
+    fn build_timeline(&self, sessions: &[SessionRecord], width: usize, p: &Palette) -> Paragraph {
+        let mut hour_buckets: [Vec<&SessionRecord>; 24] = Default::default();
         for s in sessions { let h = s.started_at.hour() as usize; if h < 24 { hour_buckets[h].push(s); } }
 
         let chars_per_hour = (width.saturating_sub(24)) / 24;

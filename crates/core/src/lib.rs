@@ -9,7 +9,6 @@ pub mod engine;
 pub mod error;
 pub mod storage;
 
-// Re-export commonly used types
 pub use config::AppConfig;
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
 pub use contracts::idle::IdleDetector;

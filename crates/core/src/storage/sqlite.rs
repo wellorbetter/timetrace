@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Timelike, Utc};
 use rusqlite::{params, Connection};
 use tracing::{debug, warn};
 
@@ -78,8 +78,7 @@ impl DataStore for SqliteStore {
 
     fn close_session(&self, id: i64, end_time: DateTime<Utc>) {
         let conn = self.lock();
-        // Compute duration
-        if let Ok(Some(started_at_str)) = conn.query_row(
+        if let Ok(started_at_str) = conn.query_row(
             "SELECT started_at FROM usage_sessions WHERE id = ?1",
             params![id],
             |row| row.get::<_, String>(0),

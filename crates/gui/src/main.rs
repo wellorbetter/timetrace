@@ -3,6 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::Timelike;
+
 use clap::Parser;
 use eframe::egui;
 use egui_plot::{Bar, BarChart, Legend, Plot};
@@ -24,14 +26,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::load();
     let db_path = cli.db.unwrap_or_else(|| {
         dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("TimeTrace").join("time.db").to_string_lossy()
+            .join("TimeTrace").join("time.db").to_string_lossy().to_string()
     });
 
     let db = Arc::new(SqliteStore::open(std::path::PathBuf::from(&db_path))?);
 
     let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
     let _handle = run_monitor_loop(
-        Win32WindowResolver, Win32IdleDetector,
+        Win32WindowResolver, Win32IdleDetector::new(),
         Duration::from_millis(config.poll_interval_ms),
         Duration::from_secs(config.idle_threshold_minutes * 60),
         sink,
@@ -173,7 +175,7 @@ impl GuiApp {
         });
     }
 
-    fn startup(&self, ui: &mut egui::Ui) {
+    fn startup(&mut self, ui: &mut egui::Ui) {
         let entries = self.db.get_all_startup_entries();
         let enabled = entries.iter().filter(|e| e.enabled).count();
 
