@@ -127,8 +127,9 @@ impl App {
         let today_s: i64 = apps.iter().map(|a| a.total_seconds).sum();
 
         let chunks = Layout::default().direction(Direction::Vertical)
-            .constraints([Constraint::Length(2), Constraint::Min(0)]).split(area);
+            .constraints([Constraint::Length(2), Constraint::Length(8), Constraint::Min(0)]).split(area);
 
+        // ── Header ──
         let mut hdr = vec![Line::from(Span::styled(
             format!("Today  {}h {}m active", today_s / 3600, (today_s % 3600) / 60),
             Style::default().fg(p.text).add_modifier(Modifier::BOLD)))];
@@ -141,20 +142,50 @@ impl App {
         frame.render_widget(Paragraph::new(hdr), chunks[0]);
 
         if apps.is_empty() {
-            frame.render_widget(Paragraph::new("Waiting for data — tracking active.\nSwitch between apps to record usage.")
+            frame.render_widget(Paragraph::new("Waiting for data — tracking is active. Switch between apps.")
                 .style(Style::default().fg(p.text_dim)).alignment(Alignment::Center), chunks[1]);
             return;
         }
 
+        // ── Vertical bar chart ──
         let max_s = apps[0].total_seconds.max(1) as f32;
+        let chart_h = (chunks[1].height as usize).saturating_sub(2);
+        let bar_count = apps.len().min(8);
+        let bar_w = (chunks[1].width as usize).saturating_sub(2) / bar_count.max(1);
+        let mut chart_lines = vec![String::new(); chart_h];
+
+        for (i, app) in apps.iter().take(8).enumerate() {
+            let frac = app.total_seconds as f32 / max_s;
+            let h = (frac * chart_h as f32) as usize;
+            let color = p.app_colors.color_for(&app.app_name);
+            // Build vertical bar from top
+            for row in 0..chart_h {
+                let filled = row >= chart_h.saturating_sub(h);
+                let ch = if filled { "█" } else { " " };
+                let pad = " ".repeat(bar_w.saturating_sub(1));
+                chart_lines[row].push_str(&format!("{}{}", ch, pad));
+            }
+        }
+        // Labels
+        let mut label_line = String::new();
+        for app in apps.iter().take(8) {
+            label_line.push_str(&format!("{:width$}", trunc(&app.app_name, bar_w.saturating_sub(1)), width = bar_w));
+        }
+        chart_lines.push(label_line);
+
+        let chart_text: Vec<Line<'static>> = chart_lines.into_iter().map(|s| Line::from(s.to_string())).collect();
+        frame.render_widget(Paragraph::new(chart_text).style(Style::default().fg(p.accent)), chunks[1]);
+
+        // ── App list + page detail (side by side) ──
+        let detail_area = chunks[2];
         if let Detail::AppDetail { app_name, .. } = &self.detail {
-            let dc = Layout::default().direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(35), Constraint::Percentage(65)]).split(chunks[1]);
+            let dc = Layout::default().direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)]).split(detail_area);
 
             let items: Vec<ListItem> = apps.iter().enumerate().map(|(i,a)| app_row(a, i == self.row, max_s, p)).collect();
             frame.render_widget(List::new(items), dc[0]);
 
-            let titles = self.db.get_window_titles(&app_name, today);
+            let titles = self.db.get_window_titles(app_name, today);
             let t2: Vec<ListItem> = if titles.is_empty() {
                 vec![ListItem::new(Span::styled("  no page data yet", Style::default().fg(p.text_dim)))]
             } else {
@@ -167,12 +198,12 @@ impl App {
                     ]))
                 }).collect()
             };
-            frame.render_widget(List::new(t2).block(Block::default().borders(Borders::TOP)
+            frame.render_widget(List::new(t2).block(Block::default().borders(Borders::LEFT)
                 .border_style(Style::default().fg(p.border))
                 .title(Span::styled(format!(" {} pages ", app_name), Style::default().fg(p.accent)))), dc[1]);
         } else {
             let items: Vec<ListItem> = apps.iter().enumerate().map(|(i,a)| app_row(a, i == self.row, max_s, p)).collect();
-            frame.render_widget(List::new(items), chunks[1]);
+            frame.render_widget(List::new(items), detail_area);
         }
     }
 

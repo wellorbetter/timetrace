@@ -221,15 +221,15 @@ impl DataStore for SqliteStore {
         hours
     }
 
-    fn get_window_titles(&self, app_path: &str, date: NaiveDate) -> Vec<(String, i64)> {
+    fn get_window_titles(&self, app_name: &str, date: NaiveDate) -> Vec<(String, i64)> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT COALESCE(window_title, ''), COALESCE(SUM(duration_secs), 0)
              FROM usage_sessions
-             WHERE app_path = ?1 AND date = ?2 AND is_idle = 0 AND duration_secs IS NOT NULL
+             WHERE app_name = ?1 AND date = ?2 AND is_idle = 0 AND duration_secs IS NOT NULL
              GROUP BY window_title ORDER BY SUM(duration_secs) DESC"
         ).unwrap();
-        stmt.query_map(params![app_path, date.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))
+        stmt.query_map(params![app_name, date.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap().filter_map(|r| r.ok()).collect()
     }
 
@@ -484,10 +484,10 @@ impl DataStore for MemoryStore {
         [0; 24]
     }
 
-    fn get_window_titles(&self, app_path: &str, _date: NaiveDate) -> Vec<(String, i64)> {
+    fn get_window_titles(&self, app_name: &str, _date: NaiveDate) -> Vec<(String, i64)> {
         self.sessions.lock().unwrap()
             .iter()
-            .filter(|s| s.app_path == app_path && !s.is_idle)
+            .filter(|s| s.app_name == app_name && !s.is_idle)
             .filter_map(|s| s.duration_secs.map(|d| (s.window_title.clone().unwrap_or_default(), d)))
             .fold(std::collections::HashMap::new(), |mut acc, (title, dur)| {
                 *acc.entry(title).or_insert(0) += dur; acc

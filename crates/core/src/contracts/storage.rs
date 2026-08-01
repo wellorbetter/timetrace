@@ -88,7 +88,7 @@ pub trait DataStore: Send + Sync {
 
     /// Get per-window-title breakdown for an app on a date.
     /// Returns Vec of (window_title, total_seconds).
-    fn get_window_titles(&self, app_path: &str, date: NaiveDate) -> Vec<(String, i64)>;
+    fn get_window_titles(&self, app_name: &str, date: NaiveDate) -> Vec<(String, i64)>;
 
     // ── Startup CRUD ──
 
