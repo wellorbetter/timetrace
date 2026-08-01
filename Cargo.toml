@@ -29,6 +29,7 @@ thiserror = "2"
 dirs = "6"
 clap = { version = "4", features = ["derive"] }
 seahash = "4"
+once_cell = "1"
 ratatui = "0.30"
 crossterm = "0.29"
 eframe = "0.31"
