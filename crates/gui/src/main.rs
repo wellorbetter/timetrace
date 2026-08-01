@@ -123,12 +123,24 @@ impl GuiApp {
     fn show_dashboard(&self, ui: &mut egui::Ui) {
         let today = chrono::Local::now().date_naive();
         let top_apps = self.db.get_top_apps(today, today, 10);
+        let total_all_time = self.db.total_tracked_seconds();
+        let started_at = self.db.recording_started_at();
 
-        let total_secs: i64 = top_apps.iter().map(|a| a.total_seconds).sum();
-        let hours = total_secs / 3600;
-        let mins = (total_secs % 3600) / 60;
+        let today_secs: i64 = top_apps.iter().map(|a| a.total_seconds).sum();
+        let today_h = today_secs / 3600;
+        let today_m = (today_secs % 3600) / 60;
 
-        ui.heading(format!("Today — {}h {}m active", hours, mins));
+        ui.heading(format!("Today — {}h {}m active", today_h, today_m));
+
+        if let Some(start) = started_at {
+            let days = (chrono::Utc::now() - start).num_days();
+            let all_h = total_all_time / 3600;
+            let all_m = (total_all_time % 3600) / 60;
+            ui.label(format!(
+                "Since {} ({}d ago)  ·  Total: {}h {}m tracked",
+                start.format("%Y-%m-%d"), days, all_h, all_m
+            ));
+        }
 
         // Top apps list
         egui::ScrollArea::vertical().show(ui, |ui| {

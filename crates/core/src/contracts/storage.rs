@@ -102,6 +102,17 @@ pub trait DataStore: Send + Sync {
     fn get_app_meta(&self, exe_path: &str) -> Option<AppMetaRecord>;
     fn set_app_meta(&self, meta: &AppMetaRecord);
 
+    // ── Recording Stats ──
+
+    /// Timestamp of the very first recorded session (when tracking began).
+    fn recording_started_at(&self) -> Option<DateTime<Utc>>;
+
+    /// Total tracked time across all sessions (excluding idle), in seconds.
+    fn total_tracked_seconds(&self) -> i64;
+
+    /// Total tracked time for a specific date range.
+    fn total_tracked_in_range(&self, start: NaiveDate, end: NaiveDate) -> i64;
+
     // ── Maintenance ──
 
     /// Delete sessions older than `before` date.

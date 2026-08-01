@@ -313,6 +313,39 @@ impl DataStore for SqliteStore {
         );
     }
 
+    // ── Recording Stats ──
+
+    fn recording_started_at(&self) -> Option<DateTime<Utc>> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT started_at FROM usage_sessions ORDER BY started_at ASC LIMIT 1",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .map(|s| parse_dt(s))
+    }
+
+    fn total_tracked_seconds(&self) -> i64 {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions WHERE is_idle = 0 AND duration_secs IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0)
+    }
+
+    fn total_tracked_in_range(&self, start: NaiveDate, end: NaiveDate) -> i64 {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions WHERE is_idle = 0 AND duration_secs IS NOT NULL AND date >= ?1 AND date <= ?2",
+            params![start.to_string(), end.to_string()],
+            |row| row.get(0),
+        )
+        .unwrap_or(0)
+    }
+
     // ── Maintenance ──
 
     fn cleanup_old_sessions(&self, before: NaiveDate) {
@@ -472,6 +505,29 @@ impl DataStore for MemoryStore {
         }
     }
 
+    fn recording_started_at(&self) -> Option<DateTime<Utc>> {
+        self.sessions.lock().unwrap()
+            .iter()
+            .min_by_key(|s| s.started_at)
+            .map(|s| s.started_at)
+    }
+
+    fn total_tracked_seconds(&self) -> i64 {
+        self.sessions.lock().unwrap()
+            .iter()
+            .filter(|s| !s.is_idle)
+            .filter_map(|s| s.duration_secs)
+            .sum()
+    }
+
+    fn total_tracked_in_range(&self, start: NaiveDate, end: NaiveDate) -> i64 {
+        self.sessions.lock().unwrap()
+            .iter()
+            .filter(|s| !s.is_idle && s.date >= start && s.date <= end)
+            .filter_map(|s| s.duration_secs)
+            .sum()
+    }
+
     fn cleanup_old_sessions(&self, before: NaiveDate) {
         self.sessions.lock().unwrap().retain(|s| s.date >= before);
     }
@@ -484,25 +540,38 @@ mod tests {
     use super::*;
     use chrono::Utc;
 
+    fn make_session(app: &str, started: DateTime<Utc>, dur: Option<i64>, idle: bool) -> SessionRecord {
+        SessionRecord {
+            id: 0, app_path: format!("C:/{app}.exe"), app_name: app.into(),
+            window_title: None, started_at: started, ended_at: None,
+            duration_secs: dur, is_idle: idle, date: started.date_naive(),
+        }
+    }
+
     #[test]
     fn test_memory_store_insert_and_query() {
         let store = MemoryStore::new();
-        let session = SessionRecord {
-            id: 0,
-            app_path: "C:/test.exe".into(),
-            app_name: "TestApp".into(),
-            window_title: None,
-            started_at: Utc::now(),
-            ended_at: None,
-            duration_secs: None,
-            is_idle: false,
-            date: Utc::now().date_naive(),
-        };
-        let id = store.insert_session(&session);
+        let id = store.insert_session(&make_session("TestApp", Utc::now(), None, false));
         assert!(id > 0);
+        assert!(store.get_active_session().is_some());
+    }
 
-        let active = store.get_active_session();
-        assert!(active.is_some());
-        assert_eq!(active.unwrap().app_name, "TestApp");
+    #[test]
+    fn test_recording_started_at() {
+        let store = MemoryStore::new();
+        let t1 = Utc::now();
+        let t2 = t1 + chrono::Duration::hours(1);
+        store.insert_session(&make_session("A", t1, Some(3600), false));
+        store.insert_session(&make_session("B", t2, Some(1800), false));
+        assert_eq!(store.recording_started_at().unwrap(), t1);
+    }
+
+    #[test]
+    fn test_total_tracked_excludes_idle() {
+        let store = MemoryStore::new();
+        let now = Utc::now();
+        store.insert_session(&make_session("Work", now, Some(1000), false));
+        store.insert_session(&make_session("Idle", now, Some(500), true));
+        assert_eq!(store.total_tracked_seconds(), 1000);
     }
 }

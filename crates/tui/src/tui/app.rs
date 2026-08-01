@@ -269,27 +269,46 @@ impl App {
     fn render_dashboard(&self, frame: &mut Frame, area: Rect, p: &Palette) {
         let today = Local::now().date_naive();
         let top_apps = self.db.get_top_apps(today, today, 10);
+        let total_all_time = self.db.total_tracked_seconds();
+        let started_at = self.db.recording_started_at();
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),  // header
-                Constraint::Length(3),  // timeline placeholder
+                Constraint::Length(2),  // header (2 lines for stats)
+                Constraint::Length(3),  // timeline
                 Constraint::Length(1),  // section title
                 Constraint::Min(0),     // app list
             ])
             .split(area);
 
-        // Header
-        let total_secs: i64 = top_apps.iter().map(|a| a.total_seconds).sum();
-        let hours = total_secs / 3600;
-        let mins = (total_secs % 3600) / 60;
+        // Header with today + all-time stats
+        let today_secs: i64 = top_apps.iter().map(|a| a.total_seconds).sum();
+        let today_h = today_secs / 3600;
+        let today_m = (today_secs % 3600) / 60;
 
-        let header = Paragraph::new(format!(
-            "Today — {}h {}m active",
-            hours, mins
-        ))
-        .style(Style::default().fg(p.text).add_modifier(Modifier::BOLD));
+        let all_h = total_all_time / 3600;
+        let all_m = (total_all_time % 3600) / 60;
+
+        let mut header_lines = vec![
+            Line::from(Span::styled(
+                format!("Today: {}h {}m active", today_h, today_m),
+                Style::default().fg(p.text).add_modifier(Modifier::BOLD),
+            )),
+        ];
+
+        if let Some(start) = started_at {
+            let days = (chrono::Utc::now() - start).num_days();
+            header_lines.push(Line::from(vec![
+                Span::styled(
+                    format!("Since {} ({}d ago)  ·  Total: {}h {}m tracked",
+                        start.format("%Y-%m-%d"), days, all_h, all_m),
+                    Style::default().fg(p.text_dim),
+                ),
+            ]));
+        }
+
+        let header = Paragraph::new(header_lines);
         frame.render_widget(header, chunks[0]);
 
         // Timeline (simplified: horizontal bar)
