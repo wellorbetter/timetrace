@@ -52,7 +52,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     eframe::run_native("TimeTrace", options,
-        Box::new(|_cc| Ok(Box::new(GuiApp::new(db.clone())))),
+        Box::new(|cc| {
+            // Load CJK-capable font for Chinese display
+            let mut fonts = egui::FontDefinitions::default();
+            // Try Microsoft YaHei (Windows CJK font)
+            if let Ok(bytes) = std::fs::read("C:\\Windows\\Fonts\\msyh.ttc") {
+                fonts.font_data.insert("YaHei".into(), egui::FontData::from_owned(bytes).into());
+                fonts.families.get_mut(&egui::FontFamily::Proportional).unwrap()
+                    .insert(0, "YaHei".into());
+            }
+            cc.egui_ctx.set_fonts(fonts);
+            Ok(Box::new(GuiApp::new(db.clone())))
+        }),
     )?;
     Ok(())
 }
@@ -75,6 +86,10 @@ impl EventSink for DebugAggregator {
             _ => {}
         }
         self.inner.accept(event);
+        // Verify DB write
+        let today = chrono::Local::now().date_naive();
+        let count = self.inner.db().get_sessions_by_date(today).len();
+        if count > 0 && count % 5 == 1 { log(&format!("db: {} sessions today", count)); }
     }
 }
 

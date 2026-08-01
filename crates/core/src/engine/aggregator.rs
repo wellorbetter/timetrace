@@ -22,12 +22,10 @@ pub struct SessionAggregator {
 
 impl SessionAggregator {
     pub fn new(db: Arc<dyn DataStore>) -> Self {
-        Self {
-            db,
-            current_session_id: None,
-            current_app_name: None,
-        }
+        Self { db, current_session_id: None, current_app_name: None }
     }
+
+    pub fn db(&self) -> &dyn DataStore { &*self.db }
 
     /// Close any pending active session on shutdown.
     pub fn flush(&mut self) {
