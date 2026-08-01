@@ -225,6 +225,9 @@ impl GuiApp {
             let days = (chrono::Utc::now() - s).num_days();
             ui.label(format!("{} {} ({}d)  |  {} {}h {}m", l.since(), s.format("%Y-%m-%d"), days, l.total(), all_total / 3600, (all_total % 3600) / 60));
         }
+
+        // Wrap charts + list in scroll area so nothing gets cut
+        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
         ui.add_space(8.0);
 
         split.sort_by(|a, b| (b.active_seconds + b.idle_seconds).cmp(&(a.active_seconds + a.idle_seconds)));
@@ -234,20 +237,25 @@ impl GuiApp {
 
         // ── Charts row ──
         let avail_w = ui.available_width();
+        let avail_h = ui.available_height();
+        let chart_h = (avail_h * 0.45).clamp(120.0, 200.0);
+        let bw = ((avail_w * 0.50) - 10.0).max(240.0);
         ui.horizontal(|ui| {
             // Stacked bar chart (50%)
-            let bw = (avail_w * 0.50).min(420.0);
             ui.vertical(|ui| {
                 ui.set_width(bw);
                 ui.label(l.by_app());
-                let chart_h = 140.0;
                 let bar_w = (bw - 20.0) / top8.len().max(1) as f32;
-                let (resp, painter) = ui.allocate_painter(Vec2::new(bw, chart_h + 26.0), egui::Sense::hover());
+                let (resp, painter) = ui.allocate_painter(Vec2::new(bw, chart_h + 24.0), egui::Sense::hover());
+
+                // Font size adapts to bar width
+                let font_size = if bar_w < 40.0 { 8.0 } else if bar_w < 60.0 { 9.0 } else { 10.0 };
+                let max_chars = (bar_w / (font_size * 0.9)).floor().max(3.0) as usize;
 
                 for (i, s) in top8.iter().enumerate() {
                     let total_h = (s.active_seconds + s.idle_seconds) as f32 / max_val * chart_h;
                     let x = resp.rect.left() + 6.0 + i as f32 * bar_w;
-                    let bottom = resp.rect.bottom() - 26.0;
+                    let bottom = resp.rect.bottom() - 24.0;
 
                     // Active part (colored, rounded top)
                     if s.active_seconds > 0 {
@@ -261,24 +269,25 @@ impl GuiApp {
                         let idle_rect = Rect::from_min_size(Pos2::new(x + 1.0, bottom - total_h), Vec2::new(bar_w - 2.0, ih));
                         painter.rect_filled(idle_rect, Rounding::same(4), m3::OUTLINE.gamma_multiply(0.45));
                     }
-                    // Value label above bar
+                    // Value label: inside bar if tall enough, else above
                     let mins = (s.active_seconds + s.idle_seconds) / 60;
-                    painter.text(Pos2::new(x + bar_w / 2.0, bottom - total_h - 11.0),
-                        egui::Align2::CENTER_BOTTOM, format!("{}m", mins), egui::FontId::proportional(9.0), m3::ON_SURFACE.gamma_multiply(0.7));
+                    let label_y = if total_h > 20.0 { bottom - total_h + 10.0 } else { bottom - total_h - 3.0 };
+                    painter.text(Pos2::new(x + bar_w / 2.0, label_y),
+                        egui::Align2::CENTER_CENTER, format!("{}m", mins), egui::FontId::proportional(font_size), m3::ON_SURFACE);
                     // Name label
                     painter.text(Pos2::new(x + bar_w / 2.0, resp.rect.bottom() - 8.0),
-                        egui::Align2::CENTER_TOP, trunc(&s.app_name, 6), egui::FontId::proportional(9.0), m3::ON_SURFACE);
+                        egui::Align2::CENTER_TOP, trunc(&s.app_name, max_chars), egui::FontId::proportional(font_size), m3::ON_SURFACE);
                 }
             });
 
             ui.add_space(10.0);
 
-            // Pie chart (45%)
-            let pw = (avail_w * 0.42).min(300.0);
+            // Pie chart (50%) — centered with legend
+            let pw = ((avail_w * 0.50) - 10.0).max(240.0);
             ui.vertical(|ui| {
                 ui.set_width(pw);
                 ui.label(l.dist());
-                let size = 130.0;
+                let size = (chart_h * 0.9).clamp(100.0, 150.0);
                 let (resp, painter) = ui.allocate_painter(Vec2::new(size, size), egui::Sense::hover());
                 let cx = resp.rect.center().x;
                 let cy = resp.rect.center().y;
@@ -313,6 +322,17 @@ impl GuiApp {
                     }
                     a += sweep;
                 }
+
+                // Legend below pie
+                ui.add_space(4.0);
+                egui::Grid::new("pie_legend").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
+                    for s in &top8 {
+                        let (r, p) = ui.allocate_painter(Vec2::new(10.0, 10.0), egui::Sense::hover());
+                        p.rect_filled(r.rect, 2.0, clr(&s.app_name));
+                        ui.label(trunc(&s.app_name, 12));
+                        ui.end_row();
+                    }
+                });
             });
         });
 
@@ -359,6 +379,8 @@ impl GuiApp {
                 }
             }
         });
+
+        }); // end ScrollArea
     }
 
     fn startup_panel(&mut self, ui: &mut egui::Ui) {
