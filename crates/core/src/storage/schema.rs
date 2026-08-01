@@ -30,6 +30,19 @@ pub const CREATE_TABLES: &[&str] = &[
     )",
     "CREATE INDEX IF NOT EXISTS idx_sessions_date ON usage_sessions(date)",
     "CREATE INDEX IF NOT EXISTS idx_sessions_app_date ON usage_sessions(app_name, date)",
+
+    // Page-level visits within a session (window title segments)
+    "CREATE TABLE IF NOT EXISTS page_visits (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id      INTEGER NOT NULL,
+        app_name        TEXT    NOT NULL,
+        window_title    TEXT,
+        started_at      TEXT    NOT NULL,
+        ended_at        TEXT,
+        duration_secs   INTEGER,
+        date            TEXT    NOT NULL
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_page_visits_app ON page_visits(app_name, date)",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

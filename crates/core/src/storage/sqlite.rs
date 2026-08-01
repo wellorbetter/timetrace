@@ -240,12 +240,43 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT COALESCE(window_title, ''), COALESCE(SUM(duration_secs), 0)
-             FROM usage_sessions
-             WHERE app_name = ?1 AND date = ?2 AND is_idle = 0 AND duration_secs IS NOT NULL
+             FROM page_visits
+             WHERE app_name = ?1 AND date = ?2 AND duration_secs > 0
              GROUP BY window_title ORDER BY SUM(duration_secs) DESC"
         ).unwrap();
         stmt.query_map(params![app_name, date.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap().filter_map(|r| r.ok()).collect()
+    }
+
+    fn start_page_visit(&self, session_id: i64, app_name: &str, title: Option<&str>, date: NaiveDate) -> i64 {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        match conn.execute(
+            "INSERT INTO page_visits (session_id, app_name, window_title, started_at, ended_at, duration_secs, date)
+             VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
+            params![session_id, app_name, title, now, date.to_string()],
+        ) {
+            Ok(_) => conn.last_insert_rowid(),
+            Err(e) => { warn!("page visit insert failed: {e}"); -1 }
+        }
+    }
+
+    fn close_page_visit(&self, visit_id: i64, end_time: DateTime<Utc>) {
+        if visit_id < 0 { return; }
+        let conn = self.lock();
+        if let Ok(started_str) = conn.query_row(
+            "SELECT started_at FROM page_visits WHERE id = ?1", params![visit_id], |row| row.get::<_, String>(0)
+        ) {
+            if let Ok(start) = DateTime::parse_from_rfc3339(&started_str) {
+                let dur = (end_time - start.with_timezone(&Utc)).num_seconds();
+                if dur > 0 {
+                    let _ = conn.execute(
+                        "UPDATE page_visits SET ended_at = ?1, duration_secs = ?2 WHERE id = ?3",
+                        params![end_time.to_rfc3339(), dur, visit_id],
+                    );
+                }
+            }
+        }
     }
 
     // ── Startup CRUD ──
@@ -498,6 +529,10 @@ impl DataStore for MemoryStore {
     fn get_usage_split(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<AppUsageSplit> {
         vec![]
     }
+
+    fn start_page_visit(&self, _session_id: i64, _app_name: &str, _title: Option<&str>, _date: NaiveDate) -> i64 { -1 }
+
+    fn close_page_visit(&self, _visit_id: i64, _end_time: DateTime<Utc>) {}
 
     fn get_hourly_breakdown(&self, _app_name: &str, _date: NaiveDate) -> [i64; 24] {
         [0; 24]

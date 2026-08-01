@@ -11,6 +11,8 @@ use timetrace_core::{
 };
 use std::f32::consts::TAU;
 
+mod icons;
+
 #[derive(Parser)] #[command(name = "tt-gui", version)]
 struct Cli { #[arg(long)] db: Option<String> }
 
@@ -129,13 +131,14 @@ struct GuiApp {
     start_filter: StartFilter,
     selected: Option<usize>,
     show_log: bool,
+    icons: icons::IconCache,
 }
 
 impl GuiApp {
     fn new(db: Arc<dyn DataStore>) -> Self {
         Self { startup: DataStore::get_all_startup_entries(&*db), db,
             panel: Panel::Dashboard, lang: Lang::Zh, start_filter: StartFilter::All,
-            selected: None, show_log: false }
+            selected: None, show_log: false, icons: icons::IconCache::new() }
     }
 }
 
@@ -178,19 +181,33 @@ impl GuiApp {
     fn dashboard(&mut self, ui: &mut egui::Ui) {
         let l = self.lang;
         let today = chrono::Local::now().date_naive();
-        let split = DataStore::get_usage_split(&*self.db, today, today);
+        let mut split = DataStore::get_usage_split(&*self.db, today, today);
         let all_total = DataStore::total_tracked_seconds(&*self.db);
         let started = DataStore::recording_started_at(&*self.db);
 
-        // Add active session's elapsed time
-        let active_extra = DataStore::get_active_session(&*self.db).map(|s| {
-            (chrono::Utc::now() - s.started_at).num_seconds().max(0)
-        }).unwrap_or(0);
+        // Merge the active session into its own entry (duration_secs is NULL until closed)
+        if let Some(active) = DataStore::get_active_session(&*self.db) {
+            let elapsed = (chrono::Utc::now() - active.started_at).num_seconds().max(0);
+            if elapsed > 0 {
+                let app_name = active.app_name.clone();
+                let mut found = false;
+                for s in split.iter_mut() {
+                    if s.app_name == app_name {
+                        s.active_seconds += elapsed;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    split.push(AppUsageSplit { app_name, active_seconds: elapsed, idle_seconds: 0 });
+                }
+            }
+        }
 
-        let active_s: i64 = split.iter().map(|s| s.active_seconds).sum::<i64>() + active_extra;
+        let active_s: i64 = split.iter().map(|s| s.active_seconds).sum::<i64>();
         let idle_s: i64 = split.iter().map(|s| s.idle_seconds).sum::<i64>();
 
-        if split.is_empty() && active_extra == 0 {
+        if split.is_empty() && idle_s == 0 {
             ui.vertical_centered(|ui| {
                 ui.add_space(80.0);
                 ui.heading("TimeTrace");
@@ -210,14 +227,10 @@ impl GuiApp {
         }
         ui.add_space(8.0);
 
-        // Include active extra in the top entry
-        let mut top8: Vec<AppUsageSplit> = split.clone();
-        if active_extra > 0 {
-            if let Some(first) = top8.first_mut() { first.active_seconds += active_extra; }
-        }
-        if top8.len() > 8 { top8.truncate(8); }
+        split.sort_by(|a, b| (b.active_seconds + b.idle_seconds).cmp(&(a.active_seconds + a.idle_seconds)));
+        let top8: Vec<AppUsageSplit> = split.iter().take(8).cloned().collect();
 
-        let max_val = top8.iter().map(|s| s.active_seconds + s.idle_seconds).max().unwrap_or(1).max(1) as f32;
+        let max_val = split.iter().map(|s| s.active_seconds + s.idle_seconds).max().unwrap_or(1).max(1) as f32;
 
         // ── Charts row ──
         let avail_w = ui.available_width();
@@ -372,12 +385,20 @@ impl GuiApp {
                 for (orig_i, e) in &filtered {
                     let is_sys = e.source == "HKLM" || e.command.to_lowercase().contains("\\system32\\") || e.command.to_lowercase().contains("\\windows\\");
                     let name = extract_exe_name(&e.command).unwrap_or_else(|| e.name.clone());
-                    // Letter avatar (Material style)
-                    let first = name.chars().next().unwrap_or('?').to_uppercase().to_string();
-                    let bg = if is_sys { m3::WARNING } else { m3::INFO };
-                    let (resp, painter) = ui.allocate_painter(Vec2::new(24.0, 24.0), egui::Sense::hover());
-                    painter.circle_filled(resp.rect.center(), 12.0, bg);
-                    painter.text(resp.rect.center(), egui::Align2::CENTER_CENTER, first, egui::FontId::proportional(11.0), Color32::WHITE);
+                    let exe_path = extract_exe_path(&e.command).unwrap_or_default();
+
+                    // Icon: real exe icon if available, else letter avatar
+                    let icon = if !exe_path.is_empty() { self.icons.get(ui.ctx(), &exe_path) } else { None };
+                    match icon {
+                        Some(tex) => { ui.add(egui::Image::new(&tex).max_size(Vec2::splat(20.0))); }
+                        None => {
+                            let first = name.chars().next().unwrap_or('?').to_uppercase().to_string();
+                            let bg = if is_sys { m3::WARNING } else { m3::INFO };
+                            let (resp, painter) = ui.allocate_painter(Vec2::new(22.0, 22.0), egui::Sense::hover());
+                            painter.circle_filled(resp.rect.center(), 11.0, bg);
+                            painter.text(resp.rect.center(), egui::Align2::CENTER_CENTER, first, egui::FontId::proportional(10.0), Color32::WHITE);
+                        }
+                    }
 
                     ui.label(trunc(&name, 22));
                     if e.enabled { ui.colored_label(m3::SUCCESS, "ON"); }
@@ -427,4 +448,39 @@ fn extract_exe_name(cmd: &str) -> Option<String> {
         return Some(before.to_string());
     }
     None
+}
+
+/// Extract the full exe path from a command line.
+fn extract_exe_path(cmd: &str) -> Option<String> {
+    let cleaned = cmd.trim_matches('"').trim();
+    if let Some(idx) = cleaned.to_lowercase().find(".exe") {
+        // Find the start of the path (after the last quote/space before the exe)
+        let end = idx + 4;
+        let mut start = 0;
+        // If there's a quote, use it as start
+        if let Some(q) = cleaned.find('"') { start = q + 1; }
+        // Walk back to the last space or quote
+        for (i, c) in cleaned[..end].char_indices().rev() {
+            if c == ' ' || c == '\"' || c == '"' {
+                start = i + 1;
+                break;
+            }
+        }
+        // Handle environment variables like %windir%
+        let path = &cleaned[start..end];
+        if path.starts_with('%') && path.contains("\\") {
+            return Some(expand_env(path));
+        }
+        return Some(path.to_string());
+    }
+    None
+}
+
+/// Expand %VAR% in a path using std::env::var.
+fn expand_env(path: &str) -> String {
+    let mut result = path.to_string();
+    for (k, v) in std::env::vars() {
+        result = result.replace(&format!("%{}%", k), &v);
+    }
+    result
 }
