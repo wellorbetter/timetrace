@@ -1,0 +1,45 @@
+[package]
+name = "timetrace-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TimeTrace GUI — native desktop window"
+
+[[bin]]
+name = "tt-gui"
+path = "src/main.rs"
+
+[dependencies]
+timetrace-core = { path = "../core" }
+
+# ── GUI ──
+eframe = "0.31"
+egui = "0.31"
+egui_plot = "0.31"
+
+# ── System tray ──
+tray-icon = "0.19"
+
+# ── CLI ──
+clap = { version = "4", features = ["derive"] }
+
+# ── Foundation ──
+chrono = "0.4"
+serde = "1"
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+seahash = "4"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = "symbols"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "crates/core",
+    "crates/tui",
+    "crates/gui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"

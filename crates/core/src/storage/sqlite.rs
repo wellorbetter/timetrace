@@ -1,0 +1,508 @@
+//! SQLite implementation of `DataStore`.
+//!
+//! Uses `rusqlite` with bundled SQLite. All errors are logged via `tracing::warn!`
+//! and operations return sensible defaults — the trait contract says infallible.
+
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+use chrono::{DateTime, NaiveDate, Utc};
+use rusqlite::{params, Connection};
+use tracing::{debug, warn};
+
+use crate::contracts::{
+    AppMetaRecord, AppUsageSummary, DataStore, SessionRecord, StartupEntryRecord,
+};
+use crate::storage::schema;
+
+pub struct SqliteStore {
+    conn: Mutex<Connection>,
+}
+
+impl SqliteStore {
+    /// Open (or create) the SQLite database at the given path.
+    pub fn open(path: PathBuf) -> Result<Self, rusqlite::Error> {
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+
+        let conn = Connection::open(&path)?;
+
+        // Apply pragmas
+        for pragma in schema::PRAGMAS {
+            conn.execute_batch(pragma)?;
+        }
+
+        // Run schema DDL
+        for ddl in schema::CREATE_TABLES {
+            conn.execute_batch(ddl)?;
+        }
+
+        debug!("SQLite opened at {}", path.display());
+
+        Ok(Self { conn: Mutex::new(conn) })
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.conn.lock().expect("SQLite connection mutex poisoned")
+    }
+}
+
+impl DataStore for SqliteStore {
+    // ── Session CRUD ──
+
+    fn insert_session(&self, session: &SessionRecord) -> i64 {
+        let conn = self.lock();
+        match conn.execute(
+            "INSERT INTO usage_sessions (app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                session.app_path,
+                session.app_name,
+                session.window_title,
+                session.started_at.to_rfc3339(),
+                session.ended_at.map(|t| t.to_rfc3339()),
+                session.duration_secs,
+                session.is_idle as i32,
+                session.date.to_string(),
+            ],
+        ) {
+            Ok(_) => conn.last_insert_rowid(),
+            Err(e) => {
+                warn!("Failed to insert session: {e}");
+                -1
+            }
+        }
+    }
+
+    fn close_session(&self, id: i64, end_time: DateTime<Utc>) {
+        let conn = self.lock();
+        // Compute duration
+        if let Ok(Some(started_at_str)) = conn.query_row(
+            "SELECT started_at FROM usage_sessions WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, String>(0),
+        ) {
+            if let Ok(started_at) = DateTime::parse_from_rfc3339(&started_at_str) {
+                let duration = (end_time - started_at.with_timezone(&Utc)).num_seconds();
+                if let Err(e) = conn.execute(
+                    "UPDATE usage_sessions SET ended_at = ?1, duration_secs = ?2 WHERE id = ?3",
+                    params![end_time.to_rfc3339(), duration, id],
+                ) {
+                    warn!("Failed to close session {id}: {e}");
+                }
+            }
+        }
+    }
+
+    fn get_active_session(&self) -> Option<SessionRecord> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT id, app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date
+             FROM usage_sessions WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1",
+            [],
+            |row| Self::row_to_session(row),
+        )
+        .ok()
+    }
+
+    // ── Queries ──
+
+    fn get_sessions_by_date(&self, date: NaiveDate) -> Vec<SessionRecord> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date
+                 FROM usage_sessions WHERE date = ?1 ORDER BY started_at",
+            )
+            .unwrap();
+        stmt.query_map(params![date.to_string()], |row| Self::row_to_session(row))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    }
+
+    fn get_sessions_by_range(&self, start: NaiveDate, end: NaiveDate) -> Vec<SessionRecord> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date
+                 FROM usage_sessions WHERE date >= ?1 AND date <= ?2 ORDER BY started_at",
+            )
+            .unwrap();
+        stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+            Self::row_to_session(row)
+        })
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect()
+    }
+
+    fn get_daily_summary(&self, date: NaiveDate) -> Vec<AppUsageSummary> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT app_name, total_seconds, session_count
+                 FROM daily_summary WHERE date = ?1 ORDER BY total_seconds DESC",
+            )
+            .unwrap();
+        stmt.query_map(params![date.to_string()], |row| {
+            Ok(AppUsageSummary {
+                app_name: row.get(0)?,
+                total_seconds: row.get(1)?,
+                session_count: row.get(2)?,
+                rank: 0,
+            })
+        })
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .enumerate()
+        .map(|(i, mut s)| {
+            s.rank = i + 1;
+            s
+        })
+        .collect()
+    }
+
+    fn get_top_apps(&self, start: NaiveDate, end: NaiveDate, limit: usize) -> Vec<AppUsageSummary> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT app_name, SUM(total_seconds) as total, SUM(session_count) as sessions
+                 FROM daily_summary
+                 WHERE date >= ?1 AND date <= ?2 AND app_name != '__IDLE__'
+                 GROUP BY app_name
+                 ORDER BY total DESC
+                 LIMIT ?3",
+            )
+            .unwrap();
+        stmt.query_map(
+            params![start.to_string(), end.to_string(), limit as i64],
+            |row| {
+                Ok(AppUsageSummary {
+                    app_name: row.get(0)?,
+                    total_seconds: row.get(1)?,
+                    session_count: row.get(2)?,
+                    rank: 0,
+                })
+            },
+        )
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .enumerate()
+        .map(|(i, mut s)| {
+            s.rank = i + 1;
+            s
+        })
+        .collect()
+    }
+
+    fn get_hourly_breakdown(&self, app_name: &str, date: NaiveDate) -> [i64; 24] {
+        let conn = self.lock();
+        let mut hours = [0i64; 24];
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT started_at, duration_secs FROM usage_sessions
+             WHERE app_name = ?1 AND date = ?2 AND duration_secs IS NOT NULL",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![app_name, date.to_string()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }) {
+                for row in rows.flatten() {
+                    if let Ok(parsed) = DateTime::parse_from_rfc3339(&row.0) {
+                        let hour = parsed.hour() as usize;
+                        if hour < 24 {
+                            hours[hour] += row.1;
+                        }
+                    }
+                }
+            }
+        }
+        hours
+    }
+
+    // ── Startup CRUD ──
+
+    fn upsert_startup_entries(&self, entries: &[StartupEntryRecord]) {
+        let conn = self.lock();
+        for entry in entries {
+            let _ = conn.execute(
+                "INSERT INTO startup_entries (name, command, source, enabled, backup_value, backup_path, first_seen, last_checked)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT(id) DO UPDATE SET
+                    command = excluded.command,
+                    last_checked = excluded.last_checked",
+                params![
+                    entry.name,
+                    entry.command,
+                    entry.source,
+                    entry.enabled as i32,
+                    entry.backup_value,
+                    entry.backup_path,
+                    entry.first_seen.to_rfc3339(),
+                    entry.last_checked.to_rfc3339(),
+                ],
+            );
+        }
+    }
+
+    fn get_all_startup_entries(&self) -> Vec<StartupEntryRecord> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, command, source, enabled, backup_value, backup_path, first_seen, last_checked
+                 FROM startup_entries ORDER BY source, name",
+            )
+            .unwrap();
+        stmt.query_map([], |row| {
+            Ok(StartupEntryRecord {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                command: row.get(2)?,
+                source: row.get(3)?,
+                enabled: row.get::<_, i32>(4)? != 0,
+                backup_value: row.get(5)?,
+                backup_path: row.get(6)?,
+                first_seen: parse_dt(row.get::<_, String>(7)?),
+                last_checked: parse_dt(row.get::<_, String>(8)?),
+            })
+        })
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect()
+    }
+
+    fn set_startup_enabled(&self, id: i64, enabled: bool, backup: Option<&str>, backup_path: Option<&str>) {
+        let conn = self.lock();
+        let _ = conn.execute(
+            "UPDATE startup_entries SET enabled = ?1, backup_value = ?2, backup_path = ?3 WHERE id = ?4",
+            params![enabled as i32, backup, backup_path, id],
+        );
+    }
+
+    // ── App Metadata ──
+
+    fn get_app_meta(&self, exe_path: &str) -> Option<AppMetaRecord> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT app_path, display_name, category, is_productive FROM app_metadata WHERE app_path = ?1",
+            params![exe_path],
+            |row| {
+                Ok(AppMetaRecord {
+                    app_path: row.get(0)?,
+                    display_name: row.get(1)?,
+                    category: row.get(2)?,
+                    is_productive: row.get::<_, Option<i32>>(3)?.map(|v| v != 0),
+                })
+            },
+        )
+        .ok()
+    }
+
+    fn set_app_meta(&self, meta: &AppMetaRecord) {
+        let conn = self.lock();
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO app_metadata (app_path, display_name, category, is_productive)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                meta.app_path,
+                meta.display_name,
+                meta.category,
+                meta.is_productive.map(|v| v as i32),
+            ],
+        );
+    }
+
+    // ── Maintenance ──
+
+    fn cleanup_old_sessions(&self, before: NaiveDate) {
+        let conn = self.lock();
+        if let Err(e) = conn.execute(
+            "DELETE FROM usage_sessions WHERE date < ?1",
+            params![before.to_string()],
+        ) {
+            warn!("Failed to cleanup old sessions: {e}");
+        }
+    }
+
+    fn vacuum(&self) {
+        let conn = self.lock();
+        if let Err(e) = conn.execute_batch("PRAGMA optimize; VACUUM;") {
+            warn!("Failed to vacuum: {e}");
+        }
+    }
+}
+
+// ── Internal helpers ──
+
+impl SqliteStore {
+    fn row_to_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRecord> {
+        Ok(SessionRecord {
+            id: row.get(0)?,
+            app_path: row.get(1)?,
+            app_name: row.get(2)?,
+            window_title: row.get(3)?,
+            started_at: parse_dt(row.get::<_, String>(4)?),
+            ended_at: row.get::<_, Option<String>>(5)?.map(parse_dt),
+            duration_secs: row.get(6)?,
+            is_idle: row.get::<_, i32>(7)? != 0,
+            date: NaiveDate::parse_from_str(&row.get::<_, String>(8)?, "%Y-%m-%d").unwrap_or_default(),
+        })
+    }
+}
+
+fn parse_dt(s: String) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(&s)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_default()
+}
+
+// ── In-memory store for testing ──
+
+/// In-memory implementation of `DataStore` for unit tests and UI prototyping.
+#[cfg(any(test, feature = "testing"))]
+pub struct MemoryStore {
+    sessions: Mutex<Vec<SessionRecord>>,
+    summaries: Mutex<Vec<(String, NaiveDate, i64, i64)>>, // app_name, date, seconds, count
+    startups: Mutex<Vec<StartupEntryRecord>>,
+    metas: Mutex<Vec<AppMetaRecord>>,
+    next_id: Mutex<i64>,
+}
+
+#[cfg(any(test, feature = "testing"))]
+impl MemoryStore {
+    pub fn new() -> Self {
+        Self {
+            sessions: Mutex::new(Vec::new()),
+            summaries: Mutex::new(Vec::new()),
+            startups: Mutex::new(Vec::new()),
+            metas: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "testing"))]
+impl DataStore for MemoryStore {
+    fn insert_session(&self, session: &SessionRecord) -> i64 {
+        let mut sessions = self.sessions.lock().unwrap();
+        let mut next_id = self.next_id.lock().unwrap();
+        let id = *next_id;
+        *next_id += 1;
+        let mut s = session.clone();
+        s.id = id;
+        sessions.push(s);
+        id
+    }
+
+    fn close_session(&self, id: i64, end_time: DateTime<Utc>) {
+        let mut sessions = self.sessions.lock().unwrap();
+        if let Some(s) = sessions.iter_mut().find(|s| s.id == id) {
+            s.ended_at = Some(end_time);
+            s.duration_secs = Some((end_time - s.started_at).num_seconds());
+        }
+    }
+
+    fn get_active_session(&self) -> Option<SessionRecord> {
+        self.sessions.lock().unwrap()
+            .iter()
+            .rev()
+            .find(|s| s.ended_at.is_none())
+            .cloned()
+    }
+
+    fn get_sessions_by_date(&self, date: NaiveDate) -> Vec<SessionRecord> {
+        self.sessions.lock().unwrap()
+            .iter()
+            .filter(|s| s.date == date)
+            .cloned()
+            .collect()
+    }
+
+    fn get_sessions_by_range(&self, start: NaiveDate, end: NaiveDate) -> Vec<SessionRecord> {
+        self.sessions.lock().unwrap()
+            .iter()
+            .filter(|s| s.date >= start && s.date <= end)
+            .cloned()
+            .collect()
+    }
+
+    fn get_daily_summary(&self, _date: NaiveDate) -> Vec<AppUsageSummary> {
+        vec![] // Simplified for testing; real logic in SqliteStore
+    }
+
+    fn get_top_apps(&self, _start: NaiveDate, _end: NaiveDate, _limit: usize) -> Vec<AppUsageSummary> {
+        vec![]
+    }
+
+    fn get_hourly_breakdown(&self, _app_name: &str, _date: NaiveDate) -> [i64; 24] {
+        [0; 24]
+    }
+
+    fn upsert_startup_entries(&self, entries: &[StartupEntryRecord]) {
+        let mut startups = self.startups.lock().unwrap();
+        for e in entries {
+            startups.push(e.clone());
+        }
+    }
+
+    fn get_all_startup_entries(&self) -> Vec<StartupEntryRecord> {
+        self.startups.lock().unwrap().clone()
+    }
+
+    fn set_startup_enabled(&self, id: i64, enabled: bool, backup: Option<&str>, backup_path: Option<&str>) {
+        let mut startups = self.startups.lock().unwrap();
+        if let Some(e) = startups.iter_mut().find(|e| e.id == id) {
+            e.enabled = enabled;
+            if let Some(v) = backup { e.backup_value = Some(v.to_string()); }
+            if let Some(p) = backup_path { e.backup_path = Some(p.to_string()); }
+        }
+    }
+
+    fn get_app_meta(&self, exe_path: &str) -> Option<AppMetaRecord> {
+        self.metas.lock().unwrap().iter().find(|m| m.app_path == exe_path).cloned()
+    }
+
+    fn set_app_meta(&self, meta: &AppMetaRecord) {
+        let mut metas = self.metas.lock().unwrap();
+        if let Some(existing) = metas.iter_mut().find(|m| m.app_path == meta.app_path) {
+            *existing = meta.clone();
+        } else {
+            metas.push(meta.clone());
+        }
+    }
+
+    fn cleanup_old_sessions(&self, before: NaiveDate) {
+        self.sessions.lock().unwrap().retain(|s| s.date >= before);
+    }
+
+    fn vacuum(&self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn test_memory_store_insert_and_query() {
+        let store = MemoryStore::new();
+        let session = SessionRecord {
+            id: 0,
+            app_path: "C:/test.exe".into(),
+            app_name: "TestApp".into(),
+            window_title: None,
+            started_at: Utc::now(),
+            ended_at: None,
+            duration_secs: None,
+            is_idle: false,
+            date: Utc::now().date_naive(),
+        };
+        let id = store.insert_session(&session);
+        assert!(id > 0);
+
+        let active = store.get_active_session();
+        assert!(active.is_some());
+        assert_eq!(active.unwrap().app_name, "TestApp");
+    }
+}
