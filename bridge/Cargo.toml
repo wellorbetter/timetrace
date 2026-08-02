@@ -1,0 +1,16 @@
+[package]
+name = "timetrace-bridge"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+timetrace-core = { path = "../crates/core" }
+flutter_rust_bridge = "2"
+anyhow = "1"
+chrono = "0.4"
+
+[dev-dependencies]
+flutter_rust_bridge_codegen = "2"

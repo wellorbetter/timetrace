@@ -4,3 +4,8 @@
 *.db-wal
 *.db-shm
 .DS_Store
+/app/build/
+/app/.dart_tool/
+/tools/
+/frb.yaml
+/codegen*.log
