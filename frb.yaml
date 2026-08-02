@@ -1,6 +1,5 @@
-# flutter_rust_bridge codegen config
 rust_input: crate::api
-rust_root: bridge/
-dart_root: app/lib
-dart_output: app/lib/src/bridge
-rust_output: bridge/src/frb_generated.rs
+rust_root: '\\?\I:\Github\pr\timetrace\bridge'
+dart_root: '\\?\I:\Github\pr\timetrace\app'
+dart_output: '\\?\I:\Github\pr\timetrace\app\lib\src\bridge'
+rust_output: '\\?\I:\Github\pr\timetrace\bridge\src\frb_generated.rs'

@@ -28,6 +28,7 @@ abstract class AppUsageItem with _$AppUsageItem {
     required String appName,
     required int activeSeconds,
     required int idleSeconds,
+    String? exePath,
   }) = _AppUsageItem;
 
   const AppUsageItem._();

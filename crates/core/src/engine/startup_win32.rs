@@ -51,9 +51,16 @@ impl StartupSource for RegistrySource {
         for result in key.enum_values() {
             if let Ok((name, value)) = result {
                 let command = match value {
-                    winreg::RegValue { vtype: _, bytes } => String::from_utf16_lossy(
-                        &bytes.chunks(2).map(|c| u16::from_ne_bytes([c[0], c[1]])).collect::<Vec<_>>()
-                    ).trim_end_matches('\0').to_string(),
+                    winreg::RegValue { vtype: _, bytes } => {
+                        // Safe UTF-16 decode — odd-length bytes must not panic
+                        let units: Vec<u16> = bytes
+                            .chunks(2)
+                            .map(|c| {
+                                if c.len() == 2 { u16::from_ne_bytes([c[0], c[1]]) } else { c[0] as u16 }
+                            })
+                            .collect();
+                        String::from_utf16_lossy(&units).trim_end_matches('\0').to_string()
+                    }
                 };
                 entries.push(StartupEntryRecord { id: 0, name, command, source: self.source_name.to_string(),
                     enabled: true, backup_value: None, backup_path: None, first_seen: now, last_checked: now });

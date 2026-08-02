@@ -43,6 +43,8 @@ pub struct AppUsageSplit {
     pub app_name: String,
     pub active_seconds: i64,
     pub idle_seconds: i64,
+    /// Example exe path for icon extraction (first seen).
+    pub exe_path: String,
 }
 
 /// User-assigned metadata for an application.

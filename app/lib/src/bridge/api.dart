@@ -7,13 +7,16 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `parse_date`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Create the API, opening the DB and starting the background monitor.
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
+
+  /// Extract an exe icon as raw RGBA pixels.
+  IconDto? getAppIcon({required String exePath});
 
   /// All startup entries.
   List<StartupDto> getStartupEntries();
@@ -38,16 +41,21 @@ class AppUsageDto {
   final String appName;
   final PlatformInt64 activeSeconds;
   final PlatformInt64 idleSeconds;
+  final String exePath;
 
   const AppUsageDto({
     required this.appName,
     required this.activeSeconds,
     required this.idleSeconds,
+    required this.exePath,
   });
 
   @override
   int get hashCode =>
-      appName.hashCode ^ activeSeconds.hashCode ^ idleSeconds.hashCode;
+      appName.hashCode ^
+      activeSeconds.hashCode ^
+      idleSeconds.hashCode ^
+      exePath.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -56,7 +64,33 @@ class AppUsageDto {
           runtimeType == other.runtimeType &&
           appName == other.appName &&
           activeSeconds == other.activeSeconds &&
-          idleSeconds == other.idleSeconds;
+          idleSeconds == other.idleSeconds &&
+          exePath == other.exePath;
+}
+
+/// Raw RGBA icon pixels for rendering in Flutter.
+class IconDto {
+  final PlatformInt64 width;
+  final PlatformInt64 height;
+  final Uint8List rgba;
+
+  const IconDto({
+    required this.width,
+    required this.height,
+    required this.rgba,
+  });
+
+  @override
+  int get hashCode => width.hashCode ^ height.hashCode ^ rgba.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is IconDto &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          rgba == other.rgba;
 }
 
 class PageDto {

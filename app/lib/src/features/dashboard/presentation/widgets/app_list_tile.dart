@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
@@ -70,7 +71,9 @@ class _AppListTileState extends ConsumerState<AppListTile> {
         child: Column(
           children: [
             ListTile(
-              leading: Icon(Icons.apps, color: color),
+              leading: widget.app.exePath != null
+                  ? AppIcon(exePath: widget.app.exePath!, size: 32)
+                  : Icon(Icons.apps, color: color),
               title: Text(widget.app.appName, overflow: TextOverflow.ellipsis),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,

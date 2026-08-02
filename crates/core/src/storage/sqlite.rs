@@ -201,15 +201,15 @@ impl DataStore for SqliteStore {
     fn get_usage_split(&self, start: NaiveDate, end: NaiveDate) -> Vec<AppUsageSplit> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT app_name,
+            "SELECT app_name, MAX(app_path),
                     COALESCE(SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END), 0)
              FROM usage_sessions
              WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0
-             GROUP BY app_name ORDER BY 2 DESC"
+             GROUP BY app_name ORDER BY 3 DESC"
         ).unwrap();
         stmt.query_map(params![start.to_string(), end.to_string()], |row| {
-            Ok(AppUsageSplit { app_name: row.get(0)?, active_seconds: row.get(1)?, idle_seconds: row.get(2)? })
+            Ok(AppUsageSplit { app_name: row.get(0)?, exe_path: row.get(1)?, active_seconds: row.get(2)?, idle_seconds: row.get(3)? })
         }).unwrap().filter_map(|r| r.ok()).collect()
     }
 

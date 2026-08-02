@@ -18,6 +18,7 @@ pub struct AppUsageDto {
     pub app_name: String,
     pub active_seconds: i64,
     pub idle_seconds: i64,
+    pub exe_path: String,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,14 @@ pub struct StatsDto {
     pub idle_seconds: i64,
     pub total_seconds: i64,
     pub since: Option<String>,
+}
+
+/// Raw RGBA icon pixels for rendering in Flutter.
+#[derive(Debug, Clone)]
+pub struct IconDto {
+    pub width: i64,
+    pub height: i64,
+    pub rgba: Vec<u8>,
 }
 
 // ── Main API ──
@@ -82,7 +91,7 @@ impl TimeTraceApi {
         let e = parse_date(&end);
         DataStore::get_usage_split(&*self.db, s, e)
             .into_iter()
-            .map(|x| AppUsageDto { app_name: x.app_name, active_seconds: x.active_seconds, idle_seconds: x.idle_seconds })
+            .map(|x| AppUsageDto { app_name: x.app_name, active_seconds: x.active_seconds, idle_seconds: x.idle_seconds, exe_path: x.exe_path })
             .collect()
     }
 
@@ -134,6 +143,16 @@ impl TimeTraceApi {
             total_seconds: DataStore::total_tracked_seconds(&*self.db),
             since: DataStore::recording_started_at(&*self.db).map(|t| t.format("%Y-%m-%d").to_string()),
         }
+    }
+
+    /// Extract an exe icon as raw RGBA pixels.
+    #[frb(sync)]
+    pub fn get_app_icon(&self, exe_path: String) -> Option<IconDto> {
+        crate::icons::extract_icon_rgba(&exe_path).map(|(w, h, rgba)| IconDto {
+            width: w as i64,
+            height: h as i64,
+            rgba,
+        })
     }
 }
 

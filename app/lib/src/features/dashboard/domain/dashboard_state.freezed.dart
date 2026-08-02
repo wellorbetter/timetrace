@@ -289,7 +289,7 @@ as String?,
 /// @nodoc
 mixin _$AppUsageItem {
 
- String get appName; int get activeSeconds; int get idleSeconds;
+ String get appName; int get activeSeconds; int get idleSeconds; String? get exePath;
 /// Create a copy of AppUsageItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -300,16 +300,16 @@ $AppUsageItemCopyWith<AppUsageItem> get copyWith => _$AppUsageItemCopyWithImpl<A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppUsageItem&&(identical(other.appName, appName) || other.appName == appName)&&(identical(other.activeSeconds, activeSeconds) || other.activeSeconds == activeSeconds)&&(identical(other.idleSeconds, idleSeconds) || other.idleSeconds == idleSeconds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppUsageItem&&(identical(other.appName, appName) || other.appName == appName)&&(identical(other.activeSeconds, activeSeconds) || other.activeSeconds == activeSeconds)&&(identical(other.idleSeconds, idleSeconds) || other.idleSeconds == idleSeconds)&&(identical(other.exePath, exePath) || other.exePath == exePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,appName,activeSeconds,idleSeconds);
+int get hashCode => Object.hash(runtimeType,appName,activeSeconds,idleSeconds,exePath);
 
 @override
 String toString() {
-  return 'AppUsageItem(appName: $appName, activeSeconds: $activeSeconds, idleSeconds: $idleSeconds)';
+  return 'AppUsageItem(appName: $appName, activeSeconds: $activeSeconds, idleSeconds: $idleSeconds, exePath: $exePath)';
 }
 
 
@@ -320,7 +320,7 @@ abstract mixin class $AppUsageItemCopyWith<$Res>  {
   factory $AppUsageItemCopyWith(AppUsageItem value, $Res Function(AppUsageItem) _then) = _$AppUsageItemCopyWithImpl;
 @useResult
 $Res call({
- String appName, int activeSeconds, int idleSeconds
+ String appName, int activeSeconds, int idleSeconds, String? exePath
 });
 
 
@@ -337,12 +337,13 @@ class _$AppUsageItemCopyWithImpl<$Res>
 
 /// Create a copy of AppUsageItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? appName = null,Object? activeSeconds = null,Object? idleSeconds = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? appName = null,Object? activeSeconds = null,Object? idleSeconds = null,Object? exePath = freezed,}) {
   return _then(_self.copyWith(
 appName: null == appName ? _self.appName : appName // ignore: cast_nullable_to_non_nullable
 as String,activeSeconds: null == activeSeconds ? _self.activeSeconds : activeSeconds // ignore: cast_nullable_to_non_nullable
 as int,idleSeconds: null == idleSeconds ? _self.idleSeconds : idleSeconds // ignore: cast_nullable_to_non_nullable
-as int,
+as int,exePath: freezed == exePath ? _self.exePath : exePath // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -427,10 +428,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String appName,  int activeSeconds,  int idleSeconds)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String appName,  int activeSeconds,  int idleSeconds,  String? exePath)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppUsageItem() when $default != null:
-return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
+return $default(_that.appName,_that.activeSeconds,_that.idleSeconds,_that.exePath);case _:
   return orElse();
 
 }
@@ -448,10 +449,10 @@ return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String appName,  int activeSeconds,  int idleSeconds)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String appName,  int activeSeconds,  int idleSeconds,  String? exePath)  $default,) {final _that = this;
 switch (_that) {
 case _AppUsageItem():
-return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
+return $default(_that.appName,_that.activeSeconds,_that.idleSeconds,_that.exePath);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -468,10 +469,10 @@ return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String appName,  int activeSeconds,  int idleSeconds)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String appName,  int activeSeconds,  int idleSeconds,  String? exePath)?  $default,) {final _that = this;
 switch (_that) {
 case _AppUsageItem() when $default != null:
-return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
+return $default(_that.appName,_that.activeSeconds,_that.idleSeconds,_that.exePath);case _:
   return null;
 
 }
@@ -483,12 +484,13 @@ return $default(_that.appName,_that.activeSeconds,_that.idleSeconds);case _:
 
 
 class _AppUsageItem extends AppUsageItem {
-  const _AppUsageItem({required this.appName, required this.activeSeconds, required this.idleSeconds}): super._();
+  const _AppUsageItem({required this.appName, required this.activeSeconds, required this.idleSeconds, this.exePath}): super._();
   
 
 @override final  String appName;
 @override final  int activeSeconds;
 @override final  int idleSeconds;
+@override final  String? exePath;
 
 /// Create a copy of AppUsageItem
 /// with the given fields replaced by the non-null parameter values.
@@ -500,16 +502,16 @@ _$AppUsageItemCopyWith<_AppUsageItem> get copyWith => __$AppUsageItemCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppUsageItem&&(identical(other.appName, appName) || other.appName == appName)&&(identical(other.activeSeconds, activeSeconds) || other.activeSeconds == activeSeconds)&&(identical(other.idleSeconds, idleSeconds) || other.idleSeconds == idleSeconds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppUsageItem&&(identical(other.appName, appName) || other.appName == appName)&&(identical(other.activeSeconds, activeSeconds) || other.activeSeconds == activeSeconds)&&(identical(other.idleSeconds, idleSeconds) || other.idleSeconds == idleSeconds)&&(identical(other.exePath, exePath) || other.exePath == exePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,appName,activeSeconds,idleSeconds);
+int get hashCode => Object.hash(runtimeType,appName,activeSeconds,idleSeconds,exePath);
 
 @override
 String toString() {
-  return 'AppUsageItem(appName: $appName, activeSeconds: $activeSeconds, idleSeconds: $idleSeconds)';
+  return 'AppUsageItem(appName: $appName, activeSeconds: $activeSeconds, idleSeconds: $idleSeconds, exePath: $exePath)';
 }
 
 
@@ -520,7 +522,7 @@ abstract mixin class _$AppUsageItemCopyWith<$Res> implements $AppUsageItemCopyWi
   factory _$AppUsageItemCopyWith(_AppUsageItem value, $Res Function(_AppUsageItem) _then) = __$AppUsageItemCopyWithImpl;
 @override @useResult
 $Res call({
- String appName, int activeSeconds, int idleSeconds
+ String appName, int activeSeconds, int idleSeconds, String? exePath
 });
 
 
@@ -537,12 +539,13 @@ class __$AppUsageItemCopyWithImpl<$Res>
 
 /// Create a copy of AppUsageItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? appName = null,Object? activeSeconds = null,Object? idleSeconds = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? appName = null,Object? activeSeconds = null,Object? idleSeconds = null,Object? exePath = freezed,}) {
   return _then(_AppUsageItem(
 appName: null == appName ? _self.appName : appName // ignore: cast_nullable_to_non_nullable
 as String,activeSeconds: null == activeSeconds ? _self.activeSeconds : activeSeconds // ignore: cast_nullable_to_non_nullable
 as int,idleSeconds: null == idleSeconds ? _self.idleSeconds : idleSeconds // ignore: cast_nullable_to_non_nullable
-as int,
+as int,exePath: freezed == exePath ? _self.exePath : exePath // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

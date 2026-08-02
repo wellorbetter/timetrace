@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 
-/// A single startup entry tile with letter avatar + toggle.
+/// A single startup entry tile with real exe icon + toggle.
 class StartupTile extends StatelessWidget {
   const StartupTile({required this.entry, required this.onToggle, super.key});
 
@@ -14,11 +15,14 @@ class StartupTile extends StatelessWidget {
         entry.exePath.contains('System32') ||
         entry.exePath.contains('Windows');
     final name = _exeName(entry.exePath) ?? entry.name;
+    final exePath = _exePath(entry.exePath);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 3),
       child: ListTile(
-        leading: _LetterAvatar(name: name, isSys: isSys),
+        leading: exePath != null
+            ? AppIcon(exePath: exePath, size: 32)
+            : _LetterAvatar(name: name, isSys: isSys),
         title: Text(name, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           isSys ? '系统级 · ${entry.source}' : '用户级 · ${entry.source}',
@@ -32,7 +36,9 @@ class StartupTile extends StatelessWidget {
     );
   }
 
-  String? _exeName(String cmd) {
+  String? _exeName(String cmd) => _exePath(cmd)?.split('\\').last;
+
+  String? _exePath(String cmd) {
     final lower = cmd.toLowerCase();
     final idx = lower.indexOf('.exe');
     if (idx < 0) return null;
@@ -42,8 +48,7 @@ class StartupTile extends StatelessWidget {
     if (start < 0) start = 0;
     final path = cmd.substring(
         start + (start < cmd.length && (cmd[start] == '"' || cmd[start] == ' ') ? 1 : 0), end);
-    final slash = path.lastIndexOf('\\');
-    return slash < 0 ? path : path.substring(slash + 1);
+    return path.startsWith('%') ? null : path;
   }
 }
 

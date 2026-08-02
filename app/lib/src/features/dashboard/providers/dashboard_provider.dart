@@ -44,6 +44,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
                 appName: s.appName,
                 activeSeconds: s.activeSeconds.toInt(),
                 idleSeconds: s.idleSeconds.toInt(),
+                exePath: s.exePath.isEmpty ? null : s.exePath,
               ))
           .toList(),
       totalActiveSeconds: stats.activeSeconds.toInt(),
