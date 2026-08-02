@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_tile.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/bar_chart_card.dart';
@@ -63,16 +64,7 @@ class _DashboardBody extends ConsumerWidget {
         state.apps.where((a) => a.totalSeconds > 0).toList(growable: false);
 
     if (apps.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.insights, size: 64, color: scheme.outlineVariant),
-            const SizedBox(height: 16),
-            const Text('暂无数据，切换应用后回来查看'),
-          ],
-        ),
-      );
+      return const EmptyState(message: '暂无数据，切换应用后回来查看');
     }
 
     return ListView(

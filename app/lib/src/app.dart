@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/router/app_router.dart';
+import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 
 class TimetraceApp extends ConsumerWidget {
@@ -9,11 +10,13 @@ class TimetraceApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final dark = ref.watch(themeModeProvider);
     return MaterialApp.router(
       title: 'TimeTrace',
       debugShowCheckedModeBanner: false,
       theme: TimetraceTheme.light(),
       darkTheme: TimetraceTheme.dark(),
+      themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: router,
     );
   }

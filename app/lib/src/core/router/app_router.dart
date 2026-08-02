@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/startup/presentation/startup_screen.dart';
 
@@ -12,6 +13,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final dark = ref.watch(themeModeProvider);
     return Scaffold(
       body: Row(
         children: [
@@ -35,6 +37,20 @@ class AppShell extends ConsumerWidget {
                 label: Text('自启动'),
               ),
             ],
+            trailing: Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: IconButton(
+                    icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
+                    onPressed: () =>
+                        ref.read(themeModeProvider.notifier).toggle(),
+                    tooltip: '切换主题',
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: child),
