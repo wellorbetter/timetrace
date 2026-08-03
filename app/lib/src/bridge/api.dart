@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_date`, `setup_logging`
+// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `parse_date`, `setup_logging`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
@@ -35,6 +35,10 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String appName,
     required String date,
   });
+
+  /// Resolve a startup command line to its clean exe path (env-expanded,
+  /// quotes/args stripped). Returns None if no .exe is found.
+  String? resolveExePath({required String command});
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config});

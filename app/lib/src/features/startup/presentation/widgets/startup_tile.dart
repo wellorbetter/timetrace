@@ -1,22 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
+import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 
-/// A startup entry row: icon + name + command + status + toggle.
-class StartupTile extends StatelessWidget {
+/// A startup entry row: icon + app name + status + toggle.
+/// Full path shown via info icon tooltip / long-press.
+class StartupTile extends ConsumerStatefulWidget {
   const StartupTile({required this.entry, required this.onToggle, super.key});
 
   final StartupDto entry;
   final void Function(bool) onToggle;
 
   @override
+  ConsumerState<StartupTile> createState() => _StartupTileState();
+}
+
+class _StartupTileState extends ConsumerState<StartupTile> {
+  String? _exePath;
+  String? _appName;
+  bool _showPath = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(covariant StartupTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entry.exePath != widget.entry.exePath) _resolve();
+  }
+
+  void _resolve() {
+    try {
+      final api = ref.read(apiProvider);
+      final path = api.resolveExePath(command: widget.entry.exePath);
+      setState(() {
+        _exePath = path;
+        _appName = path?.split('\\').last ?? widget.entry.name;
+      });
+    } catch (_) {
+      setState(() {
+        _exePath = null;
+        _appName = widget.entry.name;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isSys = entry.source == 'HKLM' ||
-        entry.exePath.contains('System32') ||
-        entry.exePath.contains('Windows');
-    final exePath = _exePath(entry.exePath);
-    final name = _exeName(entry.exePath) ?? entry.name;
+    final isSys = widget.entry.source == 'HKLM' ||
+        widget.entry.exePath.contains('System32') ||
+        widget.entry.exePath.contains('Windows');
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -28,44 +66,58 @@ class StartupTile extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => onToggle(!entry.enabled),
+        onTap: () => widget.onToggle(!widget.entry.enabled),
+        onLongPress: () => setState(() => _showPath = !_showPath),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              // Icon
-              exePath != null
-                  ? AppIcon(exePath: exePath, size: 32)
-                  : _LetterAvatar(name: name, isSys: isSys),
+              // Icon (real exe icon, resolved via Rust)
+              if (_exePath != null)
+                AppIcon(exePath: _exePath!, size: 32)
+              else
+                _LetterAvatar(name: _appName ?? '?', isSys: isSys),
               const SizedBox(width: 12),
-              // Name + command
+              // App name only (path hidden by default)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      _appName ?? widget.entry.name,
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w500),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _commandPreview(entry.exePath),
-                      style: TextStyle(fontSize: 11, color: scheme.outline),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                    // Path revealed on long-press (secondary)
+                    if (_showPath)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          widget.entry.exePath,
+                          style:
+                              TextStyle(fontSize: 11, color: scheme.outline),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
+              // Path info tooltip button
+              IconButton(
+                icon: Icon(Icons.info_outline, size: 18, color: scheme.outline),
+                tooltip: widget.entry.exePath,
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _showPath = !_showPath),
+              ),
               // Status badge
-              _StatusBadge(enabled: entry.enabled),
+              _StatusBadge(enabled: widget.entry.enabled),
               // Toggle
               Switch(
-                value: entry.enabled,
-                onChanged: onToggle,
+                value: widget.entry.enabled,
+                onChanged: widget.onToggle,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
@@ -73,29 +125,6 @@ class StartupTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _commandPreview(String cmd) {
-    final cleaned = cmd.trim();
-    if (cleaned.length > 42) return '${cleaned.substring(0, 42)}…';
-    return cleaned;
-  }
-
-  String? _exeName(String cmd) => _exePath(cmd)?.split('\\').last;
-
-  String? _exePath(String cmd) {
-    final lower = cmd.toLowerCase();
-    final idx = lower.indexOf('.exe');
-    if (idx < 0) return null;
-    final end = (idx + 4).clamp(0, cmd.length);
-    if (end <= 0) return null;
-    var start = cmd.lastIndexOf('"', end);
-    start = start < 0 ? cmd.lastIndexOf(' ', end) : start;
-    if (start < 0) start = 0;
-    if (start >= end) return null;
-    final path = cmd.substring(
-        start + (start < cmd.length && (cmd[start] == '"' || cmd[start] == ' ') ? 1 : 0), end);
-    return path.startsWith('%') ? null : path;
   }
 }
 
@@ -108,7 +137,9 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = enabled ? Colors.green.shade700 : scheme.outline;
-    final bg = enabled ? Colors.green.withValues(alpha: 0.12) : scheme.surfaceContainerHighest;
+    final bg = enabled
+        ? Colors.green.withValues(alpha: 0.12)
+        : scheme.surfaceContainerHighest;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

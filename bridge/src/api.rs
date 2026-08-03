@@ -178,11 +178,19 @@ impl TimeTraceApi {
     /// Extract an exe icon as raw RGBA pixels.
     #[frb(sync)]
     pub fn get_app_icon(&self, exe_path: String) -> Option<IconDto> {
-        crate::icons::extract_icon_rgba(&exe_path).map(|(w, h, rgba)| IconDto {
+        let cleaned = clean_exe_path(&exe_path).unwrap_or_else(|| exe_path.clone());
+        crate::icons::extract_icon_rgba(&cleaned).map(|(w, h, rgba)| IconDto {
             width: w as i64,
             height: h as i64,
             rgba,
         })
+    }
+
+    /// Resolve a startup command line to its clean exe path (env-expanded,
+    /// quotes/args stripped). Returns None if no .exe is found.
+    #[frb(sync)]
+    pub fn resolve_exe_path(&self, command: String) -> Option<String> {
+        clean_exe_path(&command)
     }
 
     /// Read the current user configuration.
@@ -210,4 +218,51 @@ impl TimeTraceApi {
 
 fn parse_date(s: &str) -> chrono::NaiveDate {
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or_else(|_| chrono::Local::now().date_naive())
+}
+
+/// Extract a clean, env-expanded exe path from a startup command line.
+/// Handles: quoted paths, trailing args, %VAR% env vars, double backslashes.
+fn clean_exe_path(cmd: &str) -> Option<String> {
+    let lower = cmd.to_lowercase();
+    let idx = lower.find(".exe")?;
+    let end = idx + 4;
+    if end > cmd.len() {
+        return None;
+    }
+    let before = &cmd[..end];
+    let start = before
+        .rfind('"')
+        .map(|q| q + 1)
+        .or_else(|| before.rfind(' ').map(|s| s + 1))
+        .unwrap_or(0);
+    if start >= end {
+        return None;
+    }
+    let raw = &cmd[start..end];
+
+    // Normalize double backslashes from registry escaping: \\ → \
+    // (only when the path otherwise parses — a single backslash stays)
+    let raw = raw.replace("\\\\", "\\");
+
+    // Expand %VAR% using process environment (windir, SystemRoot, etc.)
+    let mut expanded = raw.to_string();
+    for (k, v) in std::env::vars() {
+        expanded = expanded.replace(&format!("%{}%", k), &v);
+    }
+    // Fallback for common vars if somehow not in env
+    let common = [
+        ("windir", "C:\\Windows"),
+        ("SystemRoot", "C:\\Windows"),
+        ("ProgramFiles", "C:\\Program Files"),
+        ("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+        ("SystemDrive", "C:"),
+    ];
+    for (k, v) in common {
+        expanded = expanded.replace(&format!("%{}%", k), v);
+    }
+
+    if expanded.contains("%") {
+        return None; // unresolved env var — can't iconify
+    }
+    Some(expanded)
 }

@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1643533028;
+  int get rustContentHash => 1683660891;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -105,6 +105,11 @@ abstract class RustLibApi extends BaseApi {
     required TimeTraceApi that,
     required String appName,
     required String date,
+  });
+
+  String? crateApiTimeTraceApiResolveExePath({
+    required TimeTraceApi that,
+    required String command,
   });
 
   void crateApiTimeTraceApiSetConfig({
@@ -360,6 +365,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String? crateApiTimeTraceApiResolveExePath({
+    required TimeTraceApi that,
+    required String command,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(command, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiResolveExePathConstMeta,
+        argValues: [that, command],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiResolveExePathConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_resolve_exe_path",
+        argNames: ["that", "command"],
+      );
+
+  @override
   void crateApiTimeTraceApiSetConfig({
     required TimeTraceApi that,
     required ConfigDto config,
@@ -373,7 +411,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -408,7 +446,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1201,6 +1239,11 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     appName: appName,
     date: date,
   );
+
+  /// Resolve a startup command line to its clean exe path (env-expanded,
+  /// quotes/args stripped). Returns None if no .exe is found.
+  String? resolveExePath({required String command}) => RustLib.instance.api
+      .crateApiTimeTraceApiResolveExePath(that: this, command: command);
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config}) => RustLib.instance.api
