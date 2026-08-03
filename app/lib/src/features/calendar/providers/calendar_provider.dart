@@ -31,3 +31,26 @@ Future<void> saveDiary(WidgetRef ref, DateTime date, String content) async {
     rethrow;
   }
 }
+
+/// Hourly activity for a day (24 ints) — for the heatmap.
+final dayHourlyProvider =
+    FutureProvider.autoDispose.family<List<int>, String>((ref, date) async {
+  final api = ref.read(apiProvider);
+  return api.getDayHourly(date: date).map((e) => e.toInt()).toList();
+});
+
+/// Aggregated usage for a date range (week/month summary panel).
+final rangeSummaryProvider = FutureProvider.autoDispose
+    .family<List<DaySessionDto>, (String, String)>((ref, range) async {
+  final api = ref.read(apiProvider);
+  final split = api.getUsageSplit(start: range.$1, end: range.$2);
+  // Convert aggregated split to DaySessionDto-like rows (app, duration).
+  return split
+      .map((s) => DaySessionDto(
+            appName: s.appName,
+            isIdle: false,
+            durationSecs: s.activeSeconds,
+            startedAt: '',
+          ))
+      .toList();
+});

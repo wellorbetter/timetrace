@@ -11,6 +11,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
+  /// Register a diary image for a date.
+  String addDiaryImage({required String date, required String path});
+
   /// Clear ALL tracked usage data (sessions + page visits).
   void clearData();
 
@@ -37,8 +40,17 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Full day detail: active/idle totals, session timeline, diary.
   DayDetailDto getDayDetail({required String date});
 
+  /// Hourly active-seconds for a day (24 buckets) — for the heatmap.
+  Int64List getDayHourly({required String date});
+
   /// Get all diary entries for a month range (for calendar markers).
   List<(String, String)> getDiaryEntries({
+    required String start,
+    required String end,
+  });
+
+  /// Diary image paths in a date range (for calendar cell overlays).
+  List<(String, String)> getDiaryImages({
     required String start,
     required String end,
   });
@@ -63,6 +75,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Whether tracking is currently paused.
   bool isTrackingPaused();
+
+  /// Remove a diary image.
+  void removeDiaryImage({required String path});
 
   /// Resolve a startup command line to its clean exe path (env-expanded,
   /// quotes/args stripped). Returns None if no .exe is found.

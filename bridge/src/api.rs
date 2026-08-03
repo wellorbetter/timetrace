@@ -341,6 +341,30 @@ impl TimeTraceApi {
         DataStore::set_diary(&*self.db, parse_date(&date), &content)
     }
 
+    /// Hourly active-seconds for a day (24 buckets) — for the heatmap.
+    #[frb(sync)]
+    pub fn get_day_hourly(&self, date: String) -> Vec<i64> {
+        DataStore::get_day_hourly(&*self.db, parse_date(&date))
+    }
+
+    /// Diary image paths in a date range (for calendar cell overlays).
+    #[frb(sync)]
+    pub fn get_diary_images(&self, start: String, end: String) -> Vec<(String, String)> {
+        DataStore::get_diary_images(&*self.db, parse_date(&start), parse_date(&end))
+    }
+
+    /// Register a diary image for a date.
+    #[frb(sync)]
+    pub fn add_diary_image(&self, date: String, path: String) -> String {
+        DataStore::add_diary_image(&*self.db, parse_date(&date), &path)
+    }
+
+    /// Remove a diary image.
+    #[frb(sync)]
+    pub fn remove_diary_image(&self, path: String) {
+        DataStore::remove_diary_image(&*self.db, &path);
+    }
+
     /// Clear ALL tracked usage data (sessions + page visits).
     #[frb(sync)]
     pub fn clear_data(&self) {

@@ -51,6 +51,15 @@ pub const CREATE_TABLES: &[&str] = &[
         content         TEXT    NOT NULL DEFAULT '',
         updated_at      TEXT    NOT NULL
     )",
+
+    // Diary images (stackable per day, overlaid on calendar cells)
+    "CREATE TABLE IF NOT EXISTS diary_images (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        date            TEXT    NOT NULL,
+        path            TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_diary_images_date ON diary_images(date)",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

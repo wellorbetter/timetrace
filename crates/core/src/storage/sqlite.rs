@@ -464,6 +464,58 @@ impl DataStore for SqliteStore {
         content.to_string()
     }
 
+    fn get_day_hourly(&self, date: NaiveDate) -> Vec<i64> {
+        let conn = self.lock();
+        let mut hours = vec![0i64; 24];
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT started_at, duration_secs FROM usage_sessions
+             WHERE date = ?1 AND is_idle = 0 AND duration_secs > 0"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![date.to_string()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }) {
+                for row in rows.flatten() {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&row.0) {
+                        let local = dt.with_timezone(&chrono::Local);
+                        let h = local.hour() as usize;
+                        if h < 24 { hours[h] += row.1; }
+                    }
+                }
+            }
+        }
+        hours
+    }
+
+    fn get_diary_images(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT date, path FROM diary_images WHERE date >= ?1 AND date <= ?2 ORDER BY id"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
+
+    fn add_diary_image(&self, date: NaiveDate, path: &str) -> String {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        let _ = conn.execute(
+            "INSERT INTO diary_images (date, path, created_at) VALUES (?1, ?2, ?3)",
+            params![date.to_string(), path, now],
+        );
+        path.to_string()
+    }
+
+    fn remove_diary_image(&self, path: &str) {
+        let conn = self.lock();
+        let _ = conn.execute("DELETE FROM diary_images WHERE path = ?1", params![path]);
+    }
+
     fn get_day_sessions(&self, date: NaiveDate) -> Vec<(String, bool, i64, String)> {
         let conn = self.lock();
         let mut out = Vec::new();
@@ -711,6 +763,20 @@ impl DataStore for MemoryStore {
     fn get_day_sessions(&self, _date: NaiveDate) -> Vec<(String, bool, i64, String)> {
         vec![]
     }
+
+    fn get_day_hourly(&self, _date: NaiveDate) -> Vec<i64> {
+        vec![0; 24]
+    }
+
+    fn get_diary_images(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String)> {
+        vec![]
+    }
+
+    fn add_diary_image(&self, _date: NaiveDate, path: &str) -> String {
+        path.to_string()
+    }
+
+    fn remove_diary_image(&self, _path: &str) {}
 }
 
 #[cfg(test)]

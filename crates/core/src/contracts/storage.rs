@@ -161,4 +161,16 @@ pub trait DataStore: Send + Sync {
 
     /// Per-session detail for a day: (app_name, is_idle, duration_secs, started_at).
     fn get_day_sessions(&self, date: NaiveDate) -> Vec<(String, bool, i64, String)>;
+
+    /// Hourly active-seconds for a day (24 buckets).
+    fn get_day_hourly(&self, date: NaiveDate) -> Vec<i64>;
+
+    /// Diary image paths in a range: (date_str, path).
+    fn get_diary_images(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)>;
+
+    /// Add a diary image for a date. Returns the stored path.
+    fn add_diary_image(&self, date: NaiveDate, path: &str) -> String;
+
+    /// Remove a diary image by path.
+    fn remove_diary_image(&self, path: &str);
 }

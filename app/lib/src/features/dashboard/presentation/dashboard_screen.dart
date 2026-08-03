@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_tile.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/bar_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/weekly_insight_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -20,10 +19,10 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(L10n(ref.watch(localeProvider)).usageStats),
+        title: const Text('使用统计'),
         actions: [
           for (final (label, range) in [
-            (L10n(ref.watch(localeProvider)).locale == AppLocale.zh ? '今天' : 'Today', DateRange.today),
+            ('今天', DateRange.today),
             ('昨天', DateRange.yesterday),
             ('本周', DateRange.week),
             ('本月', DateRange.month),
@@ -69,53 +68,102 @@ class _DashboardBody extends ConsumerWidget {
       return const EmptyState(message: '暂无数据，切换应用后回来查看');
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // ── Weekly insight (product differentiator) ──
-        WeeklyInsightCard(
-          thisWeek: state.thisWeekSeconds,
-          lastWeek: state.lastWeekSeconds,
-        ),
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth > 900;
+        if (wide) {
+          // ── Two-column: charts/apps (left) + calendar/diary (right) ──
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: ListView(
+                    children: [
+                      Row(
+                        children: [
+                          StatCard(
+                            icon: Icons.timer_outlined,
+                            label: '活跃',
+                            value: state.totalActiveLabel,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          StatCard(
+                            icon: Icons.pause_circle_outline,
+                            label: '离开',
+                            value: _fmt(state.totalIdleSeconds),
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 10),
+                          StatCard(
+                            icon: Icons.history,
+                            label: '总时长',
+                            value: _fmt(state.lifetimeSeconds),
+                            color: scheme.tertiary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: BarChartCard(apps: apps)),
+                          const SizedBox(width: 12),
+                          Expanded(child: PieChartCard(apps: apps)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text('应用列表',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      for (final app in apps) AppListTile(app: app),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // ── Right column: full-height calendar ──
+                Expanded(
+                  flex: 4,
+                  child: CalendarCard(compact: true),
+                ),
+              ],
+            ),
+          );
+        }
+        // ── Narrow: single column ──
+        return ListView(
+          padding: const EdgeInsets.all(12),
           children: [
-            StatCard(
-              icon: Icons.timer_outlined,
-              label: '活跃',
-              value: state.totalActiveLabel,
-              color: scheme.primary,
+            Row(
+              children: [
+                StatCard(
+                    icon: Icons.timer_outlined,
+                    label: '活跃',
+                    value: state.totalActiveLabel,
+                    color: scheme.primary),
+                const SizedBox(width: 10),
+                StatCard(
+                    icon: Icons.pause_circle_outline,
+                    label: '离开',
+                    value: _fmt(state.totalIdleSeconds),
+                    color: Colors.grey),
+              ],
             ),
-            const SizedBox(width: 12),
-            StatCard(
-              icon: Icons.pause_circle_outline,
-              label: L10n(ref.watch(localeProvider)).idle,
-              value: _fmt(state.totalIdleSeconds),
-              color: Colors.grey,
-            ),
-            const SizedBox(width: 12),
-            StatCard(
-              icon: Icons.history,
-              label: '总时长',
-              value: _fmt(state.lifetimeSeconds),
-              color: scheme.tertiary,
-            ),
+            const SizedBox(height: 12),
+            BarChartCard(apps: apps),
+            const SizedBox(height: 12),
+            PieChartCard(apps: apps),
+            const SizedBox(height: 12),
+            CalendarCard(compact: false),
+            const SizedBox(height: 12),
+            Text('应用列表', style: Theme.of(context).textTheme.titleMedium),
+            for (final app in apps) AppListTile(app: app),
           ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: BarChartCard(apps: apps)),
-            const SizedBox(width: 16),
-            Expanded(child: PieChartCard(apps: apps)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Divider(),
-        Text('应用列表', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        for (final app in apps) AppListTile(app: app),
-      ],
+        );
+      },
     );
   }
 
