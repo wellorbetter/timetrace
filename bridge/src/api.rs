@@ -274,6 +274,39 @@ impl TimeTraceApi {
         app_config.excluded_apps = config.excluded_apps;
         app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))
     }
+
+    /// Active seconds for this week (Mon→today) and last week (full).
+    #[frb(sync)]
+    pub fn get_week_totals(&self) -> (i64, i64) {
+        let today = chrono::Local::now().date_naive();
+        let weekday = chrono::Datelike::weekday(&today).num_days_from_monday() as i64;
+        let this_monday = today - chrono::Duration::days(weekday);
+        let last_monday = this_monday - chrono::Duration::days(7);
+        let this_week = DataStore::total_tracked_in_range(&*self.db, this_monday, today);
+        let last_week = DataStore::total_tracked_in_range(&*self.db, last_monday, this_monday - chrono::Duration::days(1));
+        (this_week, last_week)
+    }
+
+    /// Clear ALL tracked usage data (sessions + page visits).
+    #[frb(sync)]
+    pub fn clear_data(&self) {
+        tracing::info!("Clearing all usage data");
+        DataStore::clear_all_data(&*self.db);
+    }
+
+    /// Export usage data for a date range as CSV.
+    /// Returns the CSV text (app, date, active_secs, idle_secs).
+    #[frb(sync)]
+    pub fn export_csv(&self, start: String, end: String) -> String {
+        let s = parse_date(&start);
+        let e = parse_date(&end);
+        let rows = DataStore::export_rows(&*self.db, s, e);
+        let mut csv = String::from("app,date,active_secs,idle_secs\n");
+        for (app, date, active, idle) in rows {
+            csv.push_str(&format!("{},{},{},{}\n", app, date, active, idle));
+        }
+        csv
+    }
 }
 
 fn parse_date(s: &str) -> chrono::NaiveDate {

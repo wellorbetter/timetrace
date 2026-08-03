@@ -10,6 +10,8 @@ abstract class DashboardState with _$DashboardState {
     required int totalActiveSeconds,
     required int totalIdleSeconds,
     required int lifetimeSeconds,
+    @Default(0) int thisWeekSeconds,
+    @Default(0) int lastWeekSeconds,
     String? since,
   }) = _DashboardState;
 

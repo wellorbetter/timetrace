@@ -39,6 +39,7 @@ class L10n {
   String get saved => locale == AppLocale.zh ? '已保存' : 'Saved';
   String get appliesOnRestart =>
       locale == AppLocale.zh ? '监控参数将在下次启动时生效' : 'Applies on next launch';
+  String get exportData => locale == AppLocale.zh ? '导出数据' : 'Export data';
   String get about => locale == AppLocale.zh ? '关于' : 'About';
   String get aboutText => locale == AppLocale.zh
       ? 'TimeTrace — 本地应用使用追踪器'

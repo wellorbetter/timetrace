@@ -11,9 +11,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
+  /// Clear ALL tracked usage data (sessions + page visits).
+  void clearData();
+
   /// Create the API, opening the DB and starting the background monitor.
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
+
+  /// Export usage data for a date range as CSV.
+  /// Returns the CSV text (app, date, active_secs, idle_secs).
+  String exportCsv({required String start, required String end});
 
   /// Extract an exe icon as raw RGBA pixels.
   IconDto? getAppIcon({required String exePath});
@@ -35,6 +42,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Per-app active/idle split for a date range (dates as "YYYY-MM-DD").
   List<AppUsageDto> getUsageSplit({required String start, required String end});
+
+  /// Active seconds for this week (Mon→today) and last week (full).
+  (PlatformInt64, PlatformInt64) getWeekTotals();
 
   /// Page-level breakdown for an app on a date.
   List<PageDto> getWindowTitles({

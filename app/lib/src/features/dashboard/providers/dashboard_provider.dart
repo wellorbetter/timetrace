@@ -40,6 +40,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final (start, end) = _rangeBounds(range);
     // Single FFI call for the whole dashboard.
     final data = api.getDashboardData(start: start, end: end);
+    final (thisWeek, lastWeek) = api.getWeekTotals();
     return DashboardState(
       apps: data.apps
           .map((s) => AppUsageItem(
@@ -52,6 +53,8 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       totalActiveSeconds: data.activeSeconds.toInt(),
       totalIdleSeconds: data.idleSeconds.toInt(),
       lifetimeSeconds: data.totalSeconds.toInt(),
+      thisWeekSeconds: thisWeek.toInt(),
+      lastWeekSeconds: lastWeek.toInt(),
       since: data.since,
     );
   }

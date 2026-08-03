@@ -95,6 +95,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageDto dco_decode_page_dto(dynamic raw);
 
   @protected
+  (PlatformInt64, PlatformInt64) dco_decode_record_i_64_i_64(dynamic raw);
+
+  @protected
   StartupDto dco_decode_startup_dto(dynamic raw);
 
   @protected
@@ -183,6 +186,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageDto sse_decode_page_dto(SseDeserializer deserializer);
+
+  @protected
+  (PlatformInt64, PlatformInt64) sse_decode_record_i_64_i_64(
+    SseDeserializer deserializer,
+  );
 
   @protected
   StartupDto sse_decode_startup_dto(SseDeserializer deserializer);
@@ -300,6 +308,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_page_dto(PageDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_i_64_i_64(
+    (PlatformInt64, PlatformInt64) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_startup_dto(StartupDto self, SseSerializer serializer);

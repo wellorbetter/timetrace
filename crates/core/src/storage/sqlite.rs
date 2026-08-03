@@ -422,6 +422,31 @@ impl DataStore for SqliteStore {
             warn!("Failed to vacuum: {e}");
         }
     }
+
+    fn clear_all_data(&self) {
+        let conn = self.lock();
+        let _ = conn.execute_batch("DELETE FROM usage_sessions; DELETE FROM page_visits;");
+    }
+
+    fn export_rows(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String, i64, i64)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT app_name, date,
+                    COALESCE(SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END), 0)
+             FROM usage_sessions
+             WHERE date >= ?1 AND date <= ?2 AND app_name != '__IDLE__'
+             GROUP BY app_name, date ORDER BY date"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
 }
 
 // ── Internal helpers ──
@@ -610,6 +635,14 @@ impl DataStore for MemoryStore {
     }
 
     fn vacuum(&self) {}
+
+    fn clear_all_data(&self) {
+        self.sessions.lock().unwrap().clear();
+    }
+
+    fn export_rows(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String, i64, i64)> {
+        vec![]
+    }
 }
 
 #[cfg(test)]

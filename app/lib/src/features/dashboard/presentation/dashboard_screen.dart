@@ -7,6 +7,7 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/bar_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/weekly_insight_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -71,6 +72,11 @@ class _DashboardBody extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── Weekly insight (product differentiator) ──
+        WeeklyInsightCard(
+          thisWeek: state.thisWeekSeconds,
+          lastWeek: state.lastWeekSeconds,
+        ),
         Row(
           children: [
             StatCard(

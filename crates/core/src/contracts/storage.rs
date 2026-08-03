@@ -143,4 +143,10 @@ pub trait DataStore: Send + Sync {
 
     /// Reclaim space from deleted records.
     fn vacuum(&self);
+
+    /// Delete ALL sessions and page visits (used by settings "clear data").
+    fn clear_all_data(&self);
+
+    /// Raw export rows: (app_name, date, active_secs, idle_secs).
+    fn export_rows(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String, i64, i64)>;
 }

@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -112,9 +117,21 @@ class SettingsScreen extends ConsumerWidget {
               title: Text(l.recordingSince),
               subtitle: Text(_dbPath(settings)),
             ),
+            // Export CSV
             ListTile(
-              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-              title: Text(l.clearData, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              leading: const Icon(Icons.file_download_outlined),
+              title: Text(l.exportData),
+              subtitle: Text('CSV — ${l.appList}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _exportCsv(context, ref, l),
+            ),
+            // Clear data
+            ListTile(
+              leading: Icon(Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error),
+              title: Text(l.clearData,
+                  style:
+                      TextStyle(color: Theme.of(context).colorScheme.error)),
               onTap: () => _confirmClear(context, ref, l),
             ),
             const Divider(),
@@ -171,14 +188,51 @@ class SettingsScreen extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () {
-              // TODO: expose clear_data in bridge
               Navigator.pop(ctx);
+              try {
+                ref.read(apiProvider).clearData();
+                ref.invalidate(settingsProvider);
+                ref.invalidate(dashboardProvider);
+                AppLogger.log('data cleared via settings');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l.saved)),
+                );
+              } catch (e) {
+                AppLogger.log('clear data failed: $e');
+              }
             },
             child: Text(l.confirm),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _exportCsv(
+      BuildContext context, WidgetRef ref, L10n l) async {
+    final dir = Platform.environment['APPDATA'] ?? '.';
+    final path = '$dir\\TimeTrace\\export.csv';
+    try {
+      final now = DateTime.now();
+      final start =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+      final end =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final csv = ref.read(apiProvider).exportCsv(start: start, end: end);
+      File(path).writeAsStringSync(csv);
+      AppLogger.log('exported CSV to $path');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${l.exportData}: $path')),
+        );
+      }
+    } catch (e) {
+      AppLogger.log('export failed: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${l.exportData} ${l.cancel}')));
+      }
+    }
   }
 }
 
