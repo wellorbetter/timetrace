@@ -19,7 +19,7 @@ class AppShell extends ConsumerWidget {
       body: Row(
         children: [
           NavigationRail(
-            selectedIndex: _indexOf(child),
+            selectedIndex: _indexOf(context),
             onDestinationSelected: (i) => context.go(_paths[i]),
             labelType: NavigationRailLabelType.all,
             leading: const Padding(
@@ -73,11 +73,11 @@ class AppShell extends ConsumerWidget {
 
 const _paths = ['/dashboard', '/startup', '/settings'];
 
-int _indexOf(Widget child) {
-  if (child is DashboardScreen) return 0;
-  if (child is StartupScreen) return 1;
-  if (child is SettingsScreen) return 2;
-  return 0;
+/// Resolve the selected rail index from the current route path.
+int _indexOf(BuildContext context) {
+  final location = GoRouterState.of(context).uri.path;
+  final i = _paths.indexOf(location);
+  return i >= 0 ? i : 0;
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {

@@ -28,6 +28,9 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
     await windowManager.setPreventClose(true);
+    // Set taskbar/title-bar icon (RC compiler is broken on this machine,
+    // so we set it at runtime from the bundled asset).
+    await windowManager.setIcon('assets/icon.ico');
 
     // System tray
     final tray = TrayService(ref);
