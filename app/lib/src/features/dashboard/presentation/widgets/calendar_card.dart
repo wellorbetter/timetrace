@@ -60,10 +60,14 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           .where((e) => e.$2.isNotEmpty)
           .map((e) => e.$1)
           .toSet();
+      // Cap to the most recent 30 entries (memory: avoid holding long texts)
       final entriesList = diaryEntries
           .where((e) => e.$2.isNotEmpty)
           .toList()
         ..sort((a, b) => a.$1.compareTo(b.$1));
+      final capped = entriesList.length > 30
+          ? entriesList.sublist(entriesList.length - 30)
+          : entriesList;
       // Per-day active seconds (heatmap intensity) — one CSV query, parsed locally
       final usage = <String, int>{};
       try {
@@ -90,7 +94,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           _diaryDays = diaryDays;
           _dayUsage = usage;
           _maxDayUsage = maxUsage;
-          _diaryEntries = entriesList;
+          _diaryEntries = capped;
         });
       }
     } catch (e) {
@@ -389,8 +393,6 @@ class _SummaryPanel extends ConsumerStatefulWidget {
 class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -660,7 +662,6 @@ class _SessionRowSimple extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
     return Padding(
@@ -704,13 +705,9 @@ class _DiaryEditor extends ConsumerStatefulWidget {
 }
 
 class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
-  TextEditingController? _diaryCtrl;
-  bool _dirty = false;
-
   @override
   void didUpdateWidget(covariant _DiaryEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.date != widget.date) _dirty = false;
   }
 
   Future<void> _uploadImage() async {

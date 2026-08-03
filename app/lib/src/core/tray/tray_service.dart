@@ -36,7 +36,7 @@ class TrayService with TrayListener {
             label: _paused ? '▶ 恢复追踪' : '⏸ 暂停追踪',
             onClick: (_) => _togglePause(),
           ),
-          MenuItem(key: 'sep', label: '—'),
+          MenuItem.separator(),
           MenuItem(
             key: 'quit',
             label: '退出',

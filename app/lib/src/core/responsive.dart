@@ -9,23 +9,8 @@ ScreenSize screenSizeOf(BoxConstraints c) {
   return ScreenSize.wide;
 }
 
-/// Adaptive visibility helpers.
+/// Adaptive visibility helpers (only what's actually used).
 extension ScreenSizeX on ScreenSize {
-  /// Whether to show the full bar+pie charts row.
-  bool get showChartsRow => this != ScreenSize.compact;
-
-  /// Whether to show the full calendar (with diary).
-  bool get showFullCalendar => this != ScreenSize.compact;
-
-  /// Whether to show the two-column layout (charts left, calendar right).
+  /// Whether the layout has room for the full-width wide layout.
   bool get twoColumn => this == ScreenSize.wide;
-
-  /// Whether to show stat cards in a 3-up row (vs 2-up compact).
-  bool get threeStats => this != ScreenSize.compact;
-
-  /// Default visible app-list rows before "show more".
-  int get defaultAppRows => this == ScreenSize.compact ? 4 : 8;
-
-  /// Default session rows before "show more".
-  int get defaultSessionRows => this == ScreenSize.compact ? 4 : 8;
 }

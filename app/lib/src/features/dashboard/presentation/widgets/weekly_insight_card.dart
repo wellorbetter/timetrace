@@ -1,6 +1,5 @@
 import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter/material.dart';
-import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 
 /// Weekly insight using the open-source `table_calendar` widget.
 /// This week vs last week totals + calendar with day activity badges.

@@ -11,7 +11,6 @@ import 'package:timetrace_app/src/core/logging/app_logger.dart';
 class _IconCache {
   static final Map<String, ui.Image> _cache = {};
 
-  static bool contains(String path) => _cache.containsKey(path);
   static ui.Image? get(String path) => _cache[path];
   static void put(String path, ui.Image img) {
     // Bound cache size (prevents unbounded growth with many apps).

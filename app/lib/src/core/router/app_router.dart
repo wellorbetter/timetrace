@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 import 'package:timetrace_app/src/features/startup/presentation/startup_screen.dart';
@@ -14,7 +13,6 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dark = ref.watch(themeModeProvider);
     return Scaffold(
       body: Row(
         children: [
