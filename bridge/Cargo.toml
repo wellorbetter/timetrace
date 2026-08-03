@@ -16,6 +16,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
 ] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+dirs = "6"
 
 [dev-dependencies]
 flutter_rust_bridge_codegen = "2"

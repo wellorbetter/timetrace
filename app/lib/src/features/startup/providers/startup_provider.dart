@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
 /// Startup entries state (Riverpod 3 syntax).
 class StartupNotifier extends AsyncNotifier<List<StartupDto>> {
@@ -8,14 +9,27 @@ class StartupNotifier extends AsyncNotifier<List<StartupDto>> {
   Future<List<StartupDto>> build() => _load();
 
   Future<List<StartupDto>> _load() async {
-    final api = ref.read(apiProvider);
-    return api.getStartupEntries();
+    try {
+      final api = ref.read(apiProvider);
+      final entries = api.getStartupEntries();
+      AppLogger.log('startup loaded: ${entries.length} entries');
+      return entries;
+    } catch (e, st) {
+      AppLogger.log('startup load FAILED: $e\n$st');
+      rethrow;
+    }
   }
 
   Future<void> toggle(StartupDto entry, bool enable) async {
-    final api = ref.read(apiProvider);
-    api.toggleStartup(id: entry.id, enable: enable);
-    state = AsyncData(await _load());
+    try {
+      final api = ref.read(apiProvider);
+      api.toggleStartup(id: entry.id, enable: enable);
+      AppLogger.log('toggled startup ${entry.name} -> ${enable ? 'on' : 'off'}');
+      state = AsyncData(await _load());
+    } catch (e, st) {
+      AppLogger.log('startup toggle FAILED ${entry.name}: $e\n$st');
+      rethrow;
+    }
   }
 }
 

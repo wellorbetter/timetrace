@@ -11,6 +11,25 @@ use anyhow::Result;
 use flutter_rust_bridge::frb;
 use timetrace_core::*;
 
+/// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
+fn setup_logging() {
+    use tracing_subscriber::prelude::*;
+    let dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("TimeTrace");
+    let _ = std::fs::create_dir_all(&dir);
+    let log_path = dir.join("timetrace.log");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path);
+    if let Ok(file) = file {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(file)
+            .with_ansi(false)
+            .try_init();
+    }
+}
+
 // ── DTOs exposed to Dart ──
 
 #[derive(Debug, Clone)]
@@ -71,6 +90,8 @@ impl TimeTraceApi {
     /// Create the API, opening the DB and starting the background monitor.
     #[frb(sync)]
     pub fn create(db_path: String) -> Result<TimeTraceApi> {
+        setup_logging();
+        tracing::info!("TimeTrace bridge starting, db={}", db_path);
         let db = Arc::new(SqliteStore::open(PathBuf::from(&db_path))?);
 
         // Auto-scan startup entries on first launch

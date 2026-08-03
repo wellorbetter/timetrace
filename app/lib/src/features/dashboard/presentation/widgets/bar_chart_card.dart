@@ -10,7 +10,7 @@ class BarChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Scale to the max TOTAL (active + idle) so stacked bars stay comparable.
+    // Scale to the max TOTAL so stacked bars stay comparable.
     final maxTotal = apps
         .map((a) => a.totalSeconds)
         .fold<int>(1, (m, v) => v > m ? v : m);
@@ -22,8 +22,7 @@ class BarChartCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('按应用'),
-            const SizedBox(height: 12),
-            // Legend: active / idle
+            const SizedBox(height: 8),
             Row(
               children: [
                 _LegendDot(color: appColor('x'), label: '活跃'),
@@ -34,7 +33,9 @@ class BarChartCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            // Fixed height; labels are fixed-size, bar area is Expanded →
+            // no RenderFlex overflow regardless of font metrics.
             SizedBox(
               height: 150,
               child: Row(
@@ -50,49 +51,65 @@ class BarChartCard extends StatelessWidget {
                             Text(
                               app.activeSeconds > 0 ? app.activeLabel : '',
                               style: const TextStyle(fontSize: 10),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            // Stacked column: active (bottom) + idle (top)
-                            SizedBox(
-                              height: 120,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
+                            // Bar area — Expanded absorbs all remaining height.
+                            Expanded(
+                              child: Stack(
+                                alignment: Alignment.bottomCenter,
                                 children: [
-                                  if (app.idleSeconds > 0)
-                                    Container(
-                                      height: (app.idleSeconds / maxTotal) *
-                                          120,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: appColor(app.appName)
-                                            .withValues(alpha: 0.25),
-                                        borderRadius: app.activeSeconds > 0
-                                            ? BorderRadius.zero
-                                            : const BorderRadius.vertical(
-                                                top: Radius.circular(4)),
-                                      ),
-                                    ),
+                                  // Active segment: solid color from bottom
                                   if (app.activeSeconds > 0)
-                                    Expanded(
+                                    FractionallySizedBox(
+                                      heightFactor:
+                                          (app.activeSeconds / maxTotal)
+                                              .clamp(0.02, 1.0),
+                                      widthFactor: 1.0,
                                       child: Container(
-                                        width: double.infinity,
                                         decoration: BoxDecoration(
                                           color: appColor(app.appName),
-                                          borderRadius: app.idleSeconds > 0
-                                              ? BorderRadius.zero
-                                              : const BorderRadius.vertical(
-                                                  top: Radius.circular(4)),
+                                          borderRadius:
+                                              app.idleSeconds > 0
+                                                  ? BorderRadius.zero
+                                                  : const BorderRadius.vertical(
+                                                      top: Radius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
+                                  // Idle segment: translucent, on TOP of active
+                                  if (app.idleSeconds > 0)
+                                    FractionallySizedBox(
+                                      heightFactor:
+                                          ((app.activeSeconds + app.idleSeconds) /
+                                                  maxTotal)
+                                              .clamp(0.02, 1.0),
+                                      widthFactor: 1.0,
+                                      child: FractionallySizedBox(
+                                        heightFactor: app.idleSeconds /
+                                            (app.activeSeconds + app.idleSeconds),
+                                        alignment: Alignment.topCenter,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: appColor(app.appName)
+                                                .withValues(alpha: 0.25),
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                                    top: Radius.circular(4)),
+                                          ),
                                         ),
                                       ),
                                     ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               app.appName.length > 6
                                   ? app.appName.substring(0, 6)
                                   : app.appName,
                               style: const TextStyle(fontSize: 9),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -120,7 +137,11 @@ class _LegendDot extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 11)),
       ],

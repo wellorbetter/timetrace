@@ -42,10 +42,13 @@ class StartupTile extends StatelessWidget {
     final lower = cmd.toLowerCase();
     final idx = lower.indexOf('.exe');
     if (idx < 0) return null;
-    final end = idx + 4;
+    // Clamp end to the string length — fixes RangeError on truncated paths.
+    final end = (idx + 4).clamp(0, cmd.length);
+    if (end <= 0) return null;
     var start = cmd.lastIndexOf('"', end);
     start = start < 0 ? cmd.lastIndexOf(' ', end) : start;
     if (start < 0) start = 0;
+    if (start >= end) return null;
     final path = cmd.substring(
         start + (start < cmd.length && (cmd[start] == '"' || cmd[start] == ' ') ? 1 : 0), end);
     return path.startsWith('%') ? null : path;
