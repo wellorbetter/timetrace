@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
-/// Expandable app row; tapping reveals per-page breakdown.
+/// Expandable app row with real icon; tap reveals per-page breakdown.
 class AppListTile extends ConsumerStatefulWidget {
   const AppListTile({required this.app, super.key});
 
@@ -53,7 +54,6 @@ class _AppListTileState extends ConsumerState<AppListTile> {
       case DateRange.yesterday:
         return fmt(now.subtract(const Duration(days: 1)));
       case DateRange.week:
-        return fmt(now);
       case DateRange.month:
         return fmt(now);
     }
@@ -61,35 +61,68 @@ class _AppListTileState extends ConsumerState<AppListTile> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = appColor(widget.app.appName);
-    final activeLabel = widget.app.activeLabel;
+    final l = L10n(ref.watch(localeProvider));
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+      ),
       child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: _toggle,
         child: Column(
           children: [
-            ListTile(
-              leading: widget.app.exePath != null
-                  ? AppIcon(exePath: widget.app.exePath!, size: 32)
-                  : Icon(Icons.apps, color: color),
-              title: Text(widget.app.appName, overflow: TextOverflow.ellipsis),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
                 children: [
+                  // Real icon if available
+                  if (widget.app.exePath != null)
+                    AppIcon(exePath: widget.app.exePath!, size: 32)
+                  else
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.apps, size: 18, color: color),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.app.appName,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   if (widget.app.idleSeconds > 0)
                     Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Text('挂机 ${widget.app.idleLabel}',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey)),
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Text(
+                        '${l.idle} ${widget.app.idleLabel}',
+                        style: TextStyle(fontSize: 11, color: scheme.outline),
+                      ),
                     ),
-                  Text(activeLabel,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    widget.app.activeLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(width: 4),
-                  Icon(_expanded ? Icons.expand_less : Icons.expand_more,
-                      size: 20),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                    color: scheme.outline,
+                  ),
                 ],
               ),
             ),
@@ -104,7 +137,7 @@ class _AppListTileState extends ConsumerState<AppListTile> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2))),
                     )
-                  : _PagesList(pages: _pages ?? [], appColor: color),
+                  : _PagesList(pages: _pages ?? []),
             ],
           ],
         ),
@@ -114,17 +147,20 @@ class _AppListTileState extends ConsumerState<AppListTile> {
 }
 
 class _PagesList extends StatelessWidget {
-  const _PagesList({required this.pages, required this.appColor});
+  const _PagesList({required this.pages});
 
   final List<(String, int)> pages;
-  final Color appColor;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (pages.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('暂无页面数据', style: TextStyle(color: Colors.grey)),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          '暂无页面数据',
+          style: TextStyle(fontSize: 12, color: scheme.outline),
+        ),
       );
     }
     final total = pages.fold<int>(0, (s, p) => s + p.$2);
@@ -134,10 +170,10 @@ class _PagesList extends StatelessWidget {
         children: [
           for (final (title, seconds) in pages)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
               child: Row(
                 children: [
-                  Icon(Icons.web_outlined, size: 14, color: Colors.grey),
+                  Icon(Icons.web_outlined, size: 14, color: scheme.outline),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -149,7 +185,7 @@ class _PagesList extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     '${seconds ~/ 60}分 (${(seconds / total * 100).round()}%)',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: scheme.outline),
                   ),
                 ],
               ),

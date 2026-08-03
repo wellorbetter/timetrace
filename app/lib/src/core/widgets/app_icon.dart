@@ -7,7 +7,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
-/// Renders a real exe icon extracted via the Rust bridge.
+/// In-memory cache of decoded exe icons (keyed by exe path).
+class _IconCache {
+  static final Map<String, ui.Image> _cache = {};
+
+  static bool contains(String path) => _cache.containsKey(path);
+  static ui.Image? get(String path) => _cache[path];
+  static void put(String path, ui.Image img) {
+    // Bound cache size (prevents unbounded growth with many apps).
+    if (_cache.length > 128) {
+      final oldest = _cache.keys.first;
+      _cache.remove(oldest);
+    }
+    _cache[path] = img;
+  }
+}
+
+/// Renders a real exe icon extracted via the Rust bridge, with caching.
 class AppIcon extends ConsumerStatefulWidget {
   const AppIcon({required this.exePath, this.size = 32, super.key});
 
@@ -25,20 +41,27 @@ class _AppIconState extends ConsumerState<AppIcon> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _image = _IconCache.get(widget.exePath);
+    if (_image == null) _load();
   }
 
   @override
   void didUpdateWidget(covariant AppIcon oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.exePath != widget.exePath) {
-      _image = null;
-      _load();
+      _image = _IconCache.get(widget.exePath);
+      if (_image == null) _load();
     }
   }
 
   Future<void> _load() async {
     if (_loading || widget.exePath.isEmpty) return;
+    // Another instance may have loaded it while we waited.
+    final cached = _IconCache.get(widget.exePath);
+    if (cached != null) {
+      setState(() => _image = cached);
+      return;
+    }
     _loading = true;
     try {
       final api = ref.read(apiProvider);
@@ -50,12 +73,12 @@ class _AppIconState extends ConsumerState<AppIcon> {
       final w = icon.width.toInt();
       final h = icon.height.toInt();
       // decodeImageFromPixels expects NON-premultiplied rgba8888.
-      // Rust premultiplies; un-premultiply here.
       final rgba = _unPremultiply(icon.rgba);
       final completer = Completer<ui.Image>();
       ui.decodeImageFromPixels(
           rgba, w, h, ui.PixelFormat.rgba8888, completer.complete);
       final img = await completer.future;
+      _IconCache.put(widget.exePath, img);
       if (mounted) setState(() => _image = img);
     } catch (e, st) {
       AppLogger.log('icon load FAIL ${widget.exePath}: $e\n$st');
@@ -90,7 +113,6 @@ class _AppIconState extends ConsumerState<AppIcon> {
         filterQuality: FilterQuality.high,
       );
     }
-    // Letter avatar fallback
     final name = _exeName(widget.exePath) ?? '?';
     final color = Colors.blueGrey;
     final first = name.isNotEmpty ? name[0].toUpperCase() : '?';
@@ -117,7 +139,6 @@ class _AppIconState extends ConsumerState<AppIcon> {
     final lower = cmd.toLowerCase();
     final idx = lower.indexOf('.exe');
     if (idx < 0) return null;
-    // Clamp end to string length — prevents RangeError on truncated paths.
     final end = (idx + 4).clamp(0, cmd.length);
     if (end <= 0) return null;
     var start = cmd.lastIndexOf('"', end);

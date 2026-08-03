@@ -1,4 +1,6 @@
-//! Extract application icons from .exe files via `SHGetFileInfoW`.
+//! Extract application icons from .exe files.
+//! Primary: SHGetFileInfoW (resolves shortcuts, handles most exes).
+//! Fallback: ExtractIconExW (works where SHGetFileInfoW fails, e.g. UWP stubs).
 //! Returns raw RGBA pixels for Flutter rendering.
 //!
 //! Uses manual FFI declarations to avoid windows-sys feature-gating issues.
@@ -11,7 +13,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, ICONINFO};
 
-// ── Manual FFI (shell32) — avoids windows-sys feature hell ──
+// ── Manual FFI (shell32) ──
 
 #[repr(C)]
 struct SHFILEINFOW {
@@ -35,14 +37,30 @@ unsafe extern "system" {
         cb_file_info: u32,
         u_flags: u32,
     ) -> usize;
+
+    fn ExtractIconExW(
+        lpsz_file: *const u16,
+        n_icon_index: i32,
+        phicon_large: *mut *mut std::ffi::c_void,
+        phicon_small: *mut *mut std::ffi::c_void,
+        n_icons: u32,
+    ) -> u32;
 }
 
 /// Extract an icon for an exe path.
 /// Returns (width, height, rgba_bytes).
 pub fn extract_icon_rgba(exe_path: &str) -> Option<(i32, i32, Vec<u8>)> {
+    let hicon = get_hicon(exe_path)?;
+    unsafe { icon_to_rgba(hicon) }
+}
+
+/// Get a large HICON for the path, trying SHGetFileInfoW first then ExtractIconExW.
+fn get_hicon(exe_path: &str) -> Option<*mut std::ffi::c_void> {
+    let mut path: Vec<u16> = exe_path.encode_utf16().collect();
+    path.push(0);
+
     unsafe {
-        let mut path: Vec<u16> = exe_path.encode_utf16().collect();
-        path.push(0);
+        // Try 1: SHGetFileInfoW (resolves .lnk, handles most exes)
         let mut info: SHFILEINFOW = mem::zeroed();
         let ret = SHGetFileInfoW(
             path.as_ptr(),
@@ -51,11 +69,23 @@ pub fn extract_icon_rgba(exe_path: &str) -> Option<(i32, i32, Vec<u8>)> {
             mem::size_of::<SHFILEINFOW>() as u32,
             SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES,
         );
-        if ret == 0 || info.hIcon.is_null() {
-            return None;
+        if ret != 0 && !info.hIcon.is_null() {
+            return Some(info.hIcon);
         }
-        let hicon = info.hIcon;
 
+        // Try 2: ExtractIconExW — direct resource extraction (UWP stubs etc.)
+        let mut large: *mut std::ffi::c_void = std::ptr::null_mut();
+        let count = ExtractIconExW(path.as_ptr(), 0, &mut large, std::ptr::null_mut(), 1);
+        if count > 0 && !large.is_null() {
+            return Some(large);
+        }
+        None
+    }
+}
+
+/// Convert a HICON to RGBA pixels.
+unsafe fn icon_to_rgba(hicon: *mut std::ffi::c_void) -> Option<(i32, i32, Vec<u8>)> {
+    unsafe {
         let mut icon_info: ICONINFO = mem::zeroed();
         if GetIconInfo(hicon, &mut icon_info) == 0 {
             DestroyIcon(hicon);
@@ -153,15 +183,14 @@ mod tests {
         let mut ok = 0;
         for p in paths {
             if let Some((w, h, rgba)) = extract_icon_rgba(p) {
-                eprintln!("OK   {:50} -> {}x{}", p, w, h);
+                eprintln!("OK   {:55} -> {}x{}", p, w, h);
                 assert!(w > 0 && h > 0);
                 assert!(!rgba.is_empty());
                 ok += 1;
             } else {
-                eprintln!("FAIL {:50}", p);
+                eprintln!("FAIL {:55}", p);
             }
         }
-        // explorer.exe must extract
         assert!(ok >= 1, "no icons extracted at all");
     }
 }

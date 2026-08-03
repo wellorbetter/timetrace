@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConfigDto dco_decode_config_dto(dynamic raw);
 
   @protected
+  DashboardDataDto dco_decode_dashboard_data_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -149,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConfigDto sse_decode_config_dto(SseDeserializer deserializer);
+
+  @protected
+  DashboardDataDto sse_decode_dashboard_data_dto(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -248,6 +254,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_config_dto(ConfigDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_dashboard_data_dto(
+    DashboardDataDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);

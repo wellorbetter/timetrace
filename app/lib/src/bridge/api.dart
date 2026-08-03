@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `parse_date`, `setup_logging`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -20,6 +20,12 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Read the current user configuration.
   ConfigDto getConfig();
+
+  /// One-call dashboard payload: usage split + overall stats.
+  DashboardDataDto getDashboardData({
+    required String start,
+    required String end,
+  });
 
   /// All startup entries.
   List<StartupDto> getStartupEntries();
@@ -114,6 +120,42 @@ class ConfigDto {
           idleThresholdMinutes == other.idleThresholdMinutes &&
           excludedApps == other.excludedApps &&
           dbPath == other.dbPath;
+}
+
+/// Combined dashboard payload (one FFI call instead of two).
+class DashboardDataDto {
+  final List<AppUsageDto> apps;
+  final PlatformInt64 activeSeconds;
+  final PlatformInt64 idleSeconds;
+  final PlatformInt64 totalSeconds;
+  final String? since;
+
+  const DashboardDataDto({
+    required this.apps,
+    required this.activeSeconds,
+    required this.idleSeconds,
+    required this.totalSeconds,
+    this.since,
+  });
+
+  @override
+  int get hashCode =>
+      apps.hashCode ^
+      activeSeconds.hashCode ^
+      idleSeconds.hashCode ^
+      totalSeconds.hashCode ^
+      since.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DashboardDataDto &&
+          runtimeType == other.runtimeType &&
+          apps == other.apps &&
+          activeSeconds == other.activeSeconds &&
+          idleSeconds == other.idleSeconds &&
+          totalSeconds == other.totalSeconds &&
+          since == other.since;
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.

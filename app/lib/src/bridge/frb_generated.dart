@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1948685236;
+  int get rustContentHash => 813902452;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -84,6 +84,12 @@ abstract class RustLibApi extends BaseApi {
   });
 
   ConfigDto crateApiTimeTraceApiGetConfig({required TimeTraceApi that});
+
+  DashboardDataDto crateApiTimeTraceApiGetDashboardData({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  });
 
   List<StartupDto> crateApiTimeTraceApiGetStartupEntries({
     required TimeTraceApi that,
@@ -236,6 +242,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  DashboardDataDto crateApiTimeTraceApiGetDashboardData({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(start, serializer);
+          sse_encode_String(end, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_dashboard_data_dto,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiGetDashboardDataConstMeta,
+        argValues: [that, start, end],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiGetDashboardDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_get_dashboard_data",
+        argNames: ["that", "start", "end"],
+      );
+
+  @override
   List<StartupDto> crateApiTimeTraceApiGetStartupEntries({
     required TimeTraceApi that,
   }) {
@@ -247,7 +288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_startup_dto,
@@ -282,7 +323,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_stats_dto,
@@ -317,7 +358,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_app_usage_dto,
@@ -352,7 +393,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(appName, serializer);
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_page_dto,
@@ -381,7 +422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -414,7 +455,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(command, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -447,7 +488,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -480,7 +521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(paused, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -515,7 +556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -624,6 +665,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       idleThresholdMinutes: dco_decode_u_64(arr[1]),
       excludedApps: dco_decode_list_String(arr[2]),
       dbPath: dco_decode_String(arr[3]),
+    );
+  }
+
+  @protected
+  DashboardDataDto dco_decode_dashboard_data_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return DashboardDataDto(
+      apps: dco_decode_list_app_usage_dto(arr[0]),
+      activeSeconds: dco_decode_i_64(arr[1]),
+      idleSeconds: dco_decode_i_64(arr[2]),
+      totalSeconds: dco_decode_i_64(arr[3]),
+      since: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -848,6 +904,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       idleThresholdMinutes: var_idleThresholdMinutes,
       excludedApps: var_excludedApps,
       dbPath: var_dbPath,
+    );
+  }
+
+  @protected
+  DashboardDataDto sse_decode_dashboard_data_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_apps = sse_decode_list_app_usage_dto(deserializer);
+    var var_activeSeconds = sse_decode_i_64(deserializer);
+    var var_idleSeconds = sse_decode_i_64(deserializer);
+    var var_totalSeconds = sse_decode_i_64(deserializer);
+    var var_since = sse_decode_opt_String(deserializer);
+    return DashboardDataDto(
+      apps: var_apps,
+      activeSeconds: var_activeSeconds,
+      idleSeconds: var_idleSeconds,
+      totalSeconds: var_totalSeconds,
+      since: var_since,
     );
   }
 
@@ -1108,6 +1181,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_dashboard_data_dto(
+    DashboardDataDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_app_usage_dto(self.apps, serializer);
+    sse_encode_i_64(self.activeSeconds, serializer);
+    sse_encode_i_64(self.idleSeconds, serializer);
+    sse_encode_i_64(self.totalSeconds, serializer);
+    sse_encode_opt_String(self.since, serializer);
+  }
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putPlatformInt64(self);
@@ -1278,6 +1364,16 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   /// Read the current user configuration.
   ConfigDto getConfig() =>
       RustLib.instance.api.crateApiTimeTraceApiGetConfig(that: this);
+
+  /// One-call dashboard payload: usage split + overall stats.
+  DashboardDataDto getDashboardData({
+    required String start,
+    required String end,
+  }) => RustLib.instance.api.crateApiTimeTraceApiGetDashboardData(
+    that: this,
+    start: start,
+    end: end,
+  );
 
   /// All startup entries.
   List<StartupDto> getStartupEntries() =>

@@ -26,6 +26,25 @@ class AppShell extends ConsumerWidget {
               padding: EdgeInsets.only(top: 8, bottom: 16),
               child: Icon(Icons.timer_outlined, size: 28),
             ),
+            // ── Material 3 selected-state colors ──
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+            indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
+            indicatorShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            selectedIconTheme: IconThemeData(
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
+            selectedLabelTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedIconTheme: IconThemeData(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            unselectedLabelTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             destinations: const [
               NavigationRailDestination(
                 icon: Icon(Icons.insights_outlined),

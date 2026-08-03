@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1948685236;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 813902452;
 
 // Section: executor
 
@@ -171,6 +171,58 @@ fn wire__crate__api__TimeTraceApi_get_config_impl(
                 let api_that_guard = api_that_guard.unwrap();
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::TimeTraceApi::get_config(&*api_that_guard))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_dashboard_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_dashboard_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_start = <String>::sse_decode(&mut deserializer);
+            let api_end = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Result::<_, ()>::Ok(crate::api::TimeTraceApi::get_dashboard_data(
+                    &*api_that_guard,
+                    api_start,
+                    api_end,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -715,6 +767,24 @@ impl SseDecode for crate::api::ConfigDto {
     }
 }
 
+impl SseDecode for crate::api::DashboardDataDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_apps = <Vec<crate::api::AppUsageDto>>::sse_decode(deserializer);
+        let mut var_activeSeconds = <i64>::sse_decode(deserializer);
+        let mut var_idleSeconds = <i64>::sse_decode(deserializer);
+        let mut var_totalSeconds = <i64>::sse_decode(deserializer);
+        let mut var_since = <Option<String>>::sse_decode(deserializer);
+        return crate::api::DashboardDataDto {
+            apps: var_apps,
+            active_seconds: var_activeSeconds,
+            idle_seconds: var_idleSeconds,
+            total_seconds: var_totalSeconds,
+            since: var_since,
+        };
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -921,15 +991,16 @@ fn pde_ffi_dispatcher_sync_impl(
         1 => wire__crate__api__TimeTraceApi_create_impl(ptr, rust_vec_len, data_len),
         2 => wire__crate__api__TimeTraceApi_get_app_icon_impl(ptr, rust_vec_len, data_len),
         3 => wire__crate__api__TimeTraceApi_get_config_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__TimeTraceApi_get_dashboard_data_impl(ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -984,6 +1055,27 @@ impl flutter_rust_bridge::IntoDart for crate::api::ConfigDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ConfigDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::ConfigDto> for crate::api::ConfigDto {
     fn into_into_dart(self) -> crate::api::ConfigDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::DashboardDataDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.apps.into_into_dart().into_dart(),
+            self.active_seconds.into_into_dart().into_dart(),
+            self.idle_seconds.into_into_dart().into_dart(),
+            self.total_seconds.into_into_dart().into_dart(),
+            self.since.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::DashboardDataDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::DashboardDataDto>
+    for crate::api::DashboardDataDto
+{
+    fn into_into_dart(self) -> crate::api::DashboardDataDto {
         self
     }
 }
@@ -1114,6 +1206,17 @@ impl SseEncode for crate::api::ConfigDto {
         <u64>::sse_encode(self.idle_threshold_minutes, serializer);
         <Vec<String>>::sse_encode(self.excluded_apps, serializer);
         <String>::sse_encode(self.db_path, serializer);
+    }
+}
+
+impl SseEncode for crate::api::DashboardDataDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::AppUsageDto>>::sse_encode(self.apps, serializer);
+        <i64>::sse_encode(self.active_seconds, serializer);
+        <i64>::sse_encode(self.idle_seconds, serializer);
+        <i64>::sse_encode(self.total_seconds, serializer);
+        <Option<String>>::sse_encode(self.since, serializer);
     }
 }
 

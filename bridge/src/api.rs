@@ -71,6 +71,16 @@ pub struct IconDto {
     pub rgba: Vec<u8>,
 }
 
+/// Combined dashboard payload (one FFI call instead of two).
+#[derive(Debug, Clone)]
+pub struct DashboardDataDto {
+    pub apps: Vec<AppUsageDto>,
+    pub active_seconds: i64,
+    pub idle_seconds: i64,
+    pub total_seconds: i64,
+    pub since: Option<String>,
+}
+
 /// User configuration (persisted in AppConfig.json).
 #[derive(Debug, Clone)]
 pub struct ConfigDto {
@@ -136,6 +146,32 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn is_tracking_paused(&self) -> bool {
         self.paused.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// One-call dashboard payload: usage split + overall stats.
+    #[frb(sync)]
+    pub fn get_dashboard_data(&self, start: String, end: String) -> DashboardDataDto {
+        let s = parse_date(&start);
+        let e = parse_date(&end);
+        let split = DataStore::get_usage_split(&*self.db, s, e);
+        let active: i64 = split.iter().map(|x| x.active_seconds).sum();
+        let idle: i64 = split.iter().map(|x| x.idle_seconds).sum();
+        DashboardDataDto {
+            apps: split
+                .into_iter()
+                .map(|x| AppUsageDto {
+                    app_name: x.app_name,
+                    active_seconds: x.active_seconds,
+                    idle_seconds: x.idle_seconds,
+                    exe_path: x.exe_path,
+                })
+                .collect(),
+            active_seconds: active,
+            idle_seconds: idle,
+            total_seconds: DataStore::total_tracked_seconds(&*self.db),
+            since: DataStore::recording_started_at(&*self.db)
+                .map(|t| t.format("%Y-%m-%d").to_string()),
+        }
     }
 
     /// Per-app active/idle split for a date range (dates as "YYYY-MM-DD").
@@ -248,8 +284,8 @@ fn parse_date(s: &str) -> chrono::NaiveDate {
 /// Handles: quoted paths, trailing args, %VAR% env vars, double backslashes.
 fn clean_exe_path(cmd: &str) -> Option<String> {
     let lower = cmd.to_lowercase();
-    let idx = lower.find(".exe")?;
-    let end = idx + 4;
+    let idx = lower.find(".exe").or_else(|| lower.find(".lnk"))?;
+    let end = idx + if lower[idx..].starts_with(".exe") { 4 } else { 4 };
     if end > cmd.len() {
         return None;
     }

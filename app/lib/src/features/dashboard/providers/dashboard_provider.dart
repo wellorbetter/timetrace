@@ -27,7 +27,9 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     // Rebuild when the range changes.
     ref.watch(dashboardRangeProvider);
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => ref.invalidateSelf());
+    // Refresh less aggressively; 3s is smooth enough for a local DB.
+    _timer = Timer.periodic(
+        const Duration(seconds: 3), (_) => ref.invalidateSelf());
     ref.onDispose(() => _timer?.cancel());
     return _load();
   }
@@ -36,10 +38,10 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final api = ref.read(apiProvider);
     final range = ref.read(dashboardRangeProvider);
     final (start, end) = _rangeBounds(range);
-    final split = api.getUsageSplit(start: start, end: end);
-    final stats = api.getStats(start: start, end: end);
+    // Single FFI call for the whole dashboard.
+    final data = api.getDashboardData(start: start, end: end);
     return DashboardState(
-      apps: split
+      apps: data.apps
           .map((s) => AppUsageItem(
                 appName: s.appName,
                 activeSeconds: s.activeSeconds.toInt(),
@@ -47,10 +49,10 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
                 exePath: s.exePath.isEmpty ? null : s.exePath,
               ))
           .toList(),
-      totalActiveSeconds: stats.activeSeconds.toInt(),
-      totalIdleSeconds: stats.idleSeconds.toInt(),
-      lifetimeSeconds: stats.totalSeconds.toInt(),
-      since: stats.since,
+      totalActiveSeconds: data.activeSeconds.toInt(),
+      totalIdleSeconds: data.idleSeconds.toInt(),
+      lifetimeSeconds: data.totalSeconds.toInt(),
+      since: data.since,
     );
   }
 
