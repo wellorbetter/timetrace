@@ -88,7 +88,7 @@ class _DashboardBody extends ConsumerWidget {
             const SizedBox(width: 12),
             StatCard(
               icon: Icons.pause_circle_outline,
-              label: '挂机',
+              label: L10n(ref.watch(localeProvider)).idle,
               value: _fmt(state.totalIdleSeconds),
               color: Colors.grey,
             ),

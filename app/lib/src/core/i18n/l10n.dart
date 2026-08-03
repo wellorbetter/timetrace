@@ -39,6 +39,10 @@ class L10n {
   String get saved => locale == AppLocale.zh ? '已保存' : 'Saved';
   String get appliesOnRestart =>
       locale == AppLocale.zh ? '监控参数将在下次启动时生效' : 'Applies on next launch';
+  String get font => locale == AppLocale.zh ? '字体' : 'Font';
+  String get background => locale == AppLocale.zh ? '背景' : 'Background';
+  String get backgroundImage => locale == AppLocale.zh ? '选择背景图片' : 'Choose background image';
+  String get clear => locale == AppLocale.zh ? '清除' : 'Clear';
   String get exportData => locale == AppLocale.zh ? '导出数据' : 'Export data';
   String get about => locale == AppLocale.zh ? '关于' : 'About';
   String get aboutText => locale == AppLocale.zh
@@ -46,7 +50,7 @@ class L10n {
       : 'TimeTrace — local app usage tracker';
   String get recordingSince => locale == AppLocale.zh ? '数据记录自' : 'Recording since';
   String get active => locale == AppLocale.zh ? '活跃' : 'Active';
-  String get idle => locale == AppLocale.zh ? '挂机' : 'Idle';
+  String get idle => locale == AppLocale.zh ? '离开' : 'Away';
   String get byApp => locale == AppLocale.zh ? '按应用' : 'By App';
   String get distribution => locale == AppLocale.zh ? '占比' : 'Distribution';
   String get appList => locale == AppLocale.zh ? '应用列表' : 'App list';

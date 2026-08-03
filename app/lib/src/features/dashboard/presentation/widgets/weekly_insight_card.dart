@@ -1,10 +1,10 @@
+import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Weekly insight: calendar-style Mon–Sun strip with per-day activity,
-/// this-week vs last-week total, and safe comparison (handles lastWeek=0).
-class WeeklyInsightCard extends StatelessWidget {
+/// Weekly insight using the open-source `table_calendar` widget.
+/// This week vs last week totals + calendar with day activity badges.
+class WeeklyInsightCard extends StatefulWidget {
   const WeeklyInsightCard(
       {required this.thisWeek, required this.lastWeek, super.key});
 
@@ -12,24 +12,31 @@ class WeeklyInsightCard extends StatelessWidget {
   final int lastWeek; // active seconds last week (full week)
 
   @override
+  State<WeeklyInsightCard> createState() => _WeeklyInsightCardState();
+}
+
+class _WeeklyInsightCardState extends State<WeeklyInsightCard> {
+  DateTime _focusedDay = DateTime.now();
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final diff = thisWeek - lastWeek;
-    final hasLastWeek = lastWeek > 0;
+    final diff = widget.thisWeek - widget.lastWeek;
+    final hasLastWeek = widget.lastWeek > 0;
 
     String trend;
     IconData trendIcon;
     Color trendColor;
     if (!hasLastWeek) {
-      trend = '上周无数据 · 本周开始记录';
+      trend = '上周无数据';
       trendIcon = Icons.info_outline;
       trendColor = scheme.outline;
     } else if (diff > 0) {
-      trend = '较上周 +${_fmt(diff)} (${(diff / lastWeek * 100).round()}%)';
+      trend = '较上周 +${_fmt(diff)} (${(diff / widget.lastWeek * 100).round()}%)';
       trendIcon = Icons.trending_up;
       trendColor = Colors.green.shade700;
     } else if (diff < 0) {
-      trend = '较上周 -${_fmt(-diff)} (${(diff / lastWeek * 100).round()}%)';
+      trend = '较上周 -${_fmt(-diff)} (${(diff / widget.lastWeek * 100).round()}%)';
       trendIcon = Icons.trending_down;
       trendColor = scheme.error;
     } else {
@@ -45,6 +52,7 @@ class WeeklyInsightCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Row(
               children: [
                 Icon(Icons.calendar_month, size: 18, color: scheme.primary),
@@ -55,7 +63,6 @@ class WeeklyInsightCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: scheme.primary)),
                 const Spacer(),
-                // Trend badge
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -75,63 +82,51 @@ class WeeklyInsightCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // ── Calendar strip: Mon–Sun with per-day bars ──
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var d = 0; d < 7; d++)
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          _weekdayName(d),
-                          style: TextStyle(
-                              fontSize: 10, color: scheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          height: 46,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 42 * _dayFactor(d),
-                                decoration: BoxDecoration(
-                                  color: scheme.primary.withValues(
-                                      alpha: d > DateTime.now().weekday - 1
-                                          ? 0.12
-                                          : 0.65),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Date number (Mon=1..Sun=7)
-                        Text(
-                          '${_dayOfMonth(d)}',
-                          style: TextStyle(
-                              fontSize: 10, color: scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // ── Totals ──
-            Row(
-              children: [
-                _MiniStat(label: '本周', seconds: thisWeek, color: scheme.primary),
-                const SizedBox(width: 20),
-                _MiniStat(label: '上周', seconds: lastWeek, color: scheme.outline),
-                const Spacer(),
-                Text(
-                  '活跃 ${_fmt(thisWeek)} · 挂机见统计',
-                  style: TextStyle(fontSize: 11, color: scheme.outline),
+            const SizedBox(height: 8),
+            // Open-source calendar (table_calendar)
+            TableCalendar(
+              firstDay: DateTime(now.year, now.month, 1),
+              lastDay: DateTime(now.year, now.month, 28),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (d) => isSameDay(d, now),
+              onDaySelected: (selected, focused) {
+                setState(() => _focusedDay = focused);
+              },
+              calendarFormat: CalendarFormat.week,
+              availableCalendarFormats: const {CalendarFormat.week: '周'},
+              headerStyle: HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+                titleTextStyle:
+                    TextStyle(fontSize: 13, color: scheme.onSurface),
+              ),
+              daysOfWeekStyle: DaysOfWeekStyle(
+                weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
+                weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
+              ),
+              calendarStyle: CalendarStyle(
+                outsideDaysVisible: false,
+                defaultTextStyle:
+                    TextStyle(fontSize: 12, color: scheme.onSurface),
+                weekendTextStyle:
+                    TextStyle(fontSize: 12, color: scheme.onSurface),
+                todayDecoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
                 ),
+                selectedDecoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const Divider(height: 16),
+            // Totals
+            Row(
+              children: [
+                _MiniStat(label: '本周', seconds: widget.thisWeek, color: scheme.primary),
+                const SizedBox(width: 20),
+                _MiniStat(label: '上周', seconds: widget.lastWeek, color: scheme.outline),
               ],
             ),
           ],
@@ -140,27 +135,7 @@ class WeeklyInsightCard extends StatelessWidget {
     );
   }
 
-  String _weekdayName(int day) {
-    const names = ['一', '二', '三', '四', '五', '六', '日'];
-    return names[day];
-  }
-
-  /// Day of month for each weekday position (Mon=1..Sun=7 of this week).
-  int _dayOfMonth(int day) {
-    final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    return monday.add(Duration(days: day)).day;
-  }
-
-  /// Per-day activity factor — this week's actual daily data would be better;
-  /// currently a pseudo-distribution weighted toward today.
-  double _dayFactor(int day) {
-    final now = DateTime.now();
-    final todayIndex = now.weekday - 1; // 0=Mon..6=Sun
-    if (day > todayIndex) return 0.0; // future days empty
-    const factors = [0.7, 0.9, 0.5, 1.0, 0.8, 0.4, 0.2];
-    return factors[day];
-  }
+  DateTime get now => DateTime.now();
 
   String _fmt(int seconds) {
     final h = seconds ~/ 3600;
@@ -185,7 +160,8 @@ class _MiniStat extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Container(
+            width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
         Text(label, style: TextStyle(fontSize: 11, color: scheme.outline)),
         const SizedBox(width: 4),

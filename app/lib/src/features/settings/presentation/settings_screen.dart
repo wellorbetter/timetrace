@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
+import 'package:timetrace_app/src/core/theme/background_provider.dart';
+import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
@@ -73,6 +75,18 @@ class SettingsScreen extends ConsumerWidget {
                     ref.read(localeProvider.notifier).set(v ?? AppLocale.zh),
               ),
             ),
+            const Divider(),
+
+            // ── 字体 ──
+            _SectionHeader(
+                title: l.font, icon: Icons.font_download_outlined),
+            ..._fontPicker(ref, l),
+            const Divider(),
+
+            // ── 背景 ──
+            _SectionHeader(
+                title: l.background, icon: Icons.wallpaper_outlined),
+            ..._backgroundPicker(context, ref, l),
             const Divider(),
 
             // ── 监控 ──
@@ -168,6 +182,99 @@ class SettingsScreen extends ConsumerWidget {
 
   void _update(WidgetRef ref, AppSettings next) {
     ref.read(settingsProvider.notifier).preview(next);
+  }
+
+  /// Font picker with live previews.
+  List<Widget> _fontPicker(WidgetRef ref, L10n l) {
+    final selected = ref.watch(fontProvider);
+    return [
+      for (final font in AppFont.all)
+        RadioListTile<AppFont>(
+          value: font,
+          groupValue: selected,
+          onChanged: (v) {
+            if (v != null) ref.read(fontProvider.notifier).select(v);
+          },
+          title: Text(
+            font.name,
+            style: TextStyle(fontFamily: font.family),
+          ),
+          subtitle: Text(
+            font.preview,
+            style: TextStyle(
+                fontFamily: font.family, fontSize: 13, color: Colors.grey),
+          ),
+          dense: true,
+          secondary: Text(
+            'Aa',
+            style: TextStyle(
+                fontFamily: font.family,
+                fontSize: 18,
+                fontWeight: FontWeight.bold),
+          ),
+        ),
+    ];
+  }
+
+  /// Background picker: preset colors + image + clear.
+  List<Widget> _backgroundPicker(BuildContext context, WidgetRef ref, L10n l) {
+    final pref = ref.watch(backgroundProvider);
+    const colors = <Color?>[
+      null,
+      Color(0xFFF7F3FF),
+      Color(0xFFE8F4FD),
+      Color(0xFFFDF2E9),
+      Color(0xFFF0F7EC),
+      Color(0xFF1A1A2E),
+    ];
+    return [
+      // Preset color swatches
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            for (final c in colors)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: InkWell(
+                  onTap: () =>
+                      ref.read(backgroundProvider.notifier).setColor(c),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: c ?? Theme.of(context).colorScheme.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: pref.color == c
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.outlineVariant,
+                        width: pref.color == c ? 3 : 1,
+                      ),
+                    ),
+                    child: c == null
+                        ? Icon(Icons.close, size: 16, color: Colors.grey)
+                        : null,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      ListTile(
+        leading: const Icon(Icons.image_outlined),
+        title: Text(l.backgroundImage),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => ref.read(backgroundProvider.notifier).pickImage(),
+      ),
+      if (pref.isImage || pref.color != null)
+        ListTile(
+          leading: const Icon(Icons.restart_alt),
+          title: Text(l.clear,
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          onTap: () => ref.read(backgroundProvider.notifier).clear(),
+        ),
+    ];
   }
 
   String _dbPath(AppSettings s) {

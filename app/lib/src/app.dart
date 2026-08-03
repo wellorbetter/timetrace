@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:timetrace_app/src/core/router/app_router.dart';
+import 'package:timetrace_app/src/core/theme/background_provider.dart';
+import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
@@ -24,22 +26,17 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
   }
 
   Future<void> _setup() async {
-    // Window manager: prevent close → hide to tray instead
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
     await windowManager.setPreventClose(true);
-    // Set taskbar/title-bar icon (RC compiler is broken on this machine,
-    // so we set it at runtime from the bundled asset).
     await windowManager.setIcon('assets/icon.ico');
 
-    // System tray
     final tray = TrayService(ref);
     await tray.init();
   }
 
   @override
   void onWindowClose() async {
-    // Hide to tray instead of quitting
     await windowManager.hide();
   }
 
@@ -47,8 +44,9 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final dark = ref.watch(themeModeProvider);
+    final font = ref.watch(fontProvider);
+    final background = ref.watch(backgroundProvider);
 
-    // Watch quit signal from tray
     ref.listen(trayExitProvider, (prev, next) {
       if (next) exit(0);
     });
@@ -56,10 +54,32 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
     return MaterialApp.router(
       title: 'TimeTrace',
       debugShowCheckedModeBanner: false,
-      theme: TimetraceTheme.light(),
-      darkTheme: TimetraceTheme.dark(),
+      theme: TimetraceTheme.light(fontFamily: font.family),
+      darkTheme: TimetraceTheme.dark(fontFamily: font.family),
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: router,
+      // Custom background (color or image) applied below the router.
+      builder: (context, child) {
+        if (!background.isImage && background.color == null) return child!;
+        Widget decorated = child!;
+        if (background.isImage && background.imagePath != null) {
+          decorated = Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: FileImage(File(background.imagePath!)),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: decorated,
+          );
+        } else if (background.color != null) {
+          decorated = ColoredBox(
+            color: background.color!,
+            child: decorated,
+          );
+        }
+        return decorated;
+      },
     );
   }
 }
