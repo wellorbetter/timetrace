@@ -164,7 +164,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 6, child: AppChartSection(apps: apps, tall: true)),
+            Expanded(
+              flex: 6,
+              child: SizedBox(
+                height: 360,
+                child: AppChartSection(apps: apps, tall: true),
+              ),
+            ),
             const SizedBox(width: 12),
             SizedBox(
               width: 260,

@@ -5,6 +5,7 @@ import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 /// Combined chart + app list:
 /// - Tall bars (tap to select)
@@ -35,9 +36,21 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
     if (deselecting) return;
     try {
       final api = ref.read(apiProvider);
-      final today = DateTime.now();
-      final d = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-      final pages = api.getWindowTitles(appName: widget.apps[i].appName, date: d);
+      // Use the dashboard's selected range end date, not just today,
+      // so pages appear for week/month views too.
+      final range = ref.read(dashboardRangeProvider);
+      final now = DateTime.now();
+      String end;
+      switch (range) {
+        case DateRange.today:
+        case DateRange.week:
+        case DateRange.month:
+          end = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        case DateRange.yesterday:
+          final y = now.subtract(const Duration(days: 1));
+          end = '${y.year}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
+      }
+      final pages = api.getWindowTitles(appName: widget.apps[i].appName, date: end);
       if (mounted) {
         setState(() {
           _pages = pages;
