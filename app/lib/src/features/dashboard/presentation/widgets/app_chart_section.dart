@@ -86,7 +86,7 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
             const SizedBox(height: 6),
             // ── Tall bars ──
             SizedBox(
-              height: widget.tall ? 220 : 150,
+              height: widget.tall ? 130 : 150,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -152,6 +152,12 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
                 ],
               ),
             ),
+            // ── Scrollable detail + rows ──
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             // ── Page breakdown for selected app (Edge → bilibili) ──
             if (_loadingPages)
               const Padding(
@@ -257,6 +263,10 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
                   ),
                 ),
               ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

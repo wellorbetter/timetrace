@@ -103,8 +103,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 _toolbarBtn(Icons.format_quote, '引用', () => _apply('\n> ', '', placeholder: '引用')),
                 _toolbarBtn(Icons.code, '代码', () => _apply('`', '`', placeholder: '代码')),
                 _toolbarBtn(Icons.terminal, '代码块', () => _apply('\n```\n', '\n```')),
-                const SizedBox(width: 8),
-                const Spacer(),
+                const SizedBox(width: 4),
                 // Preview toggle
                 IconButton(
                   icon: Icon(_preview ? Icons.edit_outlined : Icons.visibility_outlined, size: 17),
