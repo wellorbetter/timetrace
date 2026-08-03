@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::contracts::events::{AppInfo, EventSink, EventSourceHandle, TrackedEvent};
 use crate::contracts::idle::IdleDetector;
@@ -35,7 +35,7 @@ where
         let mut last_heartbeat = Instant::now();
 
         loop {
-            if stop_rx.try_recv().is_ok() { debug!("Monitor stopped"); break; }
+            if stop_rx.try_recv().is_ok() { info!("Monitor stopped"); break; }
             if let Ok(pause) = pause_rx.try_recv() { is_paused = pause; }
 
             if !is_paused {
@@ -44,6 +44,7 @@ where
 
                 if now_idle && !is_idle {
                     is_idle = true;
+                    info!("Monitor: idle started");
                     sink.accept(TrackedEvent::IdleStarted { timestamp: chrono::Utc::now() });
                     current_app = None;
                 } else if !now_idle && is_idle {

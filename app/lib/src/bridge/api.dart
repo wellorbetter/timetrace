@@ -36,12 +36,18 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String date,
   });
 
+  /// Whether tracking is currently paused.
+  bool isTrackingPaused();
+
   /// Resolve a startup command line to its clean exe path (env-expanded,
   /// quotes/args stripped). Returns None if no .exe is found.
   String? resolveExePath({required String command});
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config});
+
+  /// Pause or resume the background tracking monitor.
+  void setTrackingPaused({required bool paused});
 
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable});

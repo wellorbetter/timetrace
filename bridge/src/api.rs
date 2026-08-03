@@ -84,6 +84,8 @@ pub struct ConfigDto {
 
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
+    monitor: std::sync::Mutex<Option<EventSourceHandle>>,
+    paused: std::sync::atomic::AtomicBool,
 }
 
 impl TimeTraceApi {
@@ -103,15 +105,37 @@ impl TimeTraceApi {
         // Start background monitor (thread persists after handle drops)
         let config = AppConfig::load();
         let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
-        let _handle = run_monitor_loop(
+        let handle = run_monitor_loop(
             Win32WindowResolver,
             Win32IdleDetector::new(),
             Duration::from_millis(config.poll_interval_ms),
             Duration::from_secs(config.idle_threshold_minutes * 60),
             sink,
         );
+        let api = TimeTraceApi {
+            db,
+            monitor: std::sync::Mutex::new(Some(handle)),
+            paused: std::sync::atomic::AtomicBool::new(false),
+        };
+        Ok(api)
+    }
 
-        Ok(TimeTraceApi { db })
+    /// Pause or resume the background tracking monitor.
+    #[frb(sync)]
+    pub fn set_tracking_paused(&self, paused: bool) {
+        if let Ok(guard) = self.monitor.lock() {
+            if let Some(h) = guard.as_ref() {
+                if paused { h.pause(); } else { h.resume(); }
+                self.paused.store(paused, std::sync::atomic::Ordering::SeqCst);
+                tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
+            }
+        }
+    }
+
+    /// Whether tracking is currently paused.
+    #[frb(sync)]
+    pub fn is_tracking_paused(&self) -> bool {
+        self.paused.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Per-app active/idle split for a date range (dates as "YYYY-MM-DD").

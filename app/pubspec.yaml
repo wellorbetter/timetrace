@@ -41,6 +41,8 @@ dependencies:
   go_router: ^17.3.0
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
+  tray_manager:
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:
@@ -54,7 +56,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   freezed: ^3.2.5
   build_runner: ^2.15.1
-  json_serializable: ^6.14.1
+  json_serializable: ^6.8.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

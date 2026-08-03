@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use chrono::{Local, Utc};
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 use crate::contracts::storage::{DataStore, SessionRecord};
@@ -91,14 +91,14 @@ impl EventSink for SessionAggregator {
             }
 
             TrackedEvent::IdleStarted { .. } => {
-                debug!("Idle started");
+                info!("Aggregator: IdleStarted — creating __IDLE__ session");
                 // Close the active session and open an IDLE session.
                 self.close_session();
                 self.open_session(&AppInfo::idle());
             }
 
             TrackedEvent::IdleEnded { idle_duration, current_app, .. } => {
-                debug!("Idle ended: {}", current_app.display_name);
+                info!("Aggregator: IdleEnded — closing idle session, opening {}", current_app.display_name);
                 // Close the idle session (records idle time), then open the app.
                 self.close_session();
                 self.open_session(&current_app);
@@ -112,5 +112,64 @@ impl EventSink for SessionAggregator {
 impl Drop for SessionAggregator {
     fn drop(&mut self) {
         self.close_session();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contracts::events::AppInfo;
+    use crate::storage::sqlite::MemoryStore;
+
+    #[test]
+    fn test_idle_session_recorded() {
+        let db = Arc::new(MemoryStore::new());
+        let mut agg = SessionAggregator::new(db.clone());
+
+        // App session starts
+        let code = AppInfo::new("C:/code.exe".into(), "code".into());
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: code.clone(),
+            timestamp: chrono::Utc::now(),
+        });
+
+        // User goes idle
+        agg.accept(TrackedEvent::IdleStarted {
+            timestamp: chrono::Utc::now(),
+        });
+
+        // User returns after 300s
+        let idle_dur = std::time::Duration::from_secs(300);
+        agg.accept(TrackedEvent::IdleEnded {
+            idle_duration: idle_dur,
+            current_app: code.clone(),
+            timestamp: chrono::Utc::now(),
+        });
+
+        // An idle session must exist with is_idle = true
+        let sessions = db.get_sessions_by_date(chrono::Local::now().date_naive());
+        let idle_sessions: Vec<_> = sessions.iter().filter(|s| s.is_idle).collect();
+        assert!(!idle_sessions.is_empty(), "no idle session recorded");
+        assert_eq!(idle_sessions[0].app_name, "__IDLE__");
+    }
+
+    #[test]
+    fn test_usage_split_excludes_idle_app_row() {
+        let db = Arc::new(MemoryStore::new());
+        let mut agg = SessionAggregator::new(db.clone());
+
+        let code = AppInfo::new("C:/code.exe".into(), "code".into());
+        agg.accept(TrackedEvent::AppSwitched { previous: None, current: code, timestamp: chrono::Utc::now() });
+        agg.accept(TrackedEvent::IdleStarted { timestamp: chrono::Utc::now() });
+        agg.accept(TrackedEvent::IdleEnded {
+            idle_duration: std::time::Duration::from_secs(120),
+            current_app: AppInfo::new("C:/code.exe".into(), "code".into()),
+            timestamp: chrono::Utc::now(),
+        });
+
+        let today = chrono::Local::now().date_naive();
+        let split = db.get_usage_split(today, today);
+        assert!(split.iter().all(|s| s.app_name != "__IDLE__"), "idle must not appear as app row");
     }
 }
