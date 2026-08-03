@@ -12,89 +12,31 @@ import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 
-/// Calendar card (日历日记 tab): calendar grid + day/week/month summary
-/// + journal (Markdown editor, images, entries feed).
-class CalendarCard extends ConsumerStatefulWidget {
-  const CalendarCard({super.key, this.compact = false});
+/// Journal section: 日记 header + Markdown editor + image grid + entries
+/// feed for the selected day. Consumes calendarDataProvider directly.
+class DiarySection extends ConsumerWidget {
+  const DiarySection({required this.date, this.onJumpToDate, super.key});
 
-  final bool compact;
+  final DateTime date;
 
-  @override
-  ConsumerState<CalendarCard> createState() => _CalendarCardState();
-}
-
-enum SummaryRange { day, week, month }
-
-class _CalendarCardState extends ConsumerState<CalendarCard> {
-  DateTime _selected = DateTime.now();
-  SummaryRange _range = SummaryRange.day;
-
-  String _fmt(DateTime d) => calFmt(d);
+  /// Called when the user taps a recent entry — jump the calendar there.
+  final ValueChanged<DateTime>? onJumpToDate;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(calendarDataProvider).value;
+    final images = data?.images[calFmt(date)] ?? const <String>[];
     final entries = data?.entries ?? const <(String, String)>[];
+    final invalidate = () => ref.invalidate(calendarDataProvider);
 
-    Widget content = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Header ──
-        Row(
-          children: [
-            Icon(Icons.calendar_month, size: 18, color: scheme.primary),
-            const SizedBox(width: 6),
-            Text('日历',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.primary)),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 18),
-              tooltip: '刷新',
-              onPressed: () => ref.invalidate(calendarDataProvider),
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // ── Calendar (left) + Summary (right) ──
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 5,
-              child: CalendarGrid(
-                selected: _selected,
-                onSelected: (d) => setState(() => _selected = d),
-                rowHeight: 54,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              flex: 4,
-              child: DaySummaryPanel(
-                date: _selected,
-                range: _range,
-                onRangeChanged: (r) => setState(() => _range = r),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.5)),
-        const SizedBox(height: 10),
-
-        // ── Diary (full width, below, separated from calendar) ──
         _DiaryEditor(
-          date: _selected,
-          images: data?.images[_fmt(_selected)] ?? const [],
-          onImagesChanged: () => ref.invalidate(calendarDataProvider),
+          date: date,
+          images: images,
+          onImagesChanged: invalidate,
         ),
         // Recent diary entries feed (list items) — tap jumps to that day
         if (entries.isNotEmpty) ...[
@@ -106,35 +48,17 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             _DiaryEntryTile(
               dateStr: e.$1,
               content: e.$2,
-              selected: e.$1 == _fmt(_selected),
-              onTap: () {
-                setState(() => _selected = DateTime.parse(e.$1));
-              },
+              selected: e.$1 == calFmt(date),
+              onTap: () => onJumpToDate?.call(DateTime.parse(e.$1)),
             ),
         ],
       ],
     );
-
-    if (widget.compact) {
-      content = SizedBox(
-        height: MediaQuery.of(context).size.height - 150,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: content,
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(padding: const EdgeInsets.all(12), child: content),
-    );
   }
 }
 
-/// Right panel: day/week/month summary with aggregated sessions.
+enum SummaryRange { day, week, month }
+
 class DaySummaryPanel extends ConsumerStatefulWidget {
   const DaySummaryPanel({
     required this.date,

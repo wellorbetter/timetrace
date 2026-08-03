@@ -10,12 +10,12 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
-/// Dashboard with two modes (product flow):
-/// 概览 — glanceable stats (stats + chart + app list)
-/// 日历日记 — focused calendar + day summary + journal
+/// Single-page dashboard (概览 + 日历日记 merged):
+/// stats → data carousel (柱状图/饼图/汇总) → calendar → app list → journal.
+/// The carousel holds three DATA DISPLAYS; the calendar is a permanent
+/// element (day selection drives 汇总 + 日记).
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -23,66 +23,55 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(dashboardProvider);
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('使用统计'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '概览'),
-              Tab(text: '日历日记'),
-            ],
-          ),
-        ),
-        body: asyncState.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('加载失败: $e')),
-          data: (state) => TabBarView(
-            children: [
-              _OverviewBody(state: state),
-              const _CalendarBody(),
-            ],
-          ),
-        ),
+    return Scaffold(
+      appBar: AppBar(title: const Text('使用统计')),
+      body: asyncState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('加载失败: $e')),
+        data: (state) => _DashboardBody(state: state),
       ),
     );
   }
 }
 
-/// 概览: range chips + stats + bar chart + app distribution.
-class _OverviewBody extends ConsumerStatefulWidget {
-  const _OverviewBody({required this.state});
+class _DashboardBody extends ConsumerStatefulWidget {
+  const _DashboardBody({required this.state});
 
   final DashboardState state;
 
   @override
-  ConsumerState<_OverviewBody> createState() => _OverviewBodyState();
+  ConsumerState<_DashboardBody> createState() => _DashboardBodyState();
 }
 
-class _OverviewBodyState extends ConsumerState<_OverviewBody> {
-  /// Shared selection: bar chart and app list stay in sync.
+class _DashboardBodyState extends ConsumerState<_DashboardBody> {
+  /// Shared app selection: bar chart + app list stay in sync.
   int? _selected;
   List<PageDto>? _pages;
   bool _loadingPages = false;
   final List<GlobalKey> _rowKeys = [];
+
+  /// Carousel state + shared calendar day.
   final PageController _carouselCtrl = PageController();
   int _carouselIndex = 0;
   DateTime _calSelected = DateTime.now();
   SummaryRange _summaryRange = SummaryRange.day;
+
+  @override
+  void dispose() {
+    _carouselCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _select(int i) async {
     final deselecting = _selected == i;
     setState(() {
       _selected = deselecting ? null : i;
       _pages = null;
-      _loadingPages = !deselecting; // cancel deselection stops spinner
+      _loadingPages = !deselecting;
     });
     if (deselecting) return;
     try {
       final api = ref.read(apiProvider);
-      // Use the dashboard's selected range end date so pages appear
-      // for week/month views too.
       final range = ref.read(dashboardRangeProvider);
       final now = DateTime.now();
       String end;
@@ -102,7 +91,6 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
           _pages = pages;
           _loadingPages = false;
         });
-        // Scroll the tapped row into view so the inline detail is visible
         if (i < _rowKeys.length) {
           final ctx = _rowKeys[i].currentContext;
           if (ctx != null) {
@@ -121,18 +109,11 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
   }
 
   @override
-  void dispose() {
-    _carouselCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final state = widget.state;
     final apps =
         state.apps.where((a) => a.totalSeconds > 0).toList(growable: false);
 
-    // Keep row keys in sync with apps
     while (_rowKeys.length < apps.length) {
       _rowKeys.add(GlobalKey());
     }
@@ -154,7 +135,7 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
 
         return Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
+            constraints: const BoxConstraints(maxWidth: 1000),
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
@@ -173,8 +154,8 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                           final selected =
                               ref.watch(dashboardRangeProvider) == range;
                           return ChoiceChip(
-                            label: Text(label,
-                                style: const TextStyle(fontSize: 12)),
+                            label:
+                                Text(label, style: const TextStyle(fontSize: 12)),
                             selected: selected,
                             onSelected: (_) => ref
                                 .read(dashboardRangeProvider.notifier)
@@ -185,35 +166,32 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Stats: 活跃 (current range) vs 累计 (since install)
-                Row(
-                  children: [
-                    StatCard(
-                        icon: Icons.timer_outlined,
-                        label: '活跃',
-                        value: state.totalActiveLabel,
-                        color: scheme.primary),
-                    const SizedBox(width: 10),
-                    StatCard(
-                        icon: Icons.history,
-                        label: '累计',
-                        value: _fmt(state.lifetimeSeconds),
-                        subtitle: '安装以来',
-                        color: scheme.tertiary),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // ── Data carousel: 柱状图 | 饼图 | 日历 | 汇总 ──
+                // ── Data carousel: 柱状图 | 饼图 | 汇总 (data displays) ──
                 SizedBox(
                   height: size.twoColumn ? 380 : 360,
                   child: Column(
                     children: [
                       Expanded(
-                        child: PageView(
-                          controller: _carouselCtrl,
-                          onPageChanged: (i) =>
-                              setState(() => _carouselIndex = i),
+                        child: Row(
                           children: [
+                            // ◀ prev
+                            IconButton(
+                              icon: Icon(Icons.chevron_left,
+                                  size: 22, color: scheme.primary),
+                              tooltip: '上一个视图',
+                              onPressed: _carouselIndex > 0
+                                  ? () => _carouselCtrl.previousPage(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeOut,
+                                    )
+                                  : null,
+                            ),
+                            Expanded(
+                              child: PageView(
+                                controller: _carouselCtrl,
+                                onPageChanged: (i) =>
+                                    setState(() => _carouselIndex = i),
+                                children: [
                             AppChartSection(
                               apps: apps,
                               selected: _selected,
@@ -222,20 +200,8 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                             ),
                             PieChartCard(apps: apps),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: CalendarGrid(
-                                    selected: _calSelected,
-                                    onSelected: (d) =>
-                                        setState(() => _calSelected = d),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
                               child: Card(
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -247,16 +213,31 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                                   ),
                                 ),
                               ),
+                                ),
+                              ],
+                              ),
+                            ),
+                            // ▶ next
+                            IconButton(
+                              icon: Icon(Icons.chevron_right,
+                                  size: 22, color: scheme.primary),
+                              tooltip: '下一个视图',
+                              onPressed: _carouselIndex < 2
+                                  ? () => _carouselCtrl.nextPage(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeOut,
+                                    )
+                                  : null,
                             ),
                           ],
                         ),
                       ),
-                      // Carousel dots (clickable)
                       const SizedBox(height: 6),
+                      // Carousel dots (clickable)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          for (var i = 0; i < 4; i++)
+                          for (var i = 0; i < 3; i++)
                             GestureDetector(
                               onTap: () => _carouselCtrl.animateToPage(
                                 i,
@@ -264,11 +245,10 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                                 curve: Curves.easeOut,
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
                                 child: AnimatedContainer(
-                                  duration:
-                                      const Duration(milliseconds: 200),
+                                  duration: const Duration(milliseconds: 200),
                                   width: _carouselIndex == i ? 18 : 8,
                                   height: 8,
                                   decoration: BoxDecoration(
@@ -286,7 +266,44 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // App distribution — sessions expand inline
+                // ── Calendar (permanent, day selection) ──
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_month,
+                                size: 18, color: scheme.primary),
+                            const SizedBox(width: 6),
+                            Text('日历',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.primary)),
+                            const Spacer(),
+                            Text(
+                              '选择日期查看汇总与日记',
+                              style: TextStyle(
+                                  fontSize: 10, color: scheme.outline),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        CalendarGrid(
+                          selected: _calSelected,
+                          onSelected: (d) =>
+                              setState(() => _calSelected = d),
+                          rowHeight: 50,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // ── App distribution — sessions expand inline ──
                 AppListSection(
                   apps: apps,
                   selected: _selected,
@@ -294,6 +311,19 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                   loading: _loadingPages,
                   onSelect: _select,
                   rowKeys: _rowKeys,
+                ),
+                const SizedBox(height: 12),
+                // ── Journal (selected day) ──
+                Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: DiarySection(
+                      date: _calSelected,
+                      onJumpToDate: (d) =>
+                          setState(() => _calSelected = d),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -303,29 +333,4 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
     );
   }
 
-  String _fmt(int seconds) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    return h > 0 ? '${h}时${m}分' : '${m}分';
-  }
-}
-
-/// 日历日记: focused calendar + summary + journal (full width).
-class _CalendarBody extends StatelessWidget {
-  const _CalendarBody();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000),
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: const [
-            CalendarCard(),
-          ],
-        ),
-      ),
-    );
-  }
 }
