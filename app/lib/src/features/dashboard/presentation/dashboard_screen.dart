@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_tile.dart';
@@ -15,7 +16,6 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(dashboardProvider);
-    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -47,20 +47,27 @@ class DashboardScreen extends ConsumerWidget {
       body: asyncState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (state) => _DashboardBody(state: state, scheme: scheme),
+        data: (state) => _DashboardBody(state: state),
       ),
     );
   }
 }
 
-class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.state, required this.scheme});
+class _DashboardBody extends ConsumerStatefulWidget {
+  const _DashboardBody({required this.state});
 
   final DashboardState state;
-  final ColorScheme scheme;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends ConsumerState<_DashboardBody> {
+  bool _showAllApps = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
     final apps =
         state.apps.where((a) => a.totalSeconds > 0).toList(growable: false);
 
@@ -70,9 +77,11 @@ class _DashboardBody extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth > 900;
-        if (wide) {
-          // ── Two-column: charts/apps (left) + calendar/diary (right) ──
+        final size = screenSizeOf(constraints);
+        final scheme = Theme.of(context).colorScheme;
+
+        // ── WIDE: two-column ──
+        if (size.twoColumn) {
           return Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -80,51 +89,9 @@ class _DashboardBody extends ConsumerWidget {
               children: [
                 Expanded(
                   flex: 6,
-                  child: ListView(
-                    children: [
-                      Row(
-                        children: [
-                          StatCard(
-                            icon: Icons.timer_outlined,
-                            label: '活跃',
-                            value: state.totalActiveLabel,
-                            color: scheme.primary,
-                          ),
-                          const SizedBox(width: 10),
-                          StatCard(
-                            icon: Icons.pause_circle_outline,
-                            label: '离开',
-                            value: _fmt(state.totalIdleSeconds),
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 10),
-                          StatCard(
-                            icon: Icons.history,
-                            label: '总时长',
-                            value: _fmt(state.lifetimeSeconds),
-                            color: scheme.tertiary,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: BarChartCard(apps: apps)),
-                          const SizedBox(width: 12),
-                          Expanded(child: PieChartCard(apps: apps)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text('应用列表',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 4),
-                      for (final app in apps) AppListTile(app: app),
-                    ],
-                  ),
+                  child: _leftColumn(context, size, apps, state, scheme),
                 ),
                 const SizedBox(width: 12),
-                // ── Right column: full-height calendar ──
                 Expanded(
                   flex: 4,
                   child: CalendarCard(compact: true),
@@ -133,10 +100,12 @@ class _DashboardBody extends ConsumerWidget {
             ),
           );
         }
-        // ── Narrow: single column ──
+
+        // ── MEDIUM / COMPACT: single column ──
         return ListView(
           padding: const EdgeInsets.all(12),
           children: [
+            // Stats
             Row(
               children: [
                 StatCard(
@@ -150,20 +119,104 @@ class _DashboardBody extends ConsumerWidget {
                     label: '离开',
                     value: _fmt(state.totalIdleSeconds),
                     color: Colors.grey),
+                if (size.threeStats) ...[
+                  const SizedBox(width: 10),
+                  StatCard(
+                      icon: Icons.history,
+                      label: '总时长',
+                      value: _fmt(state.lifetimeSeconds),
+                      color: scheme.tertiary),
+                ],
               ],
             ),
+            // Charts (medium+) or single bar (compact)
+            if (size.showChartsRow) ...[
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: BarChartCard(apps: apps)),
+                  const SizedBox(width: 12),
+                  Expanded(child: PieChartCard(apps: apps)),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              BarChartCard(apps: apps),
+            ],
+            // Calendar (medium+) — compact only shows a hint
+            if (size.showFullCalendar) ...[
+              const SizedBox(height: 12),
+              CalendarCard(),
+            ],
             const SizedBox(height: 12),
-            BarChartCard(apps: apps),
-            const SizedBox(height: 12),
-            PieChartCard(apps: apps),
-            const SizedBox(height: 12),
-            CalendarCard(compact: false),
-            const SizedBox(height: 12),
-            Text('应用列表', style: Theme.of(context).textTheme.titleMedium),
-            for (final app in apps) AppListTile(app: app),
+            // App list (collapsed with expand)
+            _appListSection(context, size, apps, state),
           ],
         );
       },
+    );
+  }
+
+  Widget _leftColumn(BuildContext context, ScreenSize size,
+      List<AppUsageItem> apps, DashboardState state, ColorScheme scheme) {
+    return ListView(
+      children: [
+        Row(
+          children: [
+            StatCard(
+                icon: Icons.timer_outlined,
+                label: '活跃',
+                value: state.totalActiveLabel,
+                color: scheme.primary),
+            const SizedBox(width: 10),
+            StatCard(
+                icon: Icons.pause_circle_outline,
+                label: '离开',
+                value: _fmt(state.totalIdleSeconds),
+                color: Colors.grey),
+            const SizedBox(width: 10),
+            StatCard(
+                icon: Icons.history,
+                label: '总时长',
+                value: _fmt(state.lifetimeSeconds),
+                color: scheme.tertiary),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: BarChartCard(apps: apps)),
+            const SizedBox(width: 12),
+            Expanded(child: PieChartCard(apps: apps)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _appListSection(context, size, apps, state),
+      ],
+    );
+  }
+
+  Widget _appListSection(BuildContext context, ScreenSize size,
+      List<AppUsageItem> apps, DashboardState state) {
+    final visible = _showAllApps ? apps.length : size.defaultAppRows;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('应用列表', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            if (apps.length > size.defaultAppRows)
+              TextButton(
+                onPressed: () => setState(() => _showAllApps = !_showAllApps),
+                child: Text(_showAllApps ? '收起' : '全部 (${apps.length})'),
+              ),
+          ],
+        ),
+        for (final app in apps.take(visible)) AppListTile(app: app),
+      ],
     );
   }
 

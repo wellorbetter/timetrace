@@ -81,5 +81,5 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 }
 
 final dashboardProvider =
-    AsyncNotifierProvider<DashboardNotifier, DashboardState>(
+    AsyncNotifierProvider.autoDispose<DashboardNotifier, DashboardState>(
         DashboardNotifier.new);

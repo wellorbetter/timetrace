@@ -301,13 +301,21 @@ class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
 }
 
 /// Day range: detailed session timeline.
-class _DaySummary extends ConsumerWidget {
+class _DaySummary extends ConsumerStatefulWidget {
   const _DaySummary({required this.date});
 
   final DateTime date;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DaySummary> createState() => _DaySummaryState();
+}
+
+class _DaySummaryState extends ConsumerState<_DaySummary> {
+  bool _showAll = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = widget.date;
     final scheme = Theme.of(context).colorScheme;
     final asyncDay = ref.watch(calendarDayProvider(date));
 
@@ -345,9 +353,17 @@ class _DaySummary extends ConsumerWidget {
             if (day.sessions.isEmpty)
               Text('当天暂无记录',
                   style: TextStyle(fontSize: 12, color: scheme.outline))
-            else
-              for (final s in day.sessions.take(10))
+            else ...[
+              for (final s in day.sessions.take(_showAll ? 20 : 6))
                 _SessionRow(session: s),
+              if (day.sessions.length > 6)
+                Center(
+                  child: TextButton(
+                    onPressed: () => setState(() => _showAll = !_showAll),
+                    child: Text(_showAll ? '收起' : '全部 ${day.sessions.length} 条'),
+                  ),
+                ),
+            ],
           ],
         );
       },
