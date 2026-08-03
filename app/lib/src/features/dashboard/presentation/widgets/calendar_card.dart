@@ -28,6 +28,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   DateTime _selected = DateTime.now();
   _SummaryRange _range = _SummaryRange.day;
   Map<String, List<String>> _dayImages = {};
+  Set<String> _diaryDays = {};
 
   @override
   void initState() {
@@ -43,12 +44,22 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
         start: _fmt(DateTime(now.year, 1, 1)),
         end: _fmt(DateTime(now.year, 12, 31)),
       );
+      // Diary dates (days with journal content)
+      final diaryEntries = api.getDiaryEntries(
+        start: _fmt(DateTime(now.year, 1, 1)),
+        end: _fmt(DateTime(now.year, 12, 31)),
+      );
+      final diaryDays = diaryEntries
+          .where((e) => e.$2.isNotEmpty)
+          .map((e) => e.$1)
+          .toSet();
       if (mounted) {
         setState(() {
           _dayImages = {};
           for (final (date, path) in entries) {
             _dayImages.putIfAbsent(date, () => []).add(path);
           }
+          _diaryDays = diaryDays;
         });
       }
     } catch (e) {
@@ -193,42 +204,71 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       {bool selected = false, bool today = false}) {
     final dateStr = _fmt(day);
     final imgs = _dayImages[dateStr] ?? [];
+    final hasDiary = _diaryDays.contains(dateStr);
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          '${day.day}',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected
-                ? scheme.onPrimary
-                : today
-                    ? scheme.primary
-                    : scheme.onSurface,
+        // Date number — today gets a primary ring + bold
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: today && !selected
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: scheme.primary, width: 1.5),
+                )
+              : null,
+          child: Text(
+            '${day.day}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight:
+                  (today || selected) ? FontWeight.bold : FontWeight.normal,
+              color: selected
+                  ? scheme.onPrimary
+                  : today
+                      ? scheme.primary
+                      : scheme.onSurface,
+            ),
           ),
         ),
-        if (imgs.isNotEmpty)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (final p in imgs.take(3))
-                Padding(
-                  padding: const EdgeInsets.only(left: 1),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: Image.file(
-                      File(p),
-                      width: 8,
-                      height: 8,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        // Markers row: image thumbs + diary dot
+        SizedBox(
+          height: 9,
+          child: imgs.isNotEmpty
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final p in imgs.take(3))
+                      Padding(
+                        padding: const EdgeInsets.only(left: 1),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: Image.file(
+                            File(p),
+                            width: 8,
+                            height: 8,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                  ],
+                )
+              : hasDiary
+                  ? Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    )
+                  : const SizedBox(height: 5),
+        ),
       ],
     );
   }
@@ -439,9 +479,6 @@ class _AggRowTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12)),
           ),
-          if (row.sessions > 1)
-            Text('×${row.sessions} ',
-                style: TextStyle(fontSize: 10, color: scheme.outline)),
           Text(dur,
               style:
                   const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
