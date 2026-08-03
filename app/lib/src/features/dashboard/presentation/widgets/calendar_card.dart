@@ -159,8 +159,8 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
                   rightChevronIcon:
                       Icon(Icons.chevron_right, size: 20, color: scheme.primary),
                 ),
-                daysOfWeekHeight: 22,
-                rowHeight: 50,
+                daysOfWeekHeight: 24,
+                rowHeight: 54,
                 daysOfWeekStyle: DaysOfWeekStyle(
                   weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
                   weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
@@ -256,24 +256,16 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
         ? 0.0
         : (usage / _maxDayUsage).clamp(0.0, 1.0).toDouble();
 
-    // Block colors: selected solid, today container, else heatmap tint
-    Color block;
-    Color textColor = scheme.onSurface;
-    if (selected) {
-      block = scheme.primary;
-      textColor = scheme.onPrimary;
-    } else if (today) {
-      block = scheme.primaryContainer;
-      textColor = scheme.onPrimaryContainer;
-    } else if (usage > 0) {
-      block = scheme.primary.withValues(alpha: 0.08 + 0.22 * intensity);
-      textColor = scheme.onSurface;
-    } else {
-      block = scheme.surfaceContainerHighest.withValues(alpha: 0.30);
-      textColor = scheme.onSurfaceVariant;
-    }
+    // Xiaomi-style clean cells: no busy blocks.
+    // Selected = filled primary circle; today = light container circle;
+    // festivals = red text; lunar = small grey text; usage = tiny dot.
+    final isFestival = info.festival != null;
 
-    // Festival/lunar label
+    // Subtle heat background only for high-usage days (never muddy)
+    final heat = usage > 0
+        ? scheme.primary.withValues(alpha: 0.05 + 0.15 * intensity)
+        : null;
+
     String? sub;
     if (info.hasMarker) {
       sub = info.festival ?? info.solarTerm;
@@ -281,17 +273,26 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       sub = info.day;
     }
 
+    Color dayColor = scheme.onSurface;
+    if (isFestival) {
+      dayColor = Colors.red.shade600;
+    }
+    if (selected) {
+      dayColor = scheme.onPrimary;
+    } else if (today) {
+      dayColor = scheme.primary;
+    }
+
     return Center(
       child: Container(
-        width: 36,
-        height: 40,
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        width: 40,
+        height: 42,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: block,
-          borderRadius: BorderRadius.circular(10),
-          border: today && !selected
-              ? Border.all(color: scheme.primary, width: 1.2)
-              : null,
+          color: selected
+              ? scheme.primary
+              : (heat ?? (today ? scheme.primaryContainer : null)),
+          shape: BoxShape.circle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -300,63 +301,67 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             Text(
               '${day.day}',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight:
                     (today || selected) ? FontWeight.bold : FontWeight.w500,
-                color: textColor,
+                color: dayColor,
                 height: 1.1,
               ),
             ),
-            // Festival / lunar / markers row
+            // Festival / lunar label
             SizedBox(
-              height: 13,
+              height: 12,
               child: sub != null
                   ? Text(
                       sub,
                       style: TextStyle(
-                        fontSize: 7,
-                        color: (info.festival != null)
-                            ? Colors.red.shade600
-                            : scheme.outline,
+                        fontSize: 8,
+                        color: (selected || today)
+                            ? dayColor.withValues(alpha: 0.85)
+                            : (isFestival
+                                ? Colors.red.shade600
+                                : scheme.outline),
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (imgs.isNotEmpty)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              for (final p in imgs.take(2))
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 1),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: Image.file(
-                                      File(p),
-                                      width: 7,
-                                      height: 7,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const SizedBox.shrink(),
+                  : (imgs.isNotEmpty || hasDiary)
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (imgs.isNotEmpty)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final p in imgs.take(2))
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 1),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(2),
+                                        child: Image.file(
+                                          File(p),
+                                          width: 7,
+                                          height: 7,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const SizedBox.shrink(),
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                ],
+                              ),
+                            if (hasDiary && imgs.isEmpty)
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: scheme.primary,
+                                  shape: BoxShape.circle,
                                 ),
-                            ],
-                          ),
-                        if (hasDiary && imgs.isEmpty)
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: scheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
+                              ),
+                          ],
+                        )
+                      : const SizedBox(height: 9),
             ),
           ],
         ),

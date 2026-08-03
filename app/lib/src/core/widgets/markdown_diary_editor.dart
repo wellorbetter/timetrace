@@ -30,7 +30,6 @@ class MarkdownDiaryEditor extends StatefulWidget {
 class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   late TextEditingController _ctrl;
   bool _dirty = false;
-  bool _preview = false;
   Timer? _saveTimer;
   bool _saved = false;
 
@@ -114,8 +113,6 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final split = constraints.maxWidth >= 640;
-        // In split mode the preview is always live (left editor / right preview)
-        final showPreview = split || _preview;
 
         return Container(
           decoration: BoxDecoration(
@@ -151,19 +148,12 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                     _toolbarBtn(Icons.terminal, '代码块',
                         () => _apply('\n```\n', '\n```')),
                     const SizedBox(width: 4),
-                    // Narrow mode: toggle edit/preview; split mode: always preview
-                    IconButton(
-                      icon: Icon(
-                          split
-                              ? Icons.vertical_split
-                              : (_preview
-                                  ? Icons.edit_outlined
-                                  : Icons.visibility_outlined),
-                          size: 17),
-                      tooltip: split ? '左右分屏预览' : (_preview ? '编辑' : '预览'),
-                      onPressed: () => setState(() => _preview = !_preview),
-                      visualDensity: VisualDensity.compact,
-                    ),
+                    Icon(Icons.vertical_split, size: 16,
+                        color: scheme.outlineVariant),
+                    const SizedBox(width: 4),
+                    Text('实时预览',
+                        style: TextStyle(
+                            fontSize: 10, color: scheme.outline)),
                     // Save status
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
@@ -180,7 +170,8 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 ),
               ),
               const Divider(height: 1),
-              // ── Split view: editor + live preview ──
+              // ── Always-visible live preview ──
+              // Wide: editor | preview side by side. Narrow: stacked.
               if (split)
                 IntrinsicHeight(
                   child: Row(
@@ -199,10 +190,19 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                     ],
                   ),
                 )
-              else if (_preview)
-                _previewPane(scheme)
               else
-                _editor(scheme),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _editor(scheme),
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(horizontal: 10),
+                      color: scheme.outlineVariant.withValues(alpha: 0.6),
+                    ),
+                    _previewPane(scheme),
+                  ],
+                ),
             ],
           ),
         );

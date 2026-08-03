@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Donut chart that fills its card height — donut centered, legend below.
+/// Donut chart — top 5 apps + aggregated "其他" (no tiny-slice seams).
+/// Clean center text, compact legend, no lines/overlap on the ring.
 class PieChartCard extends StatelessWidget {
   const PieChartCard({required this.apps, super.key});
 
@@ -14,9 +15,9 @@ class PieChartCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final total =
         apps.fold<int>(0, (s, a) => s + a.activeSeconds).clamp(1, 1 << 62);
-    final slices = apps.take(8).toList();
-    final legend = slices.take(6).toList();
-    final more = slices.length - legend.length;
+    final top = apps.take(5).toList();
+    final rest = apps.skip(5).toList();
+    final restSec = rest.fold<int>(0, (s, a) => s + a.activeSeconds);
 
     return Card(
       child: Padding(
@@ -25,40 +26,51 @@ class PieChartCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('占比'),
-            // Donut centered in available space (fills card height)
+            // Donut centered in available space
             Expanded(
               child: Center(
                 child: SizedBox(
-                  width: 140,
-                  height: 140,
+                  width: 150,
+                  height: 150,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       PieChart(
                         PieChartData(
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 44,
+                          sectionsSpace: 1,
+                          centerSpaceRadius: 48,
                           startDegreeOffset: -90,
                           pieTouchData: PieTouchData(enabled: false),
-                          sections: slices.map((app) {
-                            return PieChartSectionData(
-                              value: app.activeSeconds.toDouble(),
-                              color: appColor(app.appName),
-                              radius: 70 - 44, // ring 44→70
-                              title: '',
-                              showTitle: false,
-                            );
-                          }).toList(),
+                          sections: [
+                            for (final app in top)
+                              PieChartSectionData(
+                                value: app.activeSeconds.toDouble(),
+                                color: appColor(app.appName),
+                                radius: 75 - 48,
+                                title: '',
+                                showTitle: false,
+                              ),
+                            if (restSec > 0)
+                              PieChartSectionData(
+                                value: restSec.toDouble(),
+                                color: scheme.surfaceContainerHighest,
+                                radius: 75 - 48,
+                                title: '',
+                                showTitle: false,
+                              ),
+                          ],
                         ),
                       ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_fmt(total),
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: scheme.onSurface)),
+                          Text(
+                            _fmt(total),
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: scheme.onSurface),
+                          ),
                           Text('活跃',
                               style: TextStyle(
                                   fontSize: 9, color: scheme.outline)),
@@ -70,12 +82,12 @@ class PieChartCard extends StatelessWidget {
               ),
             ),
             const Divider(height: 10),
-            // Legend — capped at 6 rows + "+N more" (no overlap / overflow)
+            // Legend — top 5 + 其他, compact rows
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (final app in legend)
+                  for (final app in top)
                     SizedBox(
                       height: 20,
                       child: Row(
@@ -104,12 +116,34 @@ class PieChartCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  if (more > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text('+$more 个应用（见下方列表）',
-                          style: TextStyle(
-                              fontSize: 10, color: scheme.outline)),
+                  if (restSec > 0)
+                    SizedBox(
+                      height: 20,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Expanded(
+                            child: Text('其他',
+                                style: TextStyle(fontSize: 11),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Text(
+                            '${(restSec / total * 100).round()}%',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
                     ),
                 ],
               ),
@@ -123,6 +157,6 @@ class PieChartCard extends StatelessWidget {
   String _fmt(int seconds) {
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
-    return h > 0 ? '${h}h${m}m' : '${m}m';
+    return h > 0 ? '${h}时${m}分' : '${m}分';
   }
 }
