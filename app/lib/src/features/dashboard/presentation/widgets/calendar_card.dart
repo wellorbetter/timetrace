@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/chinese_calendar.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
@@ -429,8 +430,8 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
               spacing: 6,
               runSpacing: 4,
               children: [
-                _Chip(label: '活跃 ${h}h${m}m', color: scheme.primary),
-                _Chip(label: '${agg.length} 应用', color: scheme.tertiary),
+                StatChip(label: '活跃 ${h}h${m}m', color: scheme.primary),
+                StatChip(label: '${agg.length} 应用', color: scheme.tertiary),
               ],
             ),
             const SizedBox(height: 8),
@@ -558,8 +559,8 @@ class _RangeSummary extends ConsumerWidget {
               spacing: 6,
               runSpacing: 4,
               children: [
-                _Chip(label: '活跃 ${h}h${m}m', color: scheme.primary),
-                _Chip(label: '${sessions.length} 应用', color: scheme.tertiary),
+                StatChip(label: '活跃 ${h}h${m}m', color: scheme.primary),
+                StatChip(label: '${sessions.length} 应用', color: scheme.tertiary),
               ],
             ),
             const SizedBox(height: 8),
@@ -836,27 +837,6 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 11, color: color, fontWeight: FontWeight.w500)),
     );
   }
 }

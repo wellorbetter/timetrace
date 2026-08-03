@@ -26,12 +26,13 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
   bool _loadingPages = false;
 
   Future<void> _select(int i) async {
+    final deselecting = _selected == i;
     setState(() {
-      _selected = _selected == i ? null : i;
+      _selected = deselecting ? null : i;
       _pages = null;
-      _loadingPages = true;
+      _loadingPages = !deselecting; // cancel deselection stops spinner
     });
-    if (_selected == null) return;
+    if (deselecting) return;
     try {
       final api = ref.read(apiProvider);
       final today = DateTime.now();

@@ -153,12 +153,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 color: scheme.primary),
             const SizedBox(width: 10),
             StatCard(
-                icon: Icons.pause_circle_outline,
-                label: '离开',
-                value: _fmt(state.totalIdleSeconds),
-                color: Colors.grey),
-            const SizedBox(width: 10),
-            StatCard(
                 icon: Icons.history,
                 label: '总时长',
                 value: _fmt(state.lifetimeSeconds),
