@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
-/// Markdown diary editor (Typora-like).
-/// - Wide layout: editor left + live preview right (split view)
-/// - Narrow: toolbar + 编辑/预览 toggle
-/// - Debounced auto-save (stops typing 900ms → onSave), status indicator.
-/// Encapsulated as a reusable component.
+/// Markdown diary editor, UI modeled after open-source editors (Typora/StackEdit):
+/// three explicit modes via a segmented control — 编辑 / 分屏 / 预览.
+/// Preview is therefore an OPTION, not forced.
+/// Debounced auto-save (stops typing 900ms → onSave).
 class MarkdownDiaryEditor extends StatefulWidget {
   const MarkdownDiaryEditor({
     required this.initialText,
@@ -27,11 +26,14 @@ class MarkdownDiaryEditor extends StatefulWidget {
   State<MarkdownDiaryEditor> createState() => _MarkdownDiaryEditorState();
 }
 
+enum _EditMode { edit, split, preview }
+
 class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   late TextEditingController _ctrl;
   bool _dirty = false;
   Timer? _saveTimer;
   bool _saved = false;
+  _EditMode _mode = _EditMode.edit;
 
   @override
   void initState() {
@@ -110,103 +112,99 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final split = constraints.maxWidth >= 640;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Toolbar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Wrap(
+              spacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _toolbarBtn(Icons.format_bold, '加粗',
+                    () => _apply('**', '**', placeholder: '粗体')),
+                _toolbarBtn(Icons.format_italic, '斜体',
+                    () => _apply('*', '*', placeholder: '斜体')),
+                _toolbarBtn(Icons.format_strikethrough, '删除线',
+                    () => _apply('~~', '~~', placeholder: '删除')),
+                _toolbarBtn(Icons.title, '标题',
+                    () => _apply('## ', '', placeholder: '标题')),
+                _toolbarBtn(Icons.format_list_bulleted, '列表',
+                    () => _apply('\n- ', '', placeholder: '项目')),
+                _toolbarBtn(Icons.format_quote, '引用',
+                    () => _apply('\n> ', '', placeholder: '引用')),
+                _toolbarBtn(Icons.code, '代码',
+                    () => _apply('`', '`', placeholder: '代码')),
+                _toolbarBtn(Icons.terminal, '代码块',
+                    () => _apply('\n```\n', '\n```')),
+                const SizedBox(width: 6),
+                // ── Mode switch: 编辑 / 分屏 / 预览 (preview is an OPTION) ──
+                SegmentedButton<_EditMode>(
+                  segments: const [
+                    ButtonSegment(
+                        value: _EditMode.edit,
+                        icon: Icon(Icons.edit_outlined, size: 14),
+                        label: Text('编辑', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(
+                        value: _EditMode.split,
+                        icon: Icon(Icons.vertical_split, size: 14),
+                        label: Text('分屏', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(
+                        value: _EditMode.preview,
+                        icon: Icon(Icons.visibility_outlined, size: 14),
+                        label: Text('预览', style: TextStyle(fontSize: 11))),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: (s) => setState(() => _mode = s.first),
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: WidgetStatePropertyAll(
+                        const EdgeInsets.symmetric(horizontal: 8)),
+                  ),
+                ),
+                // Save status
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    _dirty ? '输入中…' : (_saved ? '✓ 已保存' : ''),
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: _dirty ? scheme.outline : scheme.primary),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Toolbar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: Wrap(
-                  spacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+          const Divider(height: 1),
+          // ── Body by mode ──
+          switch (_mode) {
+            _EditMode.edit => _editor(scheme),
+            _EditMode.preview => _previewPane(scheme),
+            _EditMode.split => IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _toolbarBtn(Icons.format_bold, '加粗',
-                        () => _apply('**', '**', placeholder: '粗体')),
-                    _toolbarBtn(Icons.format_italic, '斜体',
-                        () => _apply('*', '*', placeholder: '斜体')),
-                    _toolbarBtn(Icons.format_strikethrough, '删除线',
-                        () => _apply('~~', '~~', placeholder: '删除')),
-                    _toolbarBtn(Icons.title, '标题',
-                        () => _apply('## ', '', placeholder: '标题')),
-                    _toolbarBtn(Icons.format_list_bulleted, '列表',
-                        () => _apply('\n- ', '', placeholder: '项目')),
-                    _toolbarBtn(Icons.format_quote, '引用',
-                        () => _apply('\n> ', '', placeholder: '引用')),
-                    _toolbarBtn(Icons.code, '代码',
-                        () => _apply('`', '`', placeholder: '代码')),
-                    _toolbarBtn(Icons.terminal, '代码块',
-                        () => _apply('\n```\n', '\n```')),
-                    const SizedBox(width: 4),
-                    Icon(Icons.vertical_split, size: 16,
-                        color: scheme.outlineVariant),
-                    const SizedBox(width: 4),
-                    Text('实时预览',
-                        style: TextStyle(
-                            fontSize: 10, color: scheme.outline)),
-                    // Save status
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Text(
-                        _dirty
-                            ? '输入中…'
-                            : (_saved ? '✓ 已保存' : ''),
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: _dirty ? scheme.outline : scheme.primary),
-                      ),
+                    Expanded(child: _editor(scheme)),
+                    Container(
+                      width: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.6),
                     ),
+                    Expanded(child: _previewPane(scheme)),
                   ],
                 ),
               ),
-              const Divider(height: 1),
-              // ── Always-visible live preview ──
-              // Wide: editor | preview side by side. Narrow: stacked.
-              if (split)
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _editor(scheme),
-                      ),
-                      Container(
-                        width: 1,
-                        color: scheme.outlineVariant.withValues(alpha: 0.6),
-                      ),
-                      Expanded(
-                        child: _previewPane(scheme),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _editor(scheme),
-                    Container(
-                      height: 1,
-                      margin: const EdgeInsets.symmetric(horizontal: 10),
-                      color: scheme.outlineVariant.withValues(alpha: 0.6),
-                    ),
-                    _previewPane(scheme),
-                  ],
-                ),
-            ],
-          ),
-        );
-      },
+          },
+        ],
+      ),
     );
   }
 
@@ -239,11 +237,17 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
               styleSheet: MarkdownStyleSheet(
                 p: const TextStyle(fontSize: 13, height: 1.6),
                 h1: TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.bold, color: scheme.onSurface),
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onSurface),
                 h2: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold, color: scheme.onSurface),
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onSurface),
                 h3: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface),
                 code: TextStyle(fontSize: 11, color: scheme.primary),
                 blockquoteDecoration: BoxDecoration(
                   color: scheme.secondaryContainer.withValues(alpha: 0.4),

@@ -7,10 +7,13 @@ import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
+/// Dashboard — single vertical flow (product order):
+/// 1. stats  2. bar chart (按应用)  3. app distribution (sessions inline)
+/// 4. calendar + day/week/month summary  5. diary + images + entries
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -94,7 +97,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           final y = now.subtract(const Duration(days: 1));
           end = '${y.year}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
       }
-      final pages = api.getWindowTitles(appName: widget.state.apps[i].appName, date: end);
+      final pages = api.getWindowTitles(
+          appName: widget.state.apps[i].appName, date: end);
       if (mounted) {
         setState(() {
           _pages = pages;
@@ -144,14 +148,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         final size = screenSizeOf(constraints);
         final scheme = Theme.of(context).colorScheme;
 
-        // ── WIDE: charts on top, app list fills the rest below ──
-        if (size.twoColumn) {
-          return Padding(
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+        // Content column — max 900px on wide screens so bars/calendar
+        // aren't stretched; centered with the nav rail on the left.
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                // 1. Stats
                 Row(
                   children: [
                     StatCard(
@@ -168,31 +173,18 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Charts: bar (flex) + pie (fixed 260×360, no jitter)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 6,
-                      child: SizedBox(
-                        height: 300,
-                        child: AppChartSection(
-                          apps: apps,
-                          selected: _selected,
-                          onSelect: _select,
-                          tall: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 260,
-                      height: 300,
-                      child: PieChartCard(apps: apps),
-                    ),
-                  ],
+                // 2. Bar chart (按应用) — tap bar to select
+                SizedBox(
+                  height: size.twoColumn ? 280 : 240,
+                  child: AppChartSection(
+                    apps: apps,
+                    selected: _selected,
+                    onSelect: _select,
+                    tall: true,
+                  ),
                 ),
                 const SizedBox(height: 12),
+                // 3. App distribution — sessions expand inline
                 AppListSection(
                   apps: apps,
                   selected: _selected,
@@ -201,69 +193,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   onSelect: _select,
                   rowKeys: _rowKeys,
                 ),
+                const SizedBox(height: 12),
+                // 4+5. Calendar + day summary + diary + images + entries
+                const CalendarCard(),
               ],
             ),
-            ),
-          );
-        }
-
-        // ── MEDIUM / COMPACT: single column ──
-        return ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Row(
-              children: [
-                StatCard(
-                    icon: Icons.timer_outlined,
-                    label: '活跃',
-                    value: state.totalActiveLabel,
-                    color: scheme.primary),
-                const SizedBox(width: 10),
-                if (size.threeStats) ...[
-                  const SizedBox(width: 10),
-                  StatCard(
-                      icon: Icons.history,
-                      label: '总时长',
-                      value: _fmt(state.lifetimeSeconds),
-                      color: scheme.tertiary),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Charts: bar + pie side by side (fixed heights)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: SizedBox(
-                    height: 300,
-                    child: AppChartSection(
-                      apps: apps,
-                      selected: _selected,
-                      onSelect: _select,
-                      tall: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 260,
-                  height: 300,
-                  child: PieChartCard(apps: apps),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            AppListSection(
-              apps: apps,
-              selected: _selected,
-              pages: _pages,
-              loading: _loadingPages,
-              onSelect: _select,
-              rowKeys: _rowKeys,
-            ),
-          ],
+          ),
         );
       },
     );
