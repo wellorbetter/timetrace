@@ -11,9 +11,9 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calend
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
-/// Dashboard — single vertical flow (product order):
-/// 1. stats  2. bar chart (按应用)  3. app distribution (sessions inline)
-/// 4. calendar + day/week/month summary  5. diary + images + entries
+/// Dashboard with two modes (product flow):
+/// 概览 — glanceable stats (stats + chart + app list)
+/// 日历日记 — focused calendar + day summary + journal
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -24,49 +24,38 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('使用统计'),
-        actions: [
-          for (final (label, range) in [
-            ('今天', DateRange.today),
-            ('昨天', DateRange.yesterday),
-            ('本周', DateRange.week),
-            ('本月', DateRange.month),
-          ])
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final selected = ref.watch(dashboardRangeProvider) == range;
-                  return ChoiceChip(
-                    label: Text(label, style: const TextStyle(fontSize: 12)),
-                    selected: selected,
-                    onSelected: (_) =>
-                        ref.read(dashboardRangeProvider.notifier).select(range),
-                  );
-                },
-              ),
-            ),
-          const SizedBox(width: 8),
-        ],
+        bottom: const TabBar(
+          tabs: [
+            Tab(text: '概览'),
+            Tab(text: '日历日记'),
+          ],
+        ),
       ),
       body: asyncState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (state) => _DashboardBody(state: state),
+        data: (state) => TabBarView(
+          children: [
+            _OverviewBody(state: state),
+            const _CalendarBody(),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _DashboardBody extends ConsumerStatefulWidget {
-  const _DashboardBody({required this.state});
+/// 概览: range chips + stats + bar chart + app distribution.
+class _OverviewBody extends ConsumerStatefulWidget {
+  const _OverviewBody({required this.state});
 
   final DashboardState state;
 
   @override
-  ConsumerState<_DashboardBody> createState() => _DashboardBodyState();
+  ConsumerState<_OverviewBody> createState() => _OverviewBodyState();
 }
 
-class _DashboardBodyState extends ConsumerState<_DashboardBody> {
+class _OverviewBodyState extends ConsumerState<_OverviewBody> {
   /// Shared selection: bar chart and app list stay in sync.
   int? _selected;
   List<PageDto>? _pages;
@@ -148,15 +137,40 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         final size = screenSizeOf(constraints);
         final scheme = Theme.of(context).colorScheme;
 
-        // Content column — max 900px on wide screens so bars/calendar
-        // aren't stretched; centered with the nav rail on the left.
         return Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                // 1. Stats
+                // Range chips
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final (label, range) in [
+                      ('今天', DateRange.today),
+                      ('昨天', DateRange.yesterday),
+                      ('本周', DateRange.week),
+                      ('本月', DateRange.month),
+                    ])
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final selected =
+                              ref.watch(dashboardRangeProvider) == range;
+                          return ChoiceChip(
+                            label: Text(label,
+                                style: const TextStyle(fontSize: 12)),
+                            selected: selected,
+                            onSelected: (_) => ref
+                                .read(dashboardRangeProvider.notifier)
+                                .select(range),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Stats
                 Row(
                   children: [
                     StatCard(
@@ -173,7 +187,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // 2. Bar chart (按应用) — tap bar to select
+                // Bar chart (按应用) — tap bar to select
                 SizedBox(
                   height: size.twoColumn ? 280 : 240,
                   child: AppChartSection(
@@ -184,7 +198,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // 3. App distribution — sessions expand inline
+                // App distribution — sessions expand inline
                 AppListSection(
                   apps: apps,
                   selected: _selected,
@@ -193,9 +207,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   onSelect: _select,
                   rowKeys: _rowKeys,
                 ),
-                const SizedBox(height: 12),
-                // 4+5. Calendar + day summary + diary + images + entries
-                const CalendarCard(),
               ],
             ),
           ),
@@ -208,5 +219,25 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
     return h > 0 ? '${h}时${m}分' : '${m}分';
+  }
+}
+
+/// 日历日记: focused calendar + summary + journal (full width).
+class _CalendarBody extends StatelessWidget {
+  const _CalendarBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: const [
+            CalendarCard(),
+          ],
+        ),
+      ),
+    );
   }
 }
