@@ -62,11 +62,11 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isCompact = widget.compact;
 
     Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Header ──
         Row(
           children: [
             Icon(Icons.calendar_month, size: 18, color: scheme.primary),
@@ -148,7 +148,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               flex: 3,
               child: _SummaryPanel(
@@ -159,9 +159,9 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             ),
           ],
         ),
-        const Divider(height: 20),
+        const SizedBox(height: 8),
 
-        // ── Diary (full width, below calendar) ──
+        // ── Diary (full width, below) ──
         _DiaryEditor(
           date: _selected,
           images: _dayImages[_fmt(_selected)] ?? [],
@@ -170,10 +170,9 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       ],
     );
 
-    // Compact (sidebar) mode: constrain height so it fills the right column.
-    if (isCompact) {
+    if (widget.compact) {
       content = SizedBox(
-        height: MediaQuery.of(context).size.height - 160,
+        height: MediaQuery.of(context).size.height - 150,
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -235,7 +234,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   }
 }
 
-/// Right panel: day/week/month summary (functional range switching).
+/// Right panel: day/week/month summary with aggregated sessions.
 class _SummaryPanel extends ConsumerStatefulWidget {
   const _SummaryPanel({
     required this.date,
@@ -288,19 +287,16 @@ class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // ── Day view: full session timeline ──
         if (widget.range == _SummaryRange.day)
           _DaySummary(date: widget.date)
         else
-          // ── Week / Month view: aggregated top apps + heatmap ──
           _RangeSummary(date: widget.date, range: widget.range),
       ],
     );
   }
 }
 
-/// Day range: detailed session timeline.
+/// Day view: AGGREGATED sessions (same app merged) + heatmap.
 class _DaySummary extends ConsumerStatefulWidget {
   const _DaySummary({required this.date});
 
@@ -313,11 +309,29 @@ class _DaySummary extends ConsumerStatefulWidget {
 class _DaySummaryState extends ConsumerState<_DaySummary> {
   bool _showAll = false;
 
+  /// Merge consecutive same-app sessions into one aggregated row.
+  List<_AggRow> _aggregate(List<DaySessionDto> sessions) {
+    final rows = <String, _AggRow>{};
+    for (final s in sessions) {
+      if (s.isIdle) continue; // drop away/empty
+      final agg = rows[s.appName] ?? _AggRow(
+          appName: s.appName,
+          firstStart: s.startedAt,
+          seconds: 0,
+          sessions: 0);
+      agg.seconds += s.durationSecs.toInt();
+      agg.sessions += 1;
+      rows[s.appName] = agg;
+    }
+    final list = rows.values.toList()
+      ..sort((a, b) => b.seconds.compareTo(a.seconds));
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final date = widget.date;
     final scheme = Theme.of(context).colorScheme;
-    final asyncDay = ref.watch(calendarDayProvider(date));
+    final asyncDay = ref.watch(calendarDayProvider(widget.date));
 
     return asyncDay.when(
       loading: () => const Padding(
@@ -333,7 +347,7 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
       data: (day) {
         final h = day.activeSeconds ~/ 3600;
         final m = (day.activeSeconds % 3600) ~/ 60;
-        final ih = day.idleSeconds ~/ 60;
+        final agg = _aggregate(day.sessions);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -342,25 +356,26 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
               runSpacing: 4,
               children: [
                 _Chip(label: '活跃 ${h}h${m}m', color: scheme.primary),
-                _Chip(label: '离开 ${ih}m', color: scheme.outline),
-                _Chip(
-                    label: '${day.sessionCount} 会话', color: scheme.tertiary),
+                _Chip(label: '${agg.length} 应用', color: scheme.tertiary),
               ],
             ),
             const SizedBox(height: 8),
-            _HourlyHeatmap(date: date),
+            _HourlyHeatmap(date: widget.date),
             const SizedBox(height: 8),
-            if (day.sessions.isEmpty)
+            Text('使用记录',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 4),
+            if (agg.isEmpty)
               Text('当天暂无记录',
                   style: TextStyle(fontSize: 12, color: scheme.outline))
             else ...[
-              for (final s in day.sessions.take(_showAll ? 20 : 6))
-                _SessionRow(session: s),
-              if (day.sessions.length > 6)
+              for (final a in agg.take(_showAll ? 20 : 6))
+                _AggRowTile(row: a),
+              if (agg.length > 6)
                 Center(
                   child: TextButton(
                     onPressed: () => setState(() => _showAll = !_showAll),
-                    child: Text(_showAll ? '收起' : '全部 ${day.sessions.length} 条'),
+                    child: Text(_showAll ? '收起' : '全部 ${agg.length} 应用'),
                   ),
                 ),
             ],
@@ -371,7 +386,72 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
   }
 }
 
-/// Week/Month range: aggregated top apps + totals.
+/// Aggregated session row (app + first start + total duration + count).
+class _AggRow {
+  _AggRow({
+    required this.appName,
+    required this.firstStart,
+    required this.seconds,
+    required this.sessions,
+  });
+
+  final String appName;
+  String firstStart;
+  int seconds;
+  int sessions;
+}
+
+class _AggRowTile extends StatelessWidget {
+  const _AggRowTile({required this.row});
+
+  final _AggRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final h = row.seconds ~/ 3600;
+    final m = (row.seconds % 3600) ~/ 60;
+    final dur = h > 0 ? '${h}h${m}m' : '${m}m';
+
+    String time = '';
+    try {
+      final dt = DateTime.parse(row.firstStart).toLocal();
+      time =
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {}
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                  color: appColor(row.appName), shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          SizedBox(
+              width: 42,
+              child: Text(time,
+                  style: TextStyle(fontSize: 10, color: scheme.outline))),
+          Expanded(
+            child: Text(row.appName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12)),
+          ),
+          if (row.sessions > 1)
+            Text('×${row.sessions} ',
+                style: TextStyle(fontSize: 10, color: scheme.outline)),
+          Text(dur,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Week/Month range: aggregated top apps.
 class _RangeSummary extends ConsumerWidget {
   const _RangeSummary({required this.date, required this.range});
 
@@ -381,7 +461,7 @@ class _RangeSummary extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final (start, end) = _rangeBounds(range, date);
+    final (start, end) = _rangeBounds(range);
     final asyncSplit = ref.watch(rangeSummaryProvider((start, end)));
 
     return asyncSplit.when(
@@ -396,7 +476,8 @@ class _RangeSummary extends ConsumerWidget {
       error: (e, _) =>
           Text('加载失败: $e', style: const TextStyle(fontSize: 12)),
       data: (sessions) {
-        final total = sessions.fold<int>(0, (s, e) => s + e.durationSecs.toInt());
+        final total =
+            sessions.fold<int>(0, (s, e) => s + e.durationSecs.toInt());
         final h = total ~/ 3600;
         final m = (total % 3600) ~/ 60;
         return Column(
@@ -419,14 +500,14 @@ class _RangeSummary extends ConsumerWidget {
                   style: TextStyle(fontSize: 12, color: scheme.outline))
             else
               for (final s in sessions.take(8))
-                _SessionRow(session: s),
+                _SessionRowSimple(name: s.appName, seconds: s.durationSecs.toInt()),
           ],
         );
       },
     );
   }
 
-  (String, String) _rangeBounds(_SummaryRange range, DateTime date) {
+  (String, String) _rangeBounds(_SummaryRange range) {
     String fmt(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final now = DateTime.now();
@@ -438,7 +519,42 @@ class _RangeSummary extends ConsumerWidget {
   }
 }
 
-/// Diary editor (full-width, below calendar): text + image upload + stacked.
+class _SessionRowSimple extends StatelessWidget {
+  const _SessionRowSimple({required this.name, required this.seconds});
+
+  final String name;
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: appColor(name), shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12)),
+          ),
+          Text(h > 0 ? '${h}h${m}m' : '${m}m',
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Diary editor (full-width, below calendar) — Material 3 style.
 class _DiaryEditor extends ConsumerStatefulWidget {
   const _DiaryEditor({
     required this.date,
@@ -518,21 +634,27 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: scheme.primary)),
-            const Spacer(),
-            if (widget.images.isNotEmpty)
-              Text('${widget.images.length} 张图片',
+            if (widget.images.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text('${widget.images.length} 图',
                   style: TextStyle(fontSize: 11, color: scheme.outline)),
+            ],
           ],
         ),
         const SizedBox(height: 6),
-        Card(
-          elevation: 0,
-          color: scheme.surfaceContainerLow,
+        // Cleaner input surface
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.6)),
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: asyncDay.when(
-              loading: () => const SizedBox(height: 60),
-              error: (_, __) => const SizedBox(height: 60),
+              loading: () => const SizedBox(height: 64),
+              error: (_, __) => const SizedBox(height: 64),
               data: (day) {
                 _diaryCtrl ??= TextEditingController(text: day.diary);
                 if (_diaryCtrl!.text != day.diary && !_dirty) {
@@ -554,9 +676,11 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.image_outlined, size: 20),
+                      icon: const Icon(Icons.add_photo_alternate_outlined,
+                          size: 20),
                       tooltip: '添加图片',
                       onPressed: _uploadImage,
+                      visualDensity: VisualDensity.compact,
                     ),
                     FilledButton.tonalIcon(
                       onPressed: _dirty
@@ -567,13 +691,13 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content: Text('日记已保存'),
+                                      content: Text('已保存'),
                                       duration: Duration(seconds: 1)),
                                 );
                               }
                             }
                           : null,
-                      icon: const Icon(Icons.save_outlined, size: 15),
+                      icon: const Icon(Icons.check, size: 16),
                       label: const Text('保存'),
                     ),
                   ],
@@ -582,8 +706,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
             ),
           ),
         ),
-
-        // Stacked image thumbnails
+        // Image grid (Material 3)
         if (widget.images.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -592,102 +715,47 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
               runSpacing: 8,
               children: [
                 for (final p in widget.images)
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(p),
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const SizedBox(width: 64, height: 64),
-                        ),
-                      ),
-                      Positioned(
-                        top: 2,
-                        right: 2,
-                        child: InkWell(
-                          onTap: () => _removeImage(p),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle),
-                            child: const Icon(Icons.close,
-                                size: 14, color: Colors.white),
+                  SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(
+                            File(p),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: scheme.surfaceContainerHighest,
+                              child: const Icon(Icons.broken_image,
+                                  color: Colors.grey),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          top: 3,
+                          right: 3,
+                          child: InkWell(
+                            onTap: () => _removeImage(p),
+                            child: Container(
+                              padding: const EdgeInsets.all(1),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close,
+                                  size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
           ),
       ],
-    );
-  }
-}
-
-class _SessionRow extends StatelessWidget {
-  const _SessionRow({required this.session});
-
-  final dynamic session;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final h = session.durationSecs.toInt() ~/ 3600;
-    final m = (session.durationSecs.toInt() % 3600) ~/ 60;
-    final dur = h > 0 ? '${h}h${m}m' : '${m}m';
-
-    String time = '';
-    try {
-      final dt = DateTime.parse(session.startedAt as String).toLocal();
-      time =
-          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) {}
-
-    if (session.isIdle as bool) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Icon(Icons.access_time, size: 13, color: scheme.outline),
-            const SizedBox(width: 8),
-            Text('离开', style: TextStyle(fontSize: 12, color: scheme.outline)),
-            const Spacer(),
-            Text(dur, style: TextStyle(fontSize: 12, color: scheme.outline)),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                  color: appColor(session.appName as String),
-                  shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          SizedBox(
-              width: 42,
-              child: Text(time,
-                  style: TextStyle(fontSize: 10, color: scheme.outline))),
-          Expanded(
-            child: Text(session.appName as String,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12)),
-          ),
-          Text(dur,
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
     );
   }
 }
@@ -735,8 +803,7 @@ class _HourlyHeatmap extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('当日活跃时段',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 4),
             SizedBox(
               height: 30,
