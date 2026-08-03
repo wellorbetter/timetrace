@@ -166,10 +166,17 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ],
         ),
         const SizedBox(height: 12),
-        // Integrated bar chart + app list (with page detail)
-        Expanded(child: AppChartSection(apps: apps, tall: true)),
-        const SizedBox(width: 12),
-        Expanded(child: PieChartCard(apps: apps)),
+        // Charts row: same height for bar card and pie card
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 6, child: AppChartSection(apps: apps, tall: true)),
+              const SizedBox(width: 12),
+              Expanded(flex: 4, child: PieChartCard(apps: apps)),
+            ],
+          ),
+        ),
       ],
     );
   }

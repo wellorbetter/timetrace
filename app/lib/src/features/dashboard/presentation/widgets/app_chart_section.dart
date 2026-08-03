@@ -101,6 +101,7 @@ class _AppChartSectionState extends ConsumerState<AppChartSection> {
                                 const SizedBox(height: 2),
                                 Expanded(
                                   child: FractionallySizedBox(
+                                    alignment: Alignment.bottomCenter,
                                     heightFactor: (apps[i].activeSeconds /
                                             maxTotal)
                                         .clamp(0.02, 1.0),
