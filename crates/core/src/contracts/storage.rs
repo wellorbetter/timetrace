@@ -159,6 +159,22 @@ pub trait DataStore: Send + Sync {
     /// Upsert a diary entry for a date. Returns the new content.
     fn set_diary(&self, date: NaiveDate, content: &str) -> String;
 
+    /// All diary entries in a range, newest first: (id, date_str, content).
+    fn get_diary_entries_detailed(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Vec<(i64, String, String)>;
+
+    /// Add a new diary entry for a date. Returns the new row id.
+    fn add_diary_entry(&self, date: NaiveDate, content: &str) -> i64;
+
+    /// Update a diary entry's content by id.
+    fn update_diary_entry(&self, id: i64, content: &str) -> Result<(), String>;
+
+    /// Delete a diary entry by id.
+    fn delete_diary_entry(&self, id: i64) -> Result<(), String>;
+
     /// Per-session detail for a day: (app_name, is_idle, duration_secs, started_at).
     fn get_day_sessions(&self, date: NaiveDate) -> Vec<(String, bool, i64, String)>;
 

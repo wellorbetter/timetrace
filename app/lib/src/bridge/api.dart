@@ -11,6 +11,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
+  /// Add a new diary entry for a date. Returns the new entry id.
+  PlatformInt64 addDiaryEntry({required String date, required String content});
+
   /// Register a diary image for a date.
   String addDiaryImage({required String date, required String path});
 
@@ -20,6 +23,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Create the API, opening the DB and starting the background monitor.
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
+
+  /// Delete a diary entry by id.
+  void deleteDiaryEntry({required PlatformInt64 id});
 
   /// Export usage data for a date range as CSV.
   /// Returns the CSV text (app, date, active_secs, idle_secs).
@@ -45,6 +51,12 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Get all diary entries for a month range (for calendar markers).
   List<(String, String)> getDiaryEntries({
+    required String start,
+    required String end,
+  });
+
+  /// All diary entries in a range with ids, newest first: (id, date, content).
+  List<(PlatformInt64, String, String)> getDiaryEntriesDetailed({
     required String start,
     required String end,
   });
@@ -94,6 +106,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable});
+
+  /// Update a diary entry's content by id.
+  void updateDiaryEntry({required PlatformInt64 id, required String content});
 }
 
 class AppUsageDto {

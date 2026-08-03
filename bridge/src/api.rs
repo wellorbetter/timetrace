@@ -335,6 +335,34 @@ impl TimeTraceApi {
         DataStore::get_diary_entries(&*self.db, parse_date(&start), parse_date(&end))
     }
 
+    /// All diary entries in a range with ids, newest first: (id, date, content).
+    #[frb(sync)]
+    pub fn get_diary_entries_detailed(
+        &self,
+        start: String,
+        end: String,
+    ) -> Vec<(i64, String, String)> {
+        DataStore::get_diary_entries_detailed(&*self.db, parse_date(&start), parse_date(&end))
+    }
+
+    /// Add a new diary entry for a date. Returns the new entry id.
+    #[frb(sync)]
+    pub fn add_diary_entry(&self, date: String, content: String) -> i64 {
+        DataStore::add_diary_entry(&*self.db, parse_date(&date), &content)
+    }
+
+    /// Update a diary entry's content by id.
+    #[frb(sync)]
+    pub fn update_diary_entry(&self, id: i64, content: String) -> Result<(), String> {
+        DataStore::update_diary_entry(&*self.db, id, &content)
+    }
+
+    /// Delete a diary entry by id.
+    #[frb(sync)]
+    pub fn delete_diary_entry(&self, id: i64) -> Result<(), String> {
+        DataStore::delete_diary_entry(&*self.db, id)
+    }
+
     /// Set the diary entry for a date.
     #[frb(sync)]
     pub fn set_diary(&self, date: String, content: String) -> String {

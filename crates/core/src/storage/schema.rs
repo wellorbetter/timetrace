@@ -44,13 +44,16 @@ pub const CREATE_TABLES: &[&str] = &[
     )",
     "CREATE INDEX IF NOT EXISTS idx_page_visits_app ON page_visits(app_name, date)",
 
-    // Daily diary / journal entries
+    // Daily diary / journal entries (multiple per day allowed)
     "CREATE TABLE IF NOT EXISTS diary_entries (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        date            TEXT    NOT NULL UNIQUE,
+        date            TEXT    NOT NULL,
         content         TEXT    NOT NULL DEFAULT '',
+        created_at      TEXT    NOT NULL,
         updated_at      TEXT    NOT NULL
     )",
+    "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
 
     // Diary images (stackable per day, overlaid on calendar cells)
     "CREATE TABLE IF NOT EXISTS diary_images (
@@ -60,6 +63,27 @@ pub const CREATE_TABLES: &[&str] = &[
         created_at      TEXT    NOT NULL
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_images_date ON diary_images(date)",
+];
+
+/// One-time migration for databases created before multi-entry diaries:
+/// the old `diary_entries.date` was UNIQUE (one entry per day). Rebuild the
+/// table without the constraint, preserving all rows.
+pub const MIGRATIONS: &[&str] = &[
+    // Only runs when the old unique index exists (checked in open()).
+    "CREATE TABLE IF NOT EXISTS diary_entries_v2 (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        date            TEXT    NOT NULL,
+        content         TEXT    NOT NULL DEFAULT '',
+        created_at      TEXT    NOT NULL,
+        updated_at      TEXT    NOT NULL
+    )",
+    "INSERT OR IGNORE INTO diary_entries_v2 (id, date, content, created_at, updated_at)
+     SELECT id, date, content, COALESCE(updated_at, date || 'T00:00:00'), updated_at
+     FROM diary_entries",
+    "DROP TABLE diary_entries",
+    "ALTER TABLE diary_entries_v2 RENAME TO diary_entries",
+    "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

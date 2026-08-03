@@ -202,26 +202,33 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                     children: [
                                       for (final key in order)
                                         switch (key) {
-                                          'bar' => AppChartSection(
-                                              apps: apps,
-                                              selected: _selected,
-                                              onSelect: _select,
-                                              tall: true,
+                                          'bar' => SingleChildScrollView(
+                                              child: AppChartSection(
+                                                apps: apps,
+                                                selected: _selected,
+                                                onSelect: _select,
+                                                tall: true,
+                                              ),
                                             ),
-                                          'pie' => PieChartCard(apps: apps),
-                                          'summary' => Padding(
-                                              padding: const EdgeInsets
-                                                  .symmetric(horizontal: 12),
-                                              child: Card(
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.all(12),
-                                                  child: DaySummaryPanel(
-                                                    date: _calSelected,
-                                                    range: _summaryRange,
-                                                    onRangeChanged: (r) =>
-                                                        setState(() =>
-                                                            _summaryRange = r),
+                                          'pie' => SingleChildScrollView(
+                                              child: PieChartCard(apps: apps),
+                                            ),
+                                          'summary' => SingleChildScrollView(
+                                              child: Padding(
+                                                padding: const EdgeInsets
+                                                    .symmetric(horizontal: 12),
+                                                child: Card(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .all(12),
+                                                    child: DaySummaryPanel(
+                                                      date: _calSelected,
+                                                      range: _summaryRange,
+                                                      onRangeChanged: (r) =>
+                                                          setState(() =>
+                                                              _summaryRange =
+                                                                  r),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -355,11 +362,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: DiarySection(
-                      date: _calSelected,
-                      onJumpToDate: (d) =>
-                          setState(() => _calSelected = d),
-                    ),
+                    child: DiarySection(date: _calSelected),
                   ),
                 ),
               ],

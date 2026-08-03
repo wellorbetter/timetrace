@@ -19,7 +19,7 @@ class CalendarData {
   final Set<String> diaryDays; // dates with non-empty journal
   final Map<String, int> usage; // date -> active seconds (heatmap)
   final int maxUsage;
-  final List<(String, String)> entries; // (date, content) sorted asc
+  final List<(int, String, String)> entries; // (id, date, content) newest first
 }
 
 String calFmt(DateTime d) =>
@@ -40,7 +40,7 @@ final calendarDataProvider =
     images.putIfAbsent(date, () => []).add(path);
   }
 
-  // Diary days + entries feed
+  // Diary days (markers) + entries feed with ids
   final diaryEntries = api.getDiaryEntries(
     start: calFmt(DateTime(now.year, 1, 1)),
     end: calFmt(DateTime(now.year, 12, 31)),
@@ -49,14 +49,14 @@ final calendarDataProvider =
       .where((e) => e.$2.isNotEmpty)
       .map((e) => e.$1)
       .toSet();
-  final entriesList = diaryEntries
-      .where((e) => e.$2.isNotEmpty)
-      .toList()
-    ..sort((a, b) => a.$1.compareTo(b.$1));
-  // Cap to the most recent 30 (memory: avoid holding long texts)
-  final capped = entriesList.length > 30
-      ? entriesList.sublist(entriesList.length - 30)
-      : entriesList;
+  final detailed = api.getDiaryEntriesDetailed(
+    start: calFmt(DateTime(now.year, 1, 1)),
+    end: calFmt(DateTime(now.year, 12, 31)),
+  );
+  // Cap to the most recent 100 (memory: avoid holding long texts)
+  final capped = detailed.length > 100
+      ? detailed.sublist(0, 100)
+      : detailed;
 
   // Per-day active seconds (heatmap) — one CSV query, parsed locally
   final usage = <String, int>{};

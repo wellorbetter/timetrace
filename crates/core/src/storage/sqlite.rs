@@ -15,6 +15,25 @@ use crate::contracts::{
 };
 use crate::storage::schema;
 
+/// Apply guarded one-time migrations. Returns Err only on real failures.
+fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    // Migration 1: diary_entries.date was UNIQUE (one entry/day) in old DBs.
+    // Rebuild the table without the constraint so multiple entries per day
+    // are allowed, preserving all existing rows.
+    let has_unique: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_index_list('diary_entries') WHERE \"unique\" = 1 AND origin = 'u'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_unique > 0 {
+        for stmt in schema::MIGRATIONS {
+            conn.execute_batch(stmt)?;
+        }
+        tracing::info!("diary_entries migrated: multi-entry per day");
+    }
+    Ok(())
+}
+
 pub struct SqliteStore {
     conn: Mutex<Connection>,
 }
@@ -38,6 +57,9 @@ impl SqliteStore {
         for ddl in schema::CREATE_TABLES {
             conn.execute_batch(ddl)?;
         }
+
+        // Run one-time migrations (guarded).
+        run_migrations(&conn)?;
 
         debug!("SQLite opened at {}", path.display());
 
@@ -457,11 +479,63 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let now = Utc::now().to_rfc3339();
         let _ = conn.execute(
-            "INSERT INTO diary_entries (date, content, updated_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT(date) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at",
+            "INSERT INTO diary_entries (date, content, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?3)
+             ON CONFLICT(id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at",
             params![date.to_string(), content, now],
         );
         content.to_string()
+    }
+
+    // ── Multi-entry diary API ──
+
+    fn get_diary_entries_detailed(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Vec<(i64, String, String)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT id, date, content FROM diary_entries
+             WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, id DESC",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
+
+    fn add_diary_entry(&self, date: NaiveDate, content: &str) -> i64 {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        let _ = conn.execute(
+            "INSERT INTO diary_entries (date, content, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?3)",
+            params![date.to_string(), content, now],
+        );
+        conn.last_insert_rowid()
+    }
+
+    fn update_diary_entry(&self, id: i64, content: &str) -> Result<(), String> {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE diary_entries SET content = ?1, updated_at = ?2 WHERE id = ?3",
+            params![content, now, id],
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
+    fn delete_diary_entry(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock();
+        conn.execute("DELETE FROM diary_entries WHERE id = ?1", params![id])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
     fn get_day_hourly(&self, date: NaiveDate) -> Vec<i64> {
@@ -758,6 +832,26 @@ impl DataStore for MemoryStore {
 
     fn set_diary(&self, _date: NaiveDate, content: &str) -> String {
         content.to_string()
+    }
+
+    fn get_diary_entries_detailed(
+        &self,
+        _start: NaiveDate,
+        _end: NaiveDate,
+    ) -> Vec<(i64, String, String)> {
+        vec![]
+    }
+
+    fn add_diary_entry(&self, _date: NaiveDate, _content: &str) -> i64 {
+        1
+    }
+
+    fn update_diary_entry(&self, _id: i64, _content: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn delete_diary_entry(&self, _id: i64) -> Result<(), String> {
+        Ok(())
     }
 
     fn get_day_sessions(&self, _date: NaiveDate) -> Vec<(String, bool, i64, String)> {

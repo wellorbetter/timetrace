@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
@@ -15,44 +16,504 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_co
 
 /// Journal section: 日记 header + Markdown editor + image grid + entries
 /// feed for the selected day. Consumes calendarDataProvider directly.
-class DiarySection extends ConsumerWidget {
-  const DiarySection({required this.date, this.onJumpToDate, super.key});
+enum _DiaryRange { day, week, month, custom }
 
+/// Journal: range selector + new/edit entry editor + collapsible image
+/// stack + expandable entry list (edit/delete). Multiple entries per day.
+class DiarySection extends ConsumerStatefulWidget {
+  const DiarySection({required this.date, super.key});
+
+  /// Anchor date from the calendar — the selected day.
   final DateTime date;
 
-  /// Called when the user taps a recent entry — jump the calendar there.
-  final ValueChanged<DateTime>? onJumpToDate;
+  @override
+  ConsumerState<DiarySection> createState() => _DiarySectionState();
+}
+
+class _DiarySectionState extends ConsumerState<DiarySection> {
+  _DiaryRange _range = _DiaryRange.day;
+  DateTime? _customStart;
+  int? _editingId; // null = writing a NEW entry for the selected day
+  bool _imagesOpen = false;
+
+  (String, String)? _bounds() {
+    final d = widget.date;
+    String f(DateTime x) => calFmt(x);
+    switch (_range) {
+      case _DiaryRange.day:
+        return (f(d), f(d));
+      case _DiaryRange.week:
+        return (f(d.subtract(const Duration(days: 6))), f(d));
+      case _DiaryRange.month:
+        return (f(DateTime(d.year, d.month, 1)), f(d));
+      case _DiaryRange.custom:
+        final s = _customStart;
+        if (s == null) return null;
+        return (f(s), f(d));
+    }
+  }
+
+  Future<void> _pickCustomStart() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: widget.date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: '选择起始日期（到所选日）',
+    );
+    if (picked != null) setState(() => _customStart = picked);
+  }
+
+  Future<void> _uploadImage() async {
+    try {
+      final result = await FilePicker.pickFiles(type: FileType.image);
+      if (result == null || result.files.isEmpty) return;
+      final src = result.files.single.path;
+      if (src == null) return;
+      final dir = Platform.environment['APPDATA'] ?? '.';
+      final targetDir = Directory('$dir\\TimeTrace\\diary_images');
+      targetDir.createSync(recursive: true);
+      final dateStr = calFmt(widget.date);
+      final ext = src.split('.').last;
+      final dest =
+          '${targetDir.path}\\${dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      File(src).copySync(dest);
+      final api = ref.read(apiProvider);
+      api.addDiaryImage(date: dateStr, path: dest);
+      AppLogger.log('diary image added: $dest');
+      ref.invalidate(calendarDataProvider);
+    } catch (e) {
+      AppLogger.log('diary image upload failed: $e');
+    }
+  }
+
+  Future<void> _removeImage(String path) async {
+    try {
+      final api = ref.read(apiProvider);
+      api.removeDiaryImage(path: path);
+      File(path).deleteSync();
+      ref.invalidate(calendarDataProvider);
+    } catch (e) {
+      AppLogger.log('remove diary image failed: $e');
+    }
+  }
+
+  Future<void> _delete(int id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除这篇日记？'),
+        content: const Text('删除后不可恢复。', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('删除')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final api = ref.read(apiProvider);
+      api.deleteDiaryEntry(id: id);
+      if (_editingId == id) setState(() => _editingId = null);
+      ref.invalidate(calendarDataProvider);
+    } catch (e) {
+      AppLogger.log('delete diary entry failed: $e');
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final data = ref.watch(calendarDataProvider).value;
-    final images = data?.images[calFmt(date)] ?? const <String>[];
-    final entries = data?.entries ?? const <(String, String)>[];
-    final invalidate = () => ref.invalidate(calendarDataProvider);
+    final all = data?.entries ?? const <(int, String, String)>[];
+    final bounds = _bounds();
+    final inRange = bounds == null
+        ? all
+        : all
+            .where((e) =>
+                e.$2.compareTo(bounds.$1) >= 0 && e.$2.compareTo(bounds.$2) <= 0)
+            .toList();
+    final images = data?.images[calFmt(widget.date)] ?? const <String>[];
+    final editing = _editingId == null
+        ? null
+        : all.where((e) => e.$1 == _editingId).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _DiaryEditor(
-          date: date,
-          images: images,
-          onImagesChanged: invalidate,
-        ),
-        // Recent diary entries feed (list items) — tap jumps to that day
-        if (entries.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          const Text('最近记录',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          for (final e in entries.reversed.take(5))
-            _DiaryEntryTile(
-              dateStr: e.$1,
-              content: e.$2,
-              selected: e.$1 == calFmt(date),
-              onTap: () => onJumpToDate?.call(DateTime.parse(e.$1)),
+        // ── Range selector ──
+        Row(
+          children: [
+            Icon(Icons.edit_note, size: 18, color: scheme.primary),
+            const SizedBox(width: 6),
+            Text('日记',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: scheme.primary)),
+            const Spacer(),
+            SegmentedButton<_DiaryRange>(
+              segments: const [
+                ButtonSegment(value: _DiaryRange.day, label: Text('当天', style: TextStyle(fontSize: 11))),
+                ButtonSegment(value: _DiaryRange.week, label: Text('一周', style: TextStyle(fontSize: 11))),
+                ButtonSegment(value: _DiaryRange.month, label: Text('一月', style: TextStyle(fontSize: 11))),
+                ButtonSegment(value: _DiaryRange.custom, label: Text('自定义', style: TextStyle(fontSize: 11))),
+              ],
+              selected: {_range},
+              onSelectionChanged: (s) => setState(() => _range = s.first),
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(horizontal: 8)),
+              ),
             ),
+          ],
+        ),
+        if (_range == _DiaryRange.custom) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(_customStart == null ? '未选起始日' : '从 ${calFmt(_customStart!)} 起',
+                  style: TextStyle(fontSize: 11, color: scheme.outline)),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _pickCustomStart,
+                child: const Text('选起始日', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
         ],
+        const SizedBox(height: 8),
+        // ── Editor (new entry for selected day, or editing) ──
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(_editingId == null ? '写新日记' : '编辑日记',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.primary)),
+                  const SizedBox(width: 8),
+                  Text(calFmt(widget.date),
+                      style: TextStyle(fontSize: 11, color: scheme.outline)),
+                  const Spacer(),
+                  if (_editingId != null)
+                    TextButton(
+                      onPressed: () => setState(() => _editingId = null),
+                      child: const Text('取消编辑', style: TextStyle(fontSize: 11)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              MarkdownDiaryEditor(
+                key: ValueKey('diary-${calFmt(widget.date)}-$_editingId'),
+                initialText: editing?.$3 ?? '',
+                maxLines: 4,
+                onSave: (text) async {
+                  if (text.trim().isEmpty) return;
+                  final api = ref.read(apiProvider);
+                  if (_editingId != null) {
+                    api.updateDiaryEntry(id: _editingId!, content: text);
+                  } else {
+                    api.addDiaryEntry(date: calFmt(widget.date), content: text);
+                  }
+                  ref.invalidate(calendarDataProvider);
+                },
+              ),
+            ],
+          ),
+        ),
+        // ── Images: collapsible stack (animated) ──
+        if (images.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _imagesOpen = !_imagesOpen),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(_imagesOpen ? Icons.expand_less : Icons.expand_more,
+                            size: 16, color: scheme.outline),
+                        const SizedBox(width: 4),
+                        Text('图片 ${images.length} 张',
+                            style: TextStyle(fontSize: 12, color: scheme.outline)),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_imagesOpen)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final p in images)
+                        GestureDetector(
+                          onTap: () => showImagePreview(context, p,
+                              title: '${widget.date.month}月${widget.date.day}日图片'),
+                          child: SizedBox(
+                            width: 72,
+                            height: 72,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.file(
+                                    File(p),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: scheme.surfaceContainerHighest,
+                                      child: const Icon(Icons.broken_image,
+                                          color: Colors.grey),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 3,
+                                  right: 3,
+                                  child: InkWell(
+                                    onTap: () => _removeImage(p),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.close,
+                                          size: 12, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                else
+                  // Stacked mini-preview: first thumb + "+n" badge
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.file(
+                            File(images.first),
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: scheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('+${images.length - 1}',
+                              style: TextStyle(
+                                  fontSize: 10, color: scheme.onSecondaryContainer)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        // ── Add-image button (always available) ──
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: OutlinedButton.icon(
+            onPressed: _uploadImage,
+            icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+            label: const Text('上传图片', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // ── Entry list ──
+        if (inRange.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text('该范围内暂无日记',
+                  style: TextStyle(fontSize: 12, color: scheme.outline)),
+            ),
+          )
+        else
+          for (final e in inRange)
+            _EntryCard(
+              id: e.$1,
+              dateStr: e.$2,
+              content: e.$3,
+              expanded: _editingId == e.$1,
+              onExpand: () => setState(() {
+                _editingId = _editingId == e.$1 ? null : e.$1;
+              }),
+              onEdit: () => setState(() {
+                _editingId = e.$1;
+                _imagesOpen = false;
+              }),
+              onDelete: () => _delete(e.$1),
+              scheme: scheme,
+            ),
       ],
+    );
+  }
+}
+
+/// One diary entry: expandable card (AnimatedSize) with edit/delete.
+class _EntryCard extends StatefulWidget {
+  const _EntryCard({
+    required this.id,
+    required this.dateStr,
+    required this.content,
+    required this.expanded,
+    required this.onExpand,
+    required this.onEdit,
+    required this.onDelete,
+    required this.scheme,
+  });
+
+  final int id;
+  final String dateStr;
+  final String content;
+  final bool expanded;
+  final VoidCallback onExpand;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final ColorScheme scheme;
+
+  @override
+  State<_EntryCard> createState() => _EntryCardState();
+}
+
+class _EntryCardState extends State<_EntryCard> {
+  @override
+  Widget build(BuildContext context) {
+    final firstLine = widget.content
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    final snippet = firstLine.length > 40 ? firstLine.substring(0, 40) : firstLine;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: widget.scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(
+            color: widget.expanded
+                ? widget.scheme.primary.withValues(alpha: 0.6)
+                : widget.scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: InkWell(
+        onTap: widget.onExpand,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.article_outlined,
+                      size: 15, color: widget.scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(widget.dateStr,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: widget.scheme.primary)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      snippet.isEmpty ? '(空)' : snippet,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  // Action buttons (stop propagation)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 15),
+                    tooltip: '编辑',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onEdit,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 15),
+                    tooltip: '删除',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onDelete,
+                  ),
+                  Icon(
+                    widget.expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: widget.scheme.outline,
+                  ),
+                ],
+              ),
+              // Expanded body: full markdown render
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: widget.expanded
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 2),
+                        child: widget.content.trim().isEmpty
+                            ? const SizedBox.shrink()
+                            : MarkdownBody(
+                                data: widget.content,
+                                selectable: true,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: const TextStyle(fontSize: 12, height: 1.5),
+                                  h1: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: widget.scheme.onSurface),
+                                  h2: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: widget.scheme.onSurface),
+                                  code: TextStyle(
+                                      fontSize: 11,
+                                      color: widget.scheme.primary),
+                                ),
+                              ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -373,231 +834,6 @@ class _SessionRowSimple extends StatelessWidget {
 }
 
 /// Diary editor (full-width, below calendar) — Material 3 style.
-class _DiaryEditor extends ConsumerStatefulWidget {
-  const _DiaryEditor({
-    required this.date,
-    required this.images,
-    required this.onImagesChanged,
-  });
-
-  final DateTime date;
-  final List<String> images;
-  final VoidCallback onImagesChanged;
-
-  @override
-  ConsumerState<_DiaryEditor> createState() => _DiaryEditorState();
-}
-
-class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
-  @override
-  void didUpdateWidget(covariant _DiaryEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-  }
-
-  Future<void> _uploadImage() async {
-    try {
-      final result = await FilePicker.pickFiles(type: FileType.image);
-      if (result == null || result.files.isEmpty) return;
-      final src = result.files.single.path;
-      if (src == null) return;
-
-      final dir = Platform.environment['APPDATA'] ?? '.';
-      final targetDir = Directory('$dir\\TimeTrace\\diary_images');
-      targetDir.createSync(recursive: true);
-      final dateStr =
-          '${widget.date.year}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}';
-      final ext = src.split('.').last;
-      final dest =
-          '${targetDir.path}\\${dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      File(src).copySync(dest);
-
-      final api = ref.read(apiProvider);
-      api.addDiaryImage(date: dateStr, path: dest);
-      AppLogger.log('diary image added: $dest');
-      widget.onImagesChanged();
-    } catch (e) {
-      AppLogger.log('diary image upload failed: $e');
-    }
-  }
-
-  Future<void> _removeImage(String path) async {
-    try {
-      final api = ref.read(apiProvider);
-      api.removeDiaryImage(path: path);
-      File(path).deleteSync();
-      widget.onImagesChanged();
-    } catch (e) {
-      AppLogger.log('remove diary image failed: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final asyncDay = ref.watch(calendarDayProvider(widget.date));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header: title + add-image button grouped on the left
-        Row(
-          children: [
-            Icon(Icons.edit_note, size: 18, color: scheme.primary),
-            const SizedBox(width: 6),
-            Text('日记',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: scheme.primary)),
-            const SizedBox(width: 10),
-            IconButton(
-              icon: const Icon(Icons.add_photo_alternate_outlined, size: 19),
-              tooltip: '添加图片',
-              onPressed: _uploadImage,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              padding: EdgeInsets.zero,
-            ),
-            if (widget.images.isNotEmpty) ...[
-              const SizedBox(width: 2),
-              Text('${widget.images.length} 图',
-                  style: TextStyle(fontSize: 11, color: scheme.outline)),
-            ],
-          ],
-        ),
-        const SizedBox(height: 6),
-        // Markdown editor (Typora-like) with toolbar + preview
-        asyncDay.when(
-          loading: () => const SizedBox(height: 140),
-          error: (_, __) => const SizedBox(height: 140),
-          data: (day) => MarkdownDiaryEditor(
-            initialText: day.diary,
-            maxLines: 5,
-            onSave: (text) async {
-              await saveDiary(ref, widget.date, text);
-              // Refresh the entries feed + diary markers
-              if (mounted) widget.onImagesChanged();
-            },
-          ),
-        ),
-        // Image grid - tap to fullscreen preview
-        if (widget.images.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final p in widget.images)
-                  GestureDetector(
-                    onTap: () => showImagePreview(context, p,
-                        title: '${widget.date.month}月${widget.date.day}日图片'),
-                    child: SizedBox(
-                      width: 84,
-                      height: 84,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(p),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: scheme.surfaceContainerHighest,
-                                child: const Icon(Icons.broken_image,
-                                    color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 3,
-                            right: 3,
-                            child: InkWell(
-                              onTap: () => _removeImage(p),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.close,
-                                    size: 12, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// One diary entry in the feed: date + first-line snippet.
-class _DiaryEntryTile extends StatelessWidget {
-  const _DiaryEntryTile({
-    required this.dateStr,
-    required this.content,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String dateStr;
-  final String content;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final firstLine = content.split('\n').firstWhere(
-        (l) => l.trim().isNotEmpty,
-        orElse: () => '');
-    final snippet = firstLine.length > 40
-        ? firstLine.substring(0, 40)
-        : firstLine;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        margin: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.secondaryContainer.withValues(alpha: 0.5)
-              : scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          children: [
-            Text(dateStr.substring(5),
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.primary)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                snippet.isEmpty ? '(空)' : snippet,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 14, color: scheme.outline),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _HourlyHeatmap extends ConsumerWidget {
   const _HourlyHeatmap({required this.date});
 
