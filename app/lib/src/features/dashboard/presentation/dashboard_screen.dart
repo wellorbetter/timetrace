@@ -4,7 +4,6 @@ import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
@@ -88,11 +87,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   flex: 6,
                   child: _leftColumn(context, size, apps, state, scheme),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 4,
-                  child: CalendarCard(compact: true),
-                ),
+
               ],
             ),
           );
@@ -127,11 +122,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             if (size.showChartsRow) ...[
               const SizedBox(height: 12),
               PieChartCard(apps: apps),
-            ],
-            // Calendar (medium+) — compact only shows a hint
-            if (size.showFullCalendar) ...[
-              const SizedBox(height: 12),
-              CalendarCard(),
             ],
 
           ],

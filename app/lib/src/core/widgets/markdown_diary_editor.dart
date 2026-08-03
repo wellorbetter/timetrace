@@ -37,8 +37,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   @override
   void didUpdateWidget(covariant MarkdownDiaryEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Sync when the external text changes (e.g., date switch) and not dirty
-    if (oldWidget.initialText != widget.initialText && !_dirty) {
+    // Only sync when the external text changes AND the editor is empty —
+    // never mid-typing (avoids refresh resetting the input).
+    if (oldWidget.initialText != widget.initialText &&
+        _ctrl.text.trim().isEmpty) {
       _ctrl.text = widget.initialText;
     }
   }

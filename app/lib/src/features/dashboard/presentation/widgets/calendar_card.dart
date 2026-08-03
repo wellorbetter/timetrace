@@ -729,7 +729,6 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
           loading: () => const SizedBox(height: 140),
           error: (_, __) => const SizedBox(height: 140),
           data: (day) => MarkdownDiaryEditor(
-            key: ValueKey('diary-${widget.date.toIso8601String()}'),
             initialText: day.diary,
             maxLines: 5,
             onSave: (text) async {

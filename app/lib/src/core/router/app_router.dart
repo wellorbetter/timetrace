@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
+import 'package:timetrace_app/src/features/calendar/presentation/calendar_page.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 import 'package:timetrace_app/src/features/startup/presentation/startup_screen.dart';
@@ -57,6 +58,11 @@ class AppShell extends ConsumerWidget {
                 label: Text('自启动'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.calendar_month_outlined),
+                selectedIcon: Icon(Icons.calendar_month),
+                label: Text('日历'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings),
                 label: Text('设置'),
@@ -71,7 +77,7 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-const _paths = ['/dashboard', '/startup', '/settings'];
+const _paths = ['/dashboard', '/startup', '/calendar', '/settings'];
 
 /// Resolve the selected rail index from the current route path.
 int _indexOf(BuildContext context) {
@@ -89,6 +95,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
           GoRoute(path: '/startup', builder: (_, _) => const StartupScreen()),
+          GoRoute(path: '/calendar', builder: (_, _) => const CalendarPage()),
           GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),
