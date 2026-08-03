@@ -428,6 +428,58 @@ impl DataStore for SqliteStore {
         let _ = conn.execute_batch("DELETE FROM usage_sessions; DELETE FROM page_visits;");
     }
 
+    fn get_diary_entries(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT date, content FROM diary_entries WHERE date >= ?1 AND date <= ?2 ORDER BY date"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
+
+    fn get_diary(&self, date: NaiveDate) -> Option<String> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT content FROM diary_entries WHERE date = ?1",
+            params![date.to_string()],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+    }
+
+    fn set_diary(&self, date: NaiveDate, content: &str) -> String {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        let _ = conn.execute(
+            "INSERT INTO diary_entries (date, content, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(date) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at",
+            params![date.to_string(), content, now],
+        );
+        content.to_string()
+    }
+
+    fn get_day_sessions(&self, date: NaiveDate) -> Vec<(String, bool, i64, String)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT app_name, is_idle, COALESCE(duration_secs, 0), started_at
+             FROM usage_sessions WHERE date = ?1 AND duration_secs > 0 ORDER BY started_at"
+        ) {
+            if let Ok(rows) = stmt.query_map(params![date.to_string()], |row| {
+                Ok((row.get(0)?, row.get::<_, i32>(1)? != 0, row.get(2)?, row.get(3)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
+
     fn export_rows(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String, i64, i64)> {
         let conn = self.lock();
         let mut out = Vec::new();
@@ -641,6 +693,22 @@ impl DataStore for MemoryStore {
     }
 
     fn export_rows(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String, i64, i64)> {
+        vec![]
+    }
+
+    fn get_diary_entries(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String)> {
+        vec![]
+    }
+
+    fn get_diary(&self, _date: NaiveDate) -> Option<String> {
+        None
+    }
+
+    fn set_diary(&self, _date: NaiveDate, content: &str) -> String {
+        content.to_string()
+    }
+
+    fn get_day_sessions(&self, _date: NaiveDate) -> Vec<(String, bool, i64, String)> {
         vec![]
     }
 }

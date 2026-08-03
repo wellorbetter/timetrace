@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `parse_date`, `setup_logging`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -30,6 +30,15 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// One-call dashboard payload: usage split + overall stats.
   DashboardDataDto getDashboardData({
+    required String start,
+    required String end,
+  });
+
+  /// Full day detail: active/idle totals, session timeline, diary.
+  DayDetailDto getDayDetail({required String date});
+
+  /// Get all diary entries for a month range (for calendar markers).
+  List<(String, String)> getDiaryEntries({
     required String start,
     required String end,
   });
@@ -61,6 +70,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config});
+
+  /// Set the diary entry for a date.
+  String setDiary({required String date, required String content});
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
@@ -166,6 +178,78 @@ class DashboardDataDto {
           idleSeconds == other.idleSeconds &&
           totalSeconds == other.totalSeconds &&
           since == other.since;
+}
+
+/// A day's detail: summary + sessions + diary.
+class DayDetailDto {
+  final String date;
+  final PlatformInt64 activeSeconds;
+  final PlatformInt64 idleSeconds;
+  final PlatformInt64 sessionCount;
+  final String diary;
+  final List<DaySessionDto> sessions;
+
+  const DayDetailDto({
+    required this.date,
+    required this.activeSeconds,
+    required this.idleSeconds,
+    required this.sessionCount,
+    required this.diary,
+    required this.sessions,
+  });
+
+  @override
+  int get hashCode =>
+      date.hashCode ^
+      activeSeconds.hashCode ^
+      idleSeconds.hashCode ^
+      sessionCount.hashCode ^
+      diary.hashCode ^
+      sessions.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DayDetailDto &&
+          runtimeType == other.runtimeType &&
+          date == other.date &&
+          activeSeconds == other.activeSeconds &&
+          idleSeconds == other.idleSeconds &&
+          sessionCount == other.sessionCount &&
+          diary == other.diary &&
+          sessions == other.sessions;
+}
+
+/// A single day's session record (for the daily log).
+class DaySessionDto {
+  final String appName;
+  final bool isIdle;
+  final PlatformInt64 durationSecs;
+  final String startedAt;
+
+  const DaySessionDto({
+    required this.appName,
+    required this.isIdle,
+    required this.durationSecs,
+    required this.startedAt,
+  });
+
+  @override
+  int get hashCode =>
+      appName.hashCode ^
+      isIdle.hashCode ^
+      durationSecs.hashCode ^
+      startedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DaySessionDto &&
+          runtimeType == other.runtimeType &&
+          appName == other.appName &&
+          isIdle == other.isIdle &&
+          durationSecs == other.durationSecs &&
+          startedAt == other.startedAt;
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.

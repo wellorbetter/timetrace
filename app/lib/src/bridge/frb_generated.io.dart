@@ -65,6 +65,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DashboardDataDto dco_decode_dashboard_data_dto(dynamic raw);
 
   @protected
+  DayDetailDto dco_decode_day_detail_dto(dynamic raw);
+
+  @protected
+  DaySessionDto dco_decode_day_session_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -77,10 +83,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<AppUsageDto> dco_decode_list_app_usage_dto(dynamic raw);
 
   @protected
+  List<DaySessionDto> dco_decode_list_day_session_dto(dynamic raw);
+
+  @protected
   List<PageDto> dco_decode_list_page_dto(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
   List<StartupDto> dco_decode_list_startup_dto(dynamic raw);
@@ -96,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, PlatformInt64) dco_decode_record_i_64_i_64(dynamic raw);
+
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
   StartupDto dco_decode_startup_dto(dynamic raw);
@@ -158,6 +173,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DashboardDataDto sse_decode_dashboard_data_dto(SseDeserializer deserializer);
 
   @protected
+  DayDetailDto sse_decode_day_detail_dto(SseDeserializer deserializer);
+
+  @protected
+  DaySessionDto sse_decode_day_session_dto(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
@@ -170,10 +191,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<AppUsageDto> sse_decode_list_app_usage_dto(SseDeserializer deserializer);
 
   @protected
+  List<DaySessionDto> sse_decode_list_day_session_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PageDto> sse_decode_list_page_dto(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<StartupDto> sse_decode_list_startup_dto(SseDeserializer deserializer);
@@ -189,6 +220,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, PlatformInt64) sse_decode_record_i_64_i_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (String, String) sse_decode_record_string_string(
     SseDeserializer deserializer,
   );
 
@@ -268,6 +304,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_day_detail_dto(DayDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_day_session_dto(DaySessionDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
@@ -283,11 +325,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_day_session_dto(
+    List<DaySessionDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_page_dto(List<PageDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
     SseSerializer serializer,
   );
 
@@ -312,6 +366,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_i_64_i_64(
     (PlatformInt64, PlatformInt64) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
     SseSerializer serializer,
   );
 

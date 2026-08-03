@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2144180565;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -945817526;
 
 // Section: executor
 
@@ -319,6 +319,108 @@ fn wire__crate__api__TimeTraceApi_get_dashboard_data_impl(
                 }
                 let api_that_guard = api_that_guard.unwrap();
                 let output_ok = Result::<_, ()>::Ok(crate::api::TimeTraceApi::get_dashboard_data(
+                    &*api_that_guard,
+                    api_start,
+                    api_end,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_day_detail_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_day_detail",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_date = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Result::<_, ()>::Ok(crate::api::TimeTraceApi::get_day_detail(
+                    &*api_that_guard,
+                    api_date,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_diary_entries_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_diary_entries",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_start = <String>::sse_decode(&mut deserializer);
+            let api_end = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Result::<_, ()>::Ok(crate::api::TimeTraceApi::get_diary_entries(
                     &*api_that_guard,
                     api_start,
                     api_end,
@@ -728,6 +830,58 @@ fn wire__crate__api__TimeTraceApi_set_config_impl(
         },
     )
 }
+fn wire__crate__api__TimeTraceApi_set_diary_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_set_diary",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_date = <String>::sse_decode(&mut deserializer);
+            let api_content = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Result::<_, ()>::Ok(crate::api::TimeTraceApi::set_diary(
+                    &*api_that_guard,
+                    api_date,
+                    api_content,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__TimeTraceApi_set_tracking_paused_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -933,6 +1087,42 @@ impl SseDecode for crate::api::DashboardDataDto {
     }
 }
 
+impl SseDecode for crate::api::DayDetailDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_date = <String>::sse_decode(deserializer);
+        let mut var_activeSeconds = <i64>::sse_decode(deserializer);
+        let mut var_idleSeconds = <i64>::sse_decode(deserializer);
+        let mut var_sessionCount = <i64>::sse_decode(deserializer);
+        let mut var_diary = <String>::sse_decode(deserializer);
+        let mut var_sessions = <Vec<crate::api::DaySessionDto>>::sse_decode(deserializer);
+        return crate::api::DayDetailDto {
+            date: var_date,
+            active_seconds: var_activeSeconds,
+            idle_seconds: var_idleSeconds,
+            session_count: var_sessionCount,
+            diary: var_diary,
+            sessions: var_sessions,
+        };
+    }
+}
+
+impl SseDecode for crate::api::DaySessionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_appName = <String>::sse_decode(deserializer);
+        let mut var_isIdle = <bool>::sse_decode(deserializer);
+        let mut var_durationSecs = <i64>::sse_decode(deserializer);
+        let mut var_startedAt = <String>::sse_decode(deserializer);
+        return crate::api::DaySessionDto {
+            app_name: var_appName,
+            is_idle: var_isIdle,
+            duration_secs: var_durationSecs,
+            started_at: var_startedAt,
+        };
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -978,6 +1168,18 @@ impl SseDecode for Vec<crate::api::AppUsageDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::DaySessionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::DaySessionDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::PageDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -997,6 +1199,18 @@ impl SseDecode for Vec<u8> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<u8>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(String, String)>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1053,6 +1267,15 @@ impl SseDecode for (i64, i64) {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_field0 = <i64>::sse_decode(deserializer);
         let mut var_field1 = <i64>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <String>::sse_decode(deserializer);
+        let mut var_field1 = <String>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
@@ -1151,16 +1374,19 @@ fn pde_ffi_dispatcher_sync_impl(
         4 => wire__crate__api__TimeTraceApi_get_app_icon_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__TimeTraceApi_get_config_impl(ptr, rust_vec_len, data_len),
         6 => wire__crate__api__TimeTraceApi_get_dashboard_data_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__TimeTraceApi_get_week_totals_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__TimeTraceApi_get_day_detail_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__TimeTraceApi_get_diary_entries_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__TimeTraceApi_get_week_totals_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__TimeTraceApi_set_diary_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1236,6 +1462,44 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::DashboardDataDto>
     for crate::api::DashboardDataDto
 {
     fn into_into_dart(self) -> crate::api::DashboardDataDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::DayDetailDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.date.into_into_dart().into_dart(),
+            self.active_seconds.into_into_dart().into_dart(),
+            self.idle_seconds.into_into_dart().into_dart(),
+            self.session_count.into_into_dart().into_dart(),
+            self.diary.into_into_dart().into_dart(),
+            self.sessions.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::DayDetailDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::DayDetailDto> for crate::api::DayDetailDto {
+    fn into_into_dart(self) -> crate::api::DayDetailDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::DaySessionDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.app_name.into_into_dart().into_dart(),
+            self.is_idle.into_into_dart().into_dart(),
+            self.duration_secs.into_into_dart().into_dart(),
+            self.started_at.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::DaySessionDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::DaySessionDto> for crate::api::DaySessionDto {
+    fn into_into_dart(self) -> crate::api::DaySessionDto {
         self
     }
 }
@@ -1380,6 +1644,28 @@ impl SseEncode for crate::api::DashboardDataDto {
     }
 }
 
+impl SseEncode for crate::api::DayDetailDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.date, serializer);
+        <i64>::sse_encode(self.active_seconds, serializer);
+        <i64>::sse_encode(self.idle_seconds, serializer);
+        <i64>::sse_encode(self.session_count, serializer);
+        <String>::sse_encode(self.diary, serializer);
+        <Vec<crate::api::DaySessionDto>>::sse_encode(self.sessions, serializer);
+    }
+}
+
+impl SseEncode for crate::api::DaySessionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.app_name, serializer);
+        <bool>::sse_encode(self.is_idle, serializer);
+        <i64>::sse_encode(self.duration_secs, serializer);
+        <String>::sse_encode(self.started_at, serializer);
+    }
+}
+
 impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1416,6 +1702,16 @@ impl SseEncode for Vec<crate::api::AppUsageDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::DaySessionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::DaySessionDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::PageDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1432,6 +1728,16 @@ impl SseEncode for Vec<u8> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <u8>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(String, String)>::sse_encode(item, serializer);
         }
     }
 }
@@ -1479,6 +1785,14 @@ impl SseEncode for (i64, i64) {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.0, serializer);
         <i64>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.0, serializer);
+        <String>::sse_encode(self.1, serializer);
     }
 }
 

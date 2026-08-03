@@ -39,6 +39,7 @@ class L10n {
   String get saved => locale == AppLocale.zh ? '已保存' : 'Saved';
   String get appliesOnRestart =>
       locale == AppLocale.zh ? '监控参数将在下次启动时生效' : 'Applies on next launch';
+  String get calendar => locale == AppLocale.zh ? '日历' : 'Calendar';
   String get font => locale == AppLocale.zh ? '字体' : 'Font';
   String get background => locale == AppLocale.zh ? '背景' : 'Background';
   String get backgroundImage => locale == AppLocale.zh ? '选择背景图片' : 'Choose background image';

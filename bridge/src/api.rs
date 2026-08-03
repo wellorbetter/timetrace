@@ -71,6 +71,26 @@ pub struct IconDto {
     pub rgba: Vec<u8>,
 }
 
+/// A single day's session record (for the daily log).
+#[derive(Debug, Clone)]
+pub struct DaySessionDto {
+    pub app_name: String,
+    pub is_idle: bool,
+    pub duration_secs: i64,
+    pub started_at: String,
+}
+
+/// A day's detail: summary + sessions + diary.
+#[derive(Debug, Clone)]
+pub struct DayDetailDto {
+    pub date: String,
+    pub active_seconds: i64,
+    pub idle_seconds: i64,
+    pub session_count: i64,
+    pub diary: String,
+    pub sessions: Vec<DaySessionDto>,
+}
+
 /// Combined dashboard payload (one FFI call instead of two).
 #[derive(Debug, Clone)]
 pub struct DashboardDataDto {
@@ -285,6 +305,40 @@ impl TimeTraceApi {
         let this_week = DataStore::total_tracked_in_range(&*self.db, this_monday, today);
         let last_week = DataStore::total_tracked_in_range(&*self.db, last_monday, this_monday - chrono::Duration::days(1));
         (this_week, last_week)
+    }
+
+    /// Full day detail: active/idle totals, session timeline, diary.
+    #[frb(sync)]
+    pub fn get_day_detail(&self, date: String) -> DayDetailDto {
+        let d = parse_date(&date);
+        let sessions = DataStore::get_day_sessions(&*self.db, d);
+        let mut active = 0i64;
+        let mut idle = 0i64;
+        let mut dtos = Vec::with_capacity(sessions.len());
+        for (app, is_idle, dur, started) in sessions {
+            if is_idle { idle += dur; } else { active += dur; }
+            dtos.push(DaySessionDto { app_name: app, is_idle, duration_secs: dur, started_at: started });
+        }
+        DayDetailDto {
+            date,
+            active_seconds: active,
+            idle_seconds: idle,
+            session_count: dtos.len() as i64,
+            diary: DataStore::get_diary(&*self.db, d).unwrap_or_default(),
+            sessions: dtos,
+        }
+    }
+
+    /// Get all diary entries for a month range (for calendar markers).
+    #[frb(sync)]
+    pub fn get_diary_entries(&self, start: String, end: String) -> Vec<(String, String)> {
+        DataStore::get_diary_entries(&*self.db, parse_date(&start), parse_date(&end))
+    }
+
+    /// Set the diary entry for a date.
+    #[frb(sync)]
+    pub fn set_diary(&self, date: String, content: String) -> String {
+        DataStore::set_diary(&*self.db, parse_date(&date), &content)
     }
 
     /// Clear ALL tracked usage data (sessions + page visits).

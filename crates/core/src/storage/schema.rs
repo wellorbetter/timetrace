@@ -43,6 +43,14 @@ pub const CREATE_TABLES: &[&str] = &[
         date            TEXT    NOT NULL
     )",
     "CREATE INDEX IF NOT EXISTS idx_page_visits_app ON page_visits(app_name, date)",
+
+    // Daily diary / journal entries
+    "CREATE TABLE IF NOT EXISTS diary_entries (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        date            TEXT    NOT NULL UNIQUE,
+        content         TEXT    NOT NULL DEFAULT '',
+        updated_at      TEXT    NOT NULL
+    )",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

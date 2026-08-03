@@ -149,4 +149,16 @@ pub trait DataStore: Send + Sync {
 
     /// Raw export rows: (app_name, date, active_secs, idle_secs).
     fn export_rows(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String, i64, i64)>;
+
+    /// All diary entries in a month range: (date_str, content).
+    fn get_diary_entries(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)>;
+
+    /// Get or create the diary entry for a date.
+    fn get_diary(&self, date: NaiveDate) -> Option<String>;
+
+    /// Upsert a diary entry for a date. Returns the new content.
+    fn set_diary(&self, date: NaiveDate, content: &str) -> String;
+
+    /// Per-session detail for a day: (app_name, is_idle, duration_secs, started_at).
+    fn get_day_sessions(&self, date: NaiveDate) -> Vec<(String, bool, i64, String)>;
 }
