@@ -209,18 +209,18 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
     final hasDiary = _diaryDays.contains(dateStr);
     final info = lunarInfo(day);
 
-    // Background: today = primary, selected = secondaryContainer
+    // Whole-cell colored block with contrasting text (user: white-on-white invisible)
     Color? bg;
     Color textColor = scheme.onSurface;
     if (selected) {
-      bg = scheme.primary;
+      bg = scheme.primary; // strong solid — white text visible
       textColor = scheme.onPrimary;
     } else if (today) {
-      bg = scheme.primaryContainer;
+      bg = scheme.primaryContainer; // light — dark text visible
       textColor = scheme.onPrimaryContainer;
     }
 
-    // Festival/lunar label (tiny)
+    // Festival/lunar label
     String? sub;
     if (info.hasMarker) {
       sub = info.festival ?? info.solarTerm;
@@ -231,23 +231,28 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        // Solid rounded block (26px) — clearly colored background + text
         Container(
-          width: 22,
-          height: 22,
+          width: 26,
+          height: 26,
           alignment: Alignment.center,
           decoration: bg == null
               ? null
-              : BoxDecoration(color: bg, shape: BoxShape.circle),
+              : BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
           child: Text(
             '${day.day}',
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: (today || selected) ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+              fontWeight:
+                  (today || selected) ? FontWeight.bold : FontWeight.normal,
               color: textColor,
             ),
           ),
         ),
-        // Festival / lunar day (red for festivals, grey otherwise)
+        // Festival / lunar day
         SizedBox(
           height: 9,
           child: sub != null
@@ -708,7 +713,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
           ],
         ),
         const SizedBox(height: 6),
-        // Cleaner input surface
+        // Input surface — clear bordered area
         Container(
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
@@ -717,7 +722,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                 color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: asyncDay.when(
               loading: () => const SizedBox(height: 64),
               error: (_, __) => const SizedBox(height: 64),
@@ -726,45 +731,54 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                 if (_diaryCtrl!.text != day.diary && !_dirty) {
                   _diaryCtrl!.text = day.diary;
                 }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _diaryCtrl,
-                        maxLines: 4,
-                        minLines: 2,
-                        decoration: const InputDecoration(
-                          hintText: '写下今天做了什么…',
-                          border: InputBorder.none,
-                        ),
-                        onChanged: (_) => _dirty = true,
+                    // Text input (full width)
+                    TextField(
+                      controller: _diaryCtrl,
+                      maxLines: 4,
+                      minLines: 2,
+                      decoration: const InputDecoration(
+                        hintText: '写下今天做了什么…',
+                        border: InputBorder.none,
+                        isDense: true,
                       ),
+                      onChanged: (_) => _dirty = true,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.add_photo_alternate_outlined,
-                          size: 20),
-                      tooltip: '添加图片',
-                      onPressed: _uploadImage,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: _dirty
-                          ? () async {
-                              await saveDiary(
-                                  ref, widget.date, _diaryCtrl!.text);
-                              _dirty = false;
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('已保存'),
-                                      duration: Duration(seconds: 1)),
-                                );
-                              }
-                            }
-                          : null,
-                      icon: const Icon(Icons.check, size: 16),
-                      label: const Text('保存'),
+                    const SizedBox(height: 4),
+                    // Action row: image + save
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.add_photo_alternate_outlined,
+                              size: 20),
+                          tooltip: '添加图片',
+                          onPressed: _uploadImage,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 4),
+                        FilledButton.tonalIcon(
+                          onPressed: _dirty
+                              ? () async {
+                                  await saveDiary(
+                                      ref, widget.date, _diaryCtrl!.text);
+                                  _dirty = false;
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                          content: Text('已保存'),
+                                          duration: Duration(seconds: 1)),
+                                    );
+                                  }
+                                }
+                              : null,
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text('保存'),
+                        ),
+                      ],
                     ),
                   ],
                 );
@@ -772,7 +786,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
             ),
           ),
         ),
-        // Image grid (Material 3)
+        // Image grid (Material 3) — larger tiles
         if (widget.images.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -782,13 +796,13 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
               children: [
                 for (final p in widget.images)
                   SizedBox(
-                    width: 72,
-                    height: 72,
+                    width: 84,
+                    height: 84,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           child: Image.file(
                             File(p),
                             fit: BoxFit.cover,
