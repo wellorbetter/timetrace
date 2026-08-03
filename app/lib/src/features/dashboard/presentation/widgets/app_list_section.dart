@@ -1,0 +1,239 @@
+import 'package:flutter/material.dart';
+import 'package:timetrace_app/src/bridge/api.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
+import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
+
+/// App distribution list — tap a row to expand its page breakdown
+/// INLINE below the row (no scrolling up to see the detail).
+class AppListSection extends StatelessWidget {
+  const AppListSection({
+    required this.apps,
+    required this.selected,
+    required this.pages,
+    required this.loading,
+    required this.onSelect,
+    required this.rowKeys,
+    this.filled = false,
+    super.key,
+  });
+
+  final List<AppUsageItem> apps;
+  final int? selected;
+  final List<PageDto>? pages;
+  final bool loading;
+  final ValueChanged<int> onSelect;
+  final List<GlobalKey> rowKeys;
+
+  /// When true, expands to fill available height (wide layout).
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final list = ListView.builder(
+      itemCount: apps.length,
+      itemBuilder: (context, i) {
+        final app = apps[i];
+        final isSel = selected == i;
+        return Column(
+          key: rowKeys[i],
+          children: [
+            _AppRow(
+              app: app,
+              isSel: isSel,
+              onTap: () => onSelect(i),
+            ),
+            // Inline page breakdown — appears right below the tapped row
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: isSel ? _PageDetail(pages: pages, loading: loading, scheme: scheme) : const SizedBox.shrink(),
+            ),
+            if (i < apps.length - 1) const Divider(height: 1),
+          ],
+        );
+      },
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('应用分布', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('点击行查看页面会话',
+                    style: TextStyle(fontSize: 10, color: scheme.outline)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Expanded(child: filled ? list : SizedBox(height: 420, child: list)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppRow extends StatelessWidget {
+  const _AppRow({required this.app, required this.isSel, required this.onTap});
+
+  final AppUsageItem app;
+  final bool isSel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSel ? scheme.secondaryContainer.withValues(alpha: 0.5) : null,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            if (app.exePath != null)
+              AppIcon(exePath: app.exePath!, size: 22)
+            else
+              Icon(Icons.apps, size: 18, color: appColor(app.appName)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                app.appName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            // Mini progress bar
+            SizedBox(
+              width: 90,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: app.activeSeconds /
+                      (app.activeSeconds +
+                          (app.totalSeconds > app.activeSeconds
+                              ? app.totalSeconds - app.activeSeconds
+                              : 1)),
+                  minHeight: 5,
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  color: appColor(app.appName),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              app.activeLabel,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              isSel ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              size: 16,
+              color: scheme.outline,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline page breakdown for the selected app (Edge → bilibili/github).
+class _PageDetail extends StatelessWidget {
+  const _PageDetail({
+    required this.pages,
+    required this.loading,
+    required this.scheme,
+  });
+
+  final List<PageDto>? pages;
+  final bool loading;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    final list = pages;
+    if (list == null) return const SizedBox.shrink();
+    if (list.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(32, 4, 8, 4),
+        child: Text('该应用无页面数据',
+            style: TextStyle(fontSize: 11, color: scheme.outline)),
+      );
+    }
+    final maxSec = list.map((p) => p.seconds).fold<int>(1, (m, v) => v > m ? v : m);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(32, 4, 8, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('页面会话',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.primary)),
+          const SizedBox(height: 6),
+          for (final p in list.take(8))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.web_outlined, size: 12, color: scheme.outline),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      p.title.isEmpty ? '(主窗口)' : p.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 50,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: (p.seconds / maxSec).clamp(0.02, 1.0),
+                        minHeight: 4,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        color: scheme.primary.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('${p.seconds.toInt() ~/ 60}分',
+                      style:
+                          TextStyle(fontSize: 10, color: scheme.outline)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

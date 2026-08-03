@@ -33,6 +33,8 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   _SummaryRange _range = _SummaryRange.day;
   Map<String, List<String>> _dayImages = {};
   Set<String> _diaryDays = {};
+  Map<String, int> _dayUsage = {}; // date -> active seconds (heatmap)
+  int _maxDayUsage = 0;
 
   @override
   void initState() {
@@ -57,6 +59,23 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           .where((e) => e.$2.isNotEmpty)
           .map((e) => e.$1)
           .toSet();
+      // Per-day active seconds (heatmap intensity) — one CSV query, parsed locally
+      final usage = <String, int>{};
+      try {
+        final csv = api.exportCsv(
+          start: _fmt(DateTime(now.year, 1, 1)),
+          end: _fmt(DateTime(now.year, 12, 31)),
+        );
+        final re = RegExp(r',(\d{4}-\d{2}-\d{2}),(\d+),(\d+)');
+        for (final m in re.allMatches(csv)) {
+          final date = m.group(1)!;
+          final active = int.tryParse(m.group(2)!) ?? 0;
+          usage[date] = (usage[date] ?? 0) + active;
+        }
+      } catch (e) {
+        AppLogger.log('load daily usage failed: $e');
+      }
+      final maxUsage = usage.values.fold<int>(0, (m, v) => v > m ? v : m);
       if (mounted) {
         setState(() {
           _dayImages = {};
@@ -64,6 +83,8 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             _dayImages.putIfAbsent(date, () => []).add(path);
           }
           _diaryDays = diaryDays;
+          _dayUsage = usage;
+          _maxDayUsage = maxUsage;
         });
       }
     } catch (e) {
@@ -124,32 +145,24 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
                   titleCentered: true,
                   formatButtonVisible: false,
                   titleTextStyle: TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: scheme.onSurface),
                   leftChevronIcon:
-                      Icon(Icons.chevron_left, size: 18, color: scheme.primary),
+                      Icon(Icons.chevron_left, size: 20, color: scheme.primary),
                   rightChevronIcon:
-                      Icon(Icons.chevron_right, size: 18, color: scheme.primary),
+                      Icon(Icons.chevron_right, size: 20, color: scheme.primary),
                 ),
-                daysOfWeekHeight: 20,
-                rowHeight: 44,
+                daysOfWeekHeight: 22,
+                rowHeight: 50,
                 daysOfWeekStyle: DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(fontSize: 10, color: scheme.outline),
-                  weekendStyle: TextStyle(fontSize: 10, color: scheme.outline),
+                  weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
+                  weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
                 ),
                 calendarStyle: CalendarStyle(
                   outsideDaysVisible: false,
-                  todayDecoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  selectedDecoration: BoxDecoration(
-                    color: scheme.primary,
-                    shape: BoxShape.circle,
-                  ),
                   defaultTextStyle:
-                      TextStyle(fontSize: 11, color: scheme.onSurface),
+                      TextStyle(fontSize: 13, color: scheme.onSurface),
                 ),
                 calendarBuilders: CalendarBuilders(
                   defaultBuilder: (context, day, focused) =>
@@ -174,9 +187,11 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
+        Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        const SizedBox(height: 10),
 
-        // ── Diary (full width, below) ──
+        // ── Diary (full width, below, separated from calendar) ──
         _DiaryEditor(
           date: _selected,
           images: _dayImages[_fmt(_selected)] ?? [],
@@ -203,24 +218,33 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
     );
   }
 
-  /// Day cell with stacked image thumbnails.
-  /// Day cell: colored background for today/selected + lunar/festival marks.
+  /// Day cell: 3D gradient block + usage heatmap background + markers.
   Widget _dayCell(DateTime day, ColorScheme scheme,
       {bool selected = false, bool today = false}) {
     final dateStr = _fmt(day);
     final imgs = _dayImages[dateStr] ?? [];
     final hasDiary = _diaryDays.contains(dateStr);
     final info = lunarInfo(day);
+    final usage = _dayUsage[dateStr] ?? 0;
+    final intensity = _maxDayUsage == 0
+        ? 0.0
+        : (usage / _maxDayUsage).clamp(0.0, 1.0).toDouble();
 
-    // Whole-cell colored block with contrasting text (user: white-on-white invisible)
-    Color? bg;
+    // Block colors: selected solid, today container, else heatmap tint
+    Color block;
     Color textColor = scheme.onSurface;
     if (selected) {
-      bg = scheme.primary; // strong solid — white text visible
+      block = scheme.primary;
       textColor = scheme.onPrimary;
     } else if (today) {
-      bg = scheme.primaryContainer; // light — dark text visible
+      block = scheme.primaryContainer;
       textColor = scheme.onPrimaryContainer;
+    } else if (usage > 0) {
+      block = scheme.primary.withValues(alpha: 0.10 + 0.28 * intensity);
+      textColor = scheme.onSurface;
+    } else {
+      block = scheme.surfaceContainerHighest.withValues(alpha: 0.35);
+      textColor = scheme.onSurfaceVariant;
     }
 
     // Festival/lunar label
@@ -234,35 +258,46 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Solid rounded block (26px) — clearly colored background + text
+        // 3D block: gradient + soft shadow for depth
         Container(
-          width: 26,
-          height: 26,
+          width: 30,
+          height: 30,
           alignment: Alignment.center,
-          decoration: bg == null
-              ? null
-              : BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [block, block.withValues(alpha: 0.72)],
+            ),
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: [
+              BoxShadow(
+                color: (selected || today)
+                    ? block.withValues(alpha: 0.5)
+                    : Colors.black.withValues(alpha: 0.10),
+                offset: const Offset(0, 2),
+                blurRadius: 4,
+              ),
+            ],
+          ),
           child: Text(
             '${day.day}',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               fontWeight:
-                  (today || selected) ? FontWeight.bold : FontWeight.normal,
+                  (today || selected) ? FontWeight.bold : FontWeight.w500,
               color: textColor,
             ),
           ),
         ),
         // Festival / lunar day
         SizedBox(
-          height: 9,
+          height: 10,
           child: sub != null
               ? Text(
                   sub,
                   style: TextStyle(
-                    fontSize: 6,
+                    fontSize: 7,
                     color: (info.festival != null)
                         ? Colors.red.shade600
                         : scheme.outline,
@@ -699,7 +734,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
+        // Header: title + add-image button grouped on the left
         Row(
           children: [
             Icon(Icons.edit_note, size: 18, color: scheme.primary),
@@ -709,18 +744,20 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: scheme.primary)),
-            if (widget.images.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Text('${widget.images.length} 图',
-                  style: TextStyle(fontSize: 11, color: scheme.outline)),
-            ],
-            const Spacer(),
+            const SizedBox(width: 10),
             IconButton(
-              icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 19),
               tooltip: '添加图片',
               onPressed: _uploadImage,
               visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
             ),
+            if (widget.images.isNotEmpty) ...[
+              const SizedBox(width: 2),
+              Text('${widget.images.length} 图',
+                  style: TextStyle(fontSize: 11, color: scheme.outline)),
+            ],
           ],
         ),
         const SizedBox(height: 6),
