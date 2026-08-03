@@ -27,7 +27,16 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('使用统计')),
       body: asyncState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 12),
+              Text('正在加载使用数据…', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
         error: (e, _) => Center(child: Text('加载失败: $e')),
         data: (state) => _DashboardBody(state: state),
       ),
@@ -125,10 +134,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       _selected = null;
     }
 
-    if (apps.isEmpty) {
-      return const EmptyState(message: '暂无数据，切换应用后回来查看');
-    }
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = screenSizeOf(constraints);
@@ -167,15 +172,55 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                // First-launch hint when the current range has no data yet
+                if (apps.isEmpty)
+                  Card(
+                    color: scheme.secondaryContainer.withValues(alpha: 0.4),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 18, color: scheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '暂无使用数据 — 开始使用应用后将自动记录，也可以切换右上角日期范围查看。',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // ── Data area: calendar (left) + ordered carousel (right) ──
                 LayoutBuilder(
                   builder: (context, con) {
                     final narrow = con.maxWidth < 760;
                     final order = ref.watch(dashboardOrderProvider);
                     final pageCount = order.length;
+                    final carouselH = narrow
+                        ? 330.0
+                        : (size.twoColumn ? 400.0 : 360.0);
+
+                    // Friendly placeholder for empty data pages
+                    Widget placeholder(String icon, String text) => Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.insights_outlined,
+                                  size: 40, color: scheme.outlineVariant),
+                              const SizedBox(height: 10),
+                              Text(text,
+                                  style: TextStyle(
+                                      fontSize: 12, color: scheme.outline)),
+                            ],
+                          ),
+                        );
 
                     Widget carousel = SizedBox(
-                      height: size.twoColumn ? 400 : 380,
+                      height: carouselH,
                       child: Column(
                         children: [
                           Expanded(
@@ -202,17 +247,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                     children: [
                                       for (final key in order)
                                         switch (key) {
-                                          'bar' => SingleChildScrollView(
-                                              child: AppChartSection(
-                                                apps: apps,
-                                                selected: _selected,
-                                                onSelect: _select,
-                                                tall: true,
-                                              ),
-                                            ),
-                                          'pie' => SingleChildScrollView(
-                                              child: PieChartCard(apps: apps),
-                                            ),
+                                          'bar' => apps.isEmpty
+                                              ? placeholder('bar', '暂无使用数据')
+                                              : SizedBox(
+                                                  height: carouselH - 8,
+                                                  child: AppChartSection(
+                                                    apps: apps,
+                                                    selected: _selected,
+                                                    onSelect: _select,
+                                                    tall: true,
+                                                  ),
+                                                ),
+                                          'pie' => apps.isEmpty
+                                              ? placeholder('pie', '暂无使用数据')
+                                              : SizedBox(
+                                                  height: carouselH - 8,
+                                                  child: PieChartCard(
+                                                      apps: apps),
+                                                ),
                                           'summary' => SingleChildScrollView(
                                               child: Padding(
                                                 padding: const EdgeInsets
@@ -233,20 +285,22 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                                 ),
                                               ),
                                             ),
-                                          'apps' => Padding(
-                                              padding: const EdgeInsets
-                                                  .symmetric(horizontal: 4),
-                                              child: SingleChildScrollView(
-                                                child: AppListSection(
-                                                  apps: apps,
-                                                  selected: _selected,
-                                                  pages: _pages,
-                                                  loading: _loadingPages,
-                                                  onSelect: _select,
-                                                  rowKeys: _rowKeys,
+                                          'apps' => apps.isEmpty
+                                              ? placeholder('apps', '暂无使用数据')
+                                              : Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 4),
+                                                  child: SingleChildScrollView(
+                                                    child: AppListSection(
+                                                      apps: apps,
+                                                      selected: _selected,
+                                                      pages: _pages,
+                                                      loading: _loadingPages,
+                                                      onSelect: _select,
+                                                      rowKeys: _rowKeys,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
                                           _ => const SizedBox.shrink(),
                                         },
                                     ],

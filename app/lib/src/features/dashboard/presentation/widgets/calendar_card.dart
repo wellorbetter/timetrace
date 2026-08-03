@@ -146,17 +146,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Range selector ──
-        Row(
-          children: [
-            Icon(Icons.edit_note, size: 18, color: scheme.primary),
-            const SizedBox(width: 6),
-            Text('日记',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: scheme.primary)),
-            const Spacer(),
-            SegmentedButton<_DiaryRange>(
+        LayoutBuilder(
+          builder: (context, con) {
+            final seg = SegmentedButton<_DiaryRange>(
               segments: const [
                 ButtonSegment(value: _DiaryRange.day, label: Text('当天', style: TextStyle(fontSize: 11))),
                 ButtonSegment(value: _DiaryRange.week, label: Text('一周', style: TextStyle(fontSize: 11))),
@@ -171,8 +163,42 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(horizontal: 8)),
               ),
-            ),
-          ],
+            );
+            if (con.maxWidth < 560) {
+              // Narrow: title row on top, selector below (no overflow)
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.edit_note, size: 18, color: scheme.primary),
+                      const SizedBox(width: 6),
+                      Text('日记',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: scheme.primary)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  seg,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Icon(Icons.edit_note, size: 18, color: scheme.primary),
+                const SizedBox(width: 6),
+                Text('日记',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: scheme.primary)),
+                const Spacer(),
+                seg,
+              ],
+            );
+          },
         ),
         if (_range == _DiaryRange.custom) ...[
           const SizedBox(height: 4),
