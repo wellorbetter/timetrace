@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_tile.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/bar_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
@@ -63,8 +62,6 @@ class _DashboardBody extends ConsumerStatefulWidget {
 }
 
 class _DashboardBodyState extends ConsumerState<_DashboardBody> {
-  bool _showAllApps = false;
-
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -124,29 +121,19 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 ],
               ],
             ),
-            // Charts (medium+) or single bar (compact)
+            // Integrated chart + app list
+            const SizedBox(height: 12),
+            AppChartSection(apps: apps),
             if (size.showChartsRow) ...[
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: BarChartCard(apps: apps)),
-                  const SizedBox(width: 12),
-                  Expanded(child: PieChartCard(apps: apps)),
-                ],
-              ),
-            ] else ...[
-              const SizedBox(height: 12),
-              BarChartCard(apps: apps),
+              PieChartCard(apps: apps),
             ],
             // Calendar (medium+) — compact only shows a hint
             if (size.showFullCalendar) ...[
               const SizedBox(height: 12),
               CalendarCard(),
             ],
-            const SizedBox(height: 12),
-            // App list (collapsed with expand)
-            _appListSection(context, size, apps, state),
+
           ],
         );
       },
@@ -179,38 +166,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: BarChartCard(apps: apps)),
-            const SizedBox(width: 12),
-            Expanded(child: PieChartCard(apps: apps)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _appListSection(context, size, apps, state),
-      ],
-    );
-  }
-
-  Widget _appListSection(BuildContext context, ScreenSize size,
-      List<AppUsageItem> apps, DashboardState state) {
-    final visible = _showAllApps ? apps.length : size.defaultAppRows;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('应用列表', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
-            if (apps.length > size.defaultAppRows)
-              TextButton(
-                onPressed: () => setState(() => _showAllApps = !_showAllApps),
-                child: Text(_showAllApps ? '收起' : '全部 (${apps.length})'),
-              ),
-          ],
-        ),
-        for (final app in apps.take(visible)) AppListTile(app: app),
+        // Integrated bar chart + app list (with page detail)
+        Expanded(child: AppChartSection(apps: apps, tall: true)),
+        const SizedBox(width: 12),
+        Expanded(child: PieChartCard(apps: apps)),
       ],
     );
   }
