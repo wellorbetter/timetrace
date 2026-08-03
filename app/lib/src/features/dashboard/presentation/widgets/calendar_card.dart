@@ -35,6 +35,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   Set<String> _diaryDays = {};
   Map<String, int> _dayUsage = {}; // date -> active seconds (heatmap)
   int _maxDayUsage = 0;
+  List<(String, String)> _diaryEntries = []; // (date, content) newest last
 
   @override
   void initState() {
@@ -59,6 +60,10 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           .where((e) => e.$2.isNotEmpty)
           .map((e) => e.$1)
           .toSet();
+      final entriesList = diaryEntries
+          .where((e) => e.$2.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.$1.compareTo(b.$1));
       // Per-day active seconds (heatmap intensity) — one CSV query, parsed locally
       final usage = <String, int>{};
       try {
@@ -85,6 +90,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           _diaryDays = diaryDays;
           _dayUsage = usage;
           _maxDayUsage = maxUsage;
+          _diaryEntries = entriesList;
         });
       }
     } catch (e) {
@@ -197,6 +203,26 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           images: _dayImages[_fmt(_selected)] ?? [],
           onImagesChanged: _loadImages,
         ),
+        // Recent diary entries feed (list items) — tap jumps to that day
+        if (_diaryEntries.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Text('最近记录',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          for (final e in _diaryEntries.reversed.take(5))
+            _DiaryEntryTile(
+              dateStr: e.$1,
+              content: e.$2,
+              selected: e.$1 == _fmt(_selected),
+              onTap: () {
+                final dt = DateTime.parse(e.$1);
+                setState(() {
+                  _selected = dt;
+                  _focused = dt;
+                });
+              },
+            ),
+        ],
       ],
     );
 
@@ -240,10 +266,10 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       block = scheme.primaryContainer;
       textColor = scheme.onPrimaryContainer;
     } else if (usage > 0) {
-      block = scheme.primary.withValues(alpha: 0.10 + 0.28 * intensity);
+      block = scheme.primary.withValues(alpha: 0.08 + 0.22 * intensity);
       textColor = scheme.onSurface;
     } else {
-      block = scheme.surfaceContainerHighest.withValues(alpha: 0.35);
+      block = scheme.surfaceContainerHighest.withValues(alpha: 0.30);
       textColor = scheme.onSurfaceVariant;
     }
 
@@ -255,93 +281,86 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       sub = info.day;
     }
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // 3D block: gradient + soft shadow for depth
-        Container(
-          width: 30,
-          height: 30,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [block, block.withValues(alpha: 0.72)],
-            ),
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: [
-              BoxShadow(
-                color: (selected || today)
-                    ? block.withValues(alpha: 0.5)
-                    : Colors.black.withValues(alpha: 0.10),
-                offset: const Offset(0, 2),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-          child: Text(
-            '${day.day}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight:
-                  (today || selected) ? FontWeight.bold : FontWeight.w500,
-              color: textColor,
-            ),
-          ),
-        ),
-        // Festival / lunar day
-        SizedBox(
-          height: 10,
-          child: sub != null
-              ? Text(
-                  sub,
-                  style: TextStyle(
-                    fontSize: 7,
-                    color: (info.festival != null)
-                        ? Colors.red.shade600
-                        : scheme.outline,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                )
+    return Center(
+      child: Container(
+        width: 36,
+        height: 40,
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: block,
+          borderRadius: BorderRadius.circular(10),
+          border: today && !selected
+              ? Border.all(color: scheme.primary, width: 1.2)
               : null,
         ),
-        // Image/diary markers
-        SizedBox(
-          height: 9,
-          child: imgs.isNotEmpty
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final p in imgs.take(3))
-                      Padding(
-                        padding: const EdgeInsets.only(left: 1),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: Image.file(
-                            File(p),
-                            width: 8,
-                            height: 8,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const SizedBox.shrink(),
-                          ),
-                        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Day number
+            Text(
+              '${day.day}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight:
+                    (today || selected) ? FontWeight.bold : FontWeight.w500,
+                color: textColor,
+                height: 1.1,
+              ),
+            ),
+            // Festival / lunar / markers row
+            SizedBox(
+              height: 13,
+              child: sub != null
+                  ? Text(
+                      sub,
+                      style: TextStyle(
+                        fontSize: 7,
+                        color: (info.festival != null)
+                            ? Colors.red.shade600
+                            : scheme.outline,
                       ),
-                  ],
-                )
-              : hasDiary
-                  ? Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: scheme.primary,
-                        shape: BoxShape.circle,
-                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     )
-                  : const SizedBox(height: 5),
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (imgs.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final p in imgs.take(2))
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 1),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(2),
+                                    child: Image.file(
+                                      File(p),
+                                      width: 7,
+                                      height: 7,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        if (hasDiary && imgs.isEmpty)
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -770,13 +789,8 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
             maxLines: 5,
             onSave: (text) async {
               await saveDiary(ref, widget.date, text);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('已保存'),
-                      duration: Duration(seconds: 1)),
-                );
-              }
+              // Refresh the entries feed + diary markers
+              if (mounted) widget.onImagesChanged();
             },
           ),
         ),
@@ -834,6 +848,66 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// One diary entry in the feed: date + first-line snippet.
+class _DiaryEntryTile extends StatelessWidget {
+  const _DiaryEntryTile({
+    required this.dateStr,
+    required this.content,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String dateStr;
+  final String content;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final firstLine = content.split('\n').firstWhere(
+        (l) => l.trim().isNotEmpty,
+        orElse: () => '');
+    final snippet = firstLine.length > 40
+        ? firstLine.substring(0, 40)
+        : firstLine;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.secondaryContainer.withValues(alpha: 0.5)
+              : scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Text(dateStr.substring(5),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.primary)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                snippet.isEmpty ? '(空)' : snippet,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 14, color: scheme.outline),
+          ],
+        ),
+      ),
     );
   }
 }

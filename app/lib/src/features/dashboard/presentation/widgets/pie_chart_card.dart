@@ -15,6 +15,8 @@ class PieChartCard extends StatelessWidget {
     final total =
         apps.fold<int>(0, (s, a) => s + a.activeSeconds).clamp(1, 1 << 62);
     final slices = apps.take(8).toList();
+    final legend = slices.take(6).toList();
+    final more = slices.length - legend.length;
 
     return Card(
       child: Padding(
@@ -67,15 +69,15 @@ class PieChartCard extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(height: 12),
-            // Legend fills remaining space (bottom area)
+            const Divider(height: 10),
+            // Legend — capped at 6 rows + "+N more" (no overlap / overflow)
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (final app in slices)
+                  for (final app in legend)
                     SizedBox(
-                      height: 22,
+                      height: 20,
                       child: Row(
                         children: [
                           Container(
@@ -101,6 +103,13 @@ class PieChartCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  if (more > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('+$more 个应用（见下方列表）',
+                          style: TextStyle(
+                              fontSize: 10, color: scheme.outline)),
                     ),
                 ],
               ),

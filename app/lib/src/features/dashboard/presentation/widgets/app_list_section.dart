@@ -4,8 +4,8 @@ import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// App distribution list — tap a row to expand its page breakdown
-/// INLINE below the row (no scrolling up to see the detail).
+/// App distribution list — every row fully expanded (no internal scroll),
+/// tap a row to expand its page breakdown INLINE below the row.
 class AppListSection extends StatelessWidget {
   const AppListSection({
     required this.apps,
@@ -14,7 +14,6 @@ class AppListSection extends StatelessWidget {
     required this.loading,
     required this.onSelect,
     required this.rowKeys,
-    this.filled = false,
     super.key,
   });
 
@@ -25,37 +24,9 @@ class AppListSection extends StatelessWidget {
   final ValueChanged<int> onSelect;
   final List<GlobalKey> rowKeys;
 
-  /// When true, expands to fill available height (wide layout).
-  final bool filled;
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final list = ListView.builder(
-      itemCount: apps.length,
-      itemBuilder: (context, i) {
-        final app = apps[i];
-        final isSel = selected == i;
-        return Column(
-          key: rowKeys[i],
-          children: [
-            _AppRow(
-              app: app,
-              isSel: isSel,
-              onTap: () => onSelect(i),
-            ),
-            // Inline page breakdown — appears right below the tapped row
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              child: isSel ? _PageDetail(pages: pages, loading: loading, scheme: scheme) : const SizedBox.shrink(),
-            ),
-            if (i < apps.length - 1) const Divider(height: 1),
-          ],
-        );
-      },
-    );
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -66,12 +37,32 @@ class AppListSection extends StatelessWidget {
               children: [
                 const Text('应用分布', style: TextStyle(fontWeight: FontWeight.w600)),
                 const Spacer(),
-                Text('点击行查看页面会话',
+                Text('${apps.length} 个应用 · 点击行查看页面会话',
                     style: TextStyle(fontSize: 10, color: scheme.outline)),
               ],
             ),
             const SizedBox(height: 4),
-            Expanded(child: filled ? list : SizedBox(height: 420, child: list)),
+            // All rows, fully expanded — no scrolling needed
+            for (var i = 0; i < apps.length; i++)
+              Column(
+                key: rowKeys[i],
+                children: [
+                  _AppRow(
+                    app: apps[i],
+                    isSel: selected == i,
+                    onTap: () => onSelect(i),
+                  ),
+                  // Inline page breakdown — right below the tapped row
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: selected == i
+                        ? _PageDetail(pages: pages, loading: loading, scheme: scheme)
+                        : const SizedBox.shrink(),
+                  ),
+                  if (i < apps.length - 1) const Divider(height: 1),
+                ],
+              ),
           ],
         ),
       ),

@@ -148,9 +148,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         if (size.twoColumn) {
           return Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Row(
                   children: [
                     StatCard(
@@ -192,18 +193,16 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Expanded(
-                  child: AppListSection(
-                    apps: apps,
-                    selected: _selected,
-                    pages: _pages,
-                    loading: _loadingPages,
-                    onSelect: _select,
-                    rowKeys: _rowKeys,
-                    filled: true,
-                  ),
+                AppListSection(
+                  apps: apps,
+                  selected: _selected,
+                  pages: _pages,
+                  loading: _loadingPages,
+                  onSelect: _select,
+                  rowKeys: _rowKeys,
                 ),
               ],
+            ),
             ),
           );
         }
@@ -263,7 +262,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               loading: _loadingPages,
               onSelect: _select,
               rowKeys: _rowKeys,
-              filled: false,
             ),
           ],
         );
