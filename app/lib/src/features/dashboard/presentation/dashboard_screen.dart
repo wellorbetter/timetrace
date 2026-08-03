@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_tile.dart';
@@ -18,10 +19,10 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('使用统计'),
+        title: Text(L10n(ref.watch(localeProvider)).usageStats),
         actions: [
           for (final (label, range) in [
-            ('今天', DateRange.today),
+            (L10n(ref.watch(localeProvider)).locale == AppLocale.zh ? '今天' : 'Today', DateRange.today),
             ('昨天', DateRange.yesterday),
             ('本周', DateRange.week),
             ('本月', DateRange.month),

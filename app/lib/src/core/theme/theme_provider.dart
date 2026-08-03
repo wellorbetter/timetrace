@@ -6,6 +6,8 @@ class ThemeNotifier extends Notifier<bool> {
   bool build() => false;
 
   void toggle() => state = !state;
+
+  void set(bool value) => state = value;
 }
 
 final themeModeProvider = NotifierProvider<ThemeNotifier, bool>(ThemeNotifier.new);

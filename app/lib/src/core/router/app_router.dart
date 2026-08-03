@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 import 'package:timetrace_app/src/features/startup/presentation/startup_screen.dart';
 
 /// Shell scaffold with a Material 3 NavigationRail.
@@ -36,21 +37,12 @@ class AppShell extends ConsumerWidget {
                 selectedIcon: Icon(Icons.power_settings_new),
                 label: Text('自启动'),
               ),
-            ],
-            trailing: Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: IconButton(
-                    icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
-                    onPressed: () =>
-                        ref.read(themeModeProvider.notifier).toggle(),
-                    tooltip: '切换主题',
-                  ),
-                ),
+              NavigationRailDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: Text('设置'),
               ),
-            ),
+            ],
           ),
           const VerticalDivider(width: 1),
           Expanded(child: child),
@@ -60,11 +52,12 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-const _paths = ['/dashboard', '/startup'];
+const _paths = ['/dashboard', '/startup', '/settings'];
 
 int _indexOf(Widget child) {
   if (child is DashboardScreen) return 0;
   if (child is StartupScreen) return 1;
+  if (child is SettingsScreen) return 2;
   return 0;
 }
 
@@ -77,6 +70,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
           GoRoute(path: '/startup', builder: (_, _) => const StartupScreen()),
+          GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),
     ],

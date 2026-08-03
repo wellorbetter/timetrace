@@ -55,13 +55,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  ConfigDto dco_decode_box_autoadd_config_dto(dynamic raw);
+
+  @protected
   IconDto dco_decode_box_autoadd_icon_dto(dynamic raw);
+
+  @protected
+  ConfigDto dco_decode_config_dto(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
   IconDto dco_decode_icon_dto(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
 
   @protected
   List<AppUsageDto> dco_decode_list_app_usage_dto(dynamic raw);
@@ -89,6 +98,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StatsDto dco_decode_stats_dto(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -130,13 +142,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  ConfigDto sse_decode_box_autoadd_config_dto(SseDeserializer deserializer);
+
+  @protected
   IconDto sse_decode_box_autoadd_icon_dto(SseDeserializer deserializer);
+
+  @protected
+  ConfigDto sse_decode_config_dto(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
   IconDto sse_decode_icon_dto(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
   List<AppUsageDto> sse_decode_list_app_usage_dto(SseDeserializer deserializer);
@@ -164,6 +185,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StatsDto sse_decode_stats_dto(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -214,13 +238,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_config_dto(
+    ConfigDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_icon_dto(IconDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_config_dto(ConfigDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_icon_dto(IconDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_app_usage_dto(
@@ -260,6 +296,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_stats_dto(StatsDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

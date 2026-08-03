@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `parse_date`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -17,6 +17,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Extract an exe icon as raw RGBA pixels.
   IconDto? getAppIcon({required String exePath});
+
+  /// Read the current user configuration.
+  ConfigDto getConfig();
 
   /// All startup entries.
   List<StartupDto> getStartupEntries();
@@ -32,6 +35,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String appName,
     required String date,
   });
+
+  /// Persist user configuration (applies on next monitor start).
+  void setConfig({required ConfigDto config});
 
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable});
@@ -66,6 +72,38 @@ class AppUsageDto {
           activeSeconds == other.activeSeconds &&
           idleSeconds == other.idleSeconds &&
           exePath == other.exePath;
+}
+
+/// User configuration (persisted in AppConfig.json).
+class ConfigDto {
+  final BigInt pollIntervalMs;
+  final BigInt idleThresholdMinutes;
+  final List<String> excludedApps;
+  final String dbPath;
+
+  const ConfigDto({
+    required this.pollIntervalMs,
+    required this.idleThresholdMinutes,
+    required this.excludedApps,
+    required this.dbPath,
+  });
+
+  @override
+  int get hashCode =>
+      pollIntervalMs.hashCode ^
+      idleThresholdMinutes.hashCode ^
+      excludedApps.hashCode ^
+      dbPath.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConfigDto &&
+          runtimeType == other.runtimeType &&
+          pollIntervalMs == other.pollIntervalMs &&
+          idleThresholdMinutes == other.idleThresholdMinutes &&
+          excludedApps == other.excludedApps &&
+          dbPath == other.dbPath;
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.

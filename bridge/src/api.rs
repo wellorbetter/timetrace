@@ -52,6 +52,15 @@ pub struct IconDto {
     pub rgba: Vec<u8>,
 }
 
+/// User configuration (persisted in AppConfig.json).
+#[derive(Debug, Clone)]
+pub struct ConfigDto {
+    pub poll_interval_ms: u64,
+    pub idle_threshold_minutes: u64,
+    pub excluded_apps: Vec<String>,
+    pub db_path: String,
+}
+
 // ── Main API ──
 
 pub struct TimeTraceApi {
@@ -153,6 +162,28 @@ impl TimeTraceApi {
             height: h as i64,
             rgba,
         })
+    }
+
+    /// Read the current user configuration.
+    #[frb(sync)]
+    pub fn get_config(&self) -> ConfigDto {
+        let config = AppConfig::load();
+        ConfigDto {
+            poll_interval_ms: config.poll_interval_ms,
+            idle_threshold_minutes: config.idle_threshold_minutes,
+            excluded_apps: config.excluded_apps,
+            db_path: String::new(),
+        }
+    }
+
+    /// Persist user configuration (applies on next monitor start).
+    #[frb(sync)]
+    pub fn set_config(&self, config: ConfigDto) -> Result<()> {
+        let mut app_config = AppConfig::load();
+        app_config.poll_interval_ms = config.poll_interval_ms;
+        app_config.idle_threshold_minutes = config.idle_threshold_minutes;
+        app_config.excluded_apps = config.excluded_apps;
+        app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))
     }
 }
 

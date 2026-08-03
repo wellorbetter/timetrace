@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/features/startup/providers/startup_provider.dart';
 import 'package:timetrace_app/src/features/startup/presentation/widgets/startup_tile.dart';
 
@@ -14,15 +15,17 @@ class StartupScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: asyncEntries.maybeWhen(
-          data: (entries) =>
-              Text('自启动 (${entries.length}项, $enabled启用)'),
-          orElse: () => const Text('自启动'),
+          data: (entries) => Text(
+              '${L10n(ref.watch(localeProvider)).startup} (${entries.length}'
+              '${L10n(ref.watch(localeProvider)).locale == AppLocale.zh ? '项' : ' items'}, $enabled'
+              '${L10n(ref.watch(localeProvider)).locale == AppLocale.zh ? '启用' : ' enabled'})'),
+          orElse: () => Text(L10n(ref.watch(localeProvider)).startup),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(startupProvider),
-            tooltip: '重新扫描',
+            tooltip: L10n(ref.watch(localeProvider)).locale == AppLocale.zh ? '重新扫描' : 'Rescan',
           ),
         ],
       ),
