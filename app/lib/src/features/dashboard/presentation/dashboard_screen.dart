@@ -10,6 +10,7 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 /// Single-page dashboard (概览 + 日历日记 merged):
@@ -166,151 +167,187 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // ── Data carousel: 柱状图 | 饼图 | 汇总 (data displays) ──
-                SizedBox(
-                  height: size.twoColumn ? 380 : 360,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            // ◀ prev
-                            IconButton(
-                              icon: Icon(Icons.chevron_left,
-                                  size: 22, color: scheme.primary),
-                              tooltip: '上一个视图',
-                              onPressed: _carouselIndex > 0
-                                  ? () => _carouselCtrl.previousPage(
-                                      duration: const Duration(milliseconds: 250),
-                                      curve: Curves.easeOut,
-                                    )
-                                  : null,
-                            ),
-                            Expanded(
-                              child: PageView(
-                                controller: _carouselCtrl,
-                                onPageChanged: (i) =>
-                                    setState(() => _carouselIndex = i),
-                                children: [
-                            AppChartSection(
-                              apps: apps,
-                              selected: _selected,
-                              onSelect: _select,
-                              tall: true,
-                            ),
-                            PieChartCard(apps: apps),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: DaySummaryPanel(
-                                    date: _calSelected,
-                                    range: _summaryRange,
-                                    onRangeChanged: (r) => setState(
-                                        () => _summaryRange = r),
+                // ── Data area: calendar (left) + ordered carousel (right) ──
+                LayoutBuilder(
+                  builder: (context, con) {
+                    final narrow = con.maxWidth < 760;
+                    final order = ref.watch(dashboardOrderProvider);
+                    final pageCount = order.length;
+
+                    Widget carousel = SizedBox(
+                      height: size.twoColumn ? 400 : 380,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                // ◀ prev
+                                IconButton(
+                                  icon: Icon(Icons.chevron_left,
+                                      size: 22, color: scheme.primary),
+                                  tooltip: '上一个视图',
+                                  onPressed: _carouselIndex > 0
+                                      ? () => _carouselCtrl.previousPage(
+                                          duration: const Duration(
+                                              milliseconds: 250),
+                                          curve: Curves.easeOut,
+                                        )
+                                      : null,
+                                ),
+                                Expanded(
+                                  child: PageView(
+                                    controller: _carouselCtrl,
+                                    onPageChanged: (i) => setState(
+                                        () => _carouselIndex = i),
+                                    children: [
+                                      for (final key in order)
+                                        switch (key) {
+                                          'bar' => AppChartSection(
+                                              apps: apps,
+                                              selected: _selected,
+                                              onSelect: _select,
+                                              tall: true,
+                                            ),
+                                          'pie' => PieChartCard(apps: apps),
+                                          'summary' => Padding(
+                                              padding: const EdgeInsets
+                                                  .symmetric(horizontal: 12),
+                                              child: Card(
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.all(12),
+                                                  child: DaySummaryPanel(
+                                                    date: _calSelected,
+                                                    range: _summaryRange,
+                                                    onRangeChanged: (r) =>
+                                                        setState(() =>
+                                                            _summaryRange = r),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          'apps' => Padding(
+                                              padding: const EdgeInsets
+                                                  .symmetric(horizontal: 4),
+                                              child: SingleChildScrollView(
+                                                child: AppListSection(
+                                                  apps: apps,
+                                                  selected: _selected,
+                                                  pages: _pages,
+                                                  loading: _loadingPages,
+                                                  onSelect: _select,
+                                                  rowKeys: _rowKeys,
+                                                ),
+                                              ),
+                                            ),
+                                          _ => const SizedBox.shrink(),
+                                        },
+                                    ],
                                   ),
                                 ),
-                              ),
+                                // ▶ next
+                                IconButton(
+                                  icon: Icon(Icons.chevron_right,
+                                      size: 22, color: scheme.primary),
+                                  tooltip: '下一个视图',
+                                  onPressed: _carouselIndex < pageCount - 1
+                                      ? () => _carouselCtrl.nextPage(
+                                          duration: const Duration(
+                                              milliseconds: 250),
+                                          curve: Curves.easeOut,
+                                        )
+                                      : null,
                                 ),
                               ],
-                              ),
                             ),
-                            // ▶ next
-                            IconButton(
-                              icon: Icon(Icons.chevron_right,
-                                  size: 22, color: scheme.primary),
-                              tooltip: '下一个视图',
-                              onPressed: _carouselIndex < 2
-                                  ? () => _carouselCtrl.nextPage(
-                                      duration: const Duration(milliseconds: 250),
-                                      curve: Curves.easeOut,
-                                    )
-                                  : null,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // Carousel dots (clickable)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          for (var i = 0; i < 3; i++)
-                            GestureDetector(
-                              onTap: () => _carouselCtrl.animateToPage(
-                                i,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOut,
-                              ),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: _carouselIndex == i ? 18 : 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: _carouselIndex == i
-                                        ? scheme.primary
-                                        : scheme.outlineVariant,
-                                    borderRadius: BorderRadius.circular(4),
+                          ),
+                          const SizedBox(height: 6),
+                          // Carousel dots (clickable)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var i = 0; i < pageCount; i++)
+                                GestureDetector(
+                                  onTap: () => _carouselCtrl.animateToPage(
+                                    i,
+                                    duration: const Duration(
+                                        milliseconds: 250),
+                                    curve: Curves.easeOut,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                          milliseconds: 200),
+                                      width: _carouselIndex == i ? 18 : 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: _carouselIndex == i
+                                            ? scheme.primary
+                                            : scheme.outlineVariant,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // ── Calendar (permanent, day selection) ──
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                    );
+
+                    // Calendar block (left column / top on narrow)
+                    Widget calendar = Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.calendar_month,
-                                size: 18, color: scheme.primary),
-                            const SizedBox(width: 6),
-                            Text('日历',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: scheme.primary)),
-                            const Spacer(),
-                            Text(
-                              '选择日期查看汇总与日记',
-                              style: TextStyle(
-                                  fontSize: 10, color: scheme.outline),
+                            Row(
+                              children: [
+                                Icon(Icons.calendar_month,
+                                    size: 18, color: scheme.primary),
+                                const SizedBox(width: 6),
+                                Text('日历',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: scheme.primary)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            CalendarGrid(
+                              selected: _calSelected,
+                              onSelected: (d) =>
+                                  setState(() => _calSelected = d),
+                              rowHeight: narrow ? 48 : 52,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        CalendarGrid(
-                          selected: _calSelected,
-                          onSelected: (d) =>
-                              setState(() => _calSelected = d),
-                          rowHeight: 50,
-                        ),
+                      ),
+                    );
+
+                    if (narrow) {
+                      // Stack: carousel first (the "data"), calendar below
+                      return Column(
+                        children: [
+                          carousel,
+                          const SizedBox(height: 12),
+                          calendar,
+                        ],
+                      );
+                    }
+                    // Wide: calendar LEFT, carousel RIGHT
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 5, child: calendar),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 7, child: carousel),
                       ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // ── App distribution — sessions expand inline ──
-                AppListSection(
-                  apps: apps,
-                  selected: _selected,
-                  pages: _pages,
-                  loading: _loadingPages,
-                  onSelect: _select,
-                  rowKeys: _rowKeys,
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 // ── Journal (selected day) ──

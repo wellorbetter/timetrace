@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
@@ -87,6 +88,16 @@ class SettingsScreen extends ConsumerWidget {
             _SectionHeader(
                 title: l.background, icon: Icons.wallpaper_outlined),
             ..._backgroundPicker(context, ref, l),
+            const Divider(),
+
+            // ── 仪表盘顺序 ──
+            _SectionHeader(title: '仪表盘顺序', icon: Icons.view_carousel_outlined),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Text('调整概览轮播的展示顺序',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
+            ..._dashboardOrderPicker(ref),
             const Divider(),
 
             // ── 监控 ──
@@ -405,4 +416,50 @@ class _SliderTile<T> extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Reorderable list of carousel views (up/down arrows, persisted).
+List<Widget> _dashboardOrderPicker(WidgetRef ref) {
+  final order = ref.watch(dashboardOrderProvider);
+  final notifier = ref.read(dashboardOrderProvider.notifier);
+  return [
+    for (var i = 0; i < order.length; i++)
+      Card(
+        margin: const EdgeInsets.only(bottom: 6),
+        child: ListTile(
+          dense: true,
+          leading: Icon(
+            switch (order[i]) {
+              'bar' => Icons.bar_chart,
+              'pie' => Icons.pie_chart_outline,
+              'summary' => Icons.summarize_outlined,
+              'apps' => Icons.apps,
+              _ => Icons.dashboard_outlined,
+            },
+          ),
+          title: Text(kViews[order[i]] ?? order[i],
+              style: const TextStyle(fontSize: 13)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+                tooltip: '上移',
+                visualDensity: VisualDensity.compact,
+                onPressed: i > 0 ? () => notifier.move(i, i - 1) : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                tooltip: '下移',
+                visualDensity: VisualDensity.compact,
+                onPressed: i < order.length - 1
+                    ? () => notifier.move(i, i + 1)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+  ];
 }
