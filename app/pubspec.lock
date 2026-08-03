@@ -456,6 +456,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.3.3"
+  lunar:
+    dependency: "direct main"
+    description:
+      name: lunar
+      sha256: "1d22682bb187b0090e6907b98227e3188bb64816efe1124e26385ccff4468ef1"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.7.8"
   matcher:
     dependency: transitive
     description:

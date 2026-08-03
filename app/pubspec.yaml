@@ -45,6 +45,7 @@ dependencies:
   window_manager: ^0.5.2
   table_calendar: ^3.2.0
   file_picker: ^11.0.3
+  lunar: ^1.7.8
 
 dev_dependencies:
   flutter_test:

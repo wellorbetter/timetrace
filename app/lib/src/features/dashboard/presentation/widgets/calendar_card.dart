@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/chinese_calendar.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
@@ -129,7 +130,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
                       Icon(Icons.chevron_right, size: 18, color: scheme.primary),
                 ),
                 daysOfWeekHeight: 20,
-                rowHeight: 40,
+                rowHeight: 44,
                 daysOfWeekStyle: DaysOfWeekStyle(
                   weekdayStyle: TextStyle(fontSize: 10, color: scheme.outline),
                   weekendStyle: TextStyle(fontSize: 10, color: scheme.outline),
@@ -200,41 +201,69 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
   }
 
   /// Day cell with stacked image thumbnails.
+  /// Day cell: colored background for today/selected + lunar/festival marks.
   Widget _dayCell(DateTime day, ColorScheme scheme,
       {bool selected = false, bool today = false}) {
     final dateStr = _fmt(day);
     final imgs = _dayImages[dateStr] ?? [];
     final hasDiary = _diaryDays.contains(dateStr);
+    final info = lunarInfo(day);
+
+    // Background: today = primary, selected = secondaryContainer
+    Color? bg;
+    Color textColor = scheme.onSurface;
+    if (selected) {
+      bg = scheme.primary;
+      textColor = scheme.onPrimary;
+    } else if (today) {
+      bg = scheme.primaryContainer;
+      textColor = scheme.onPrimaryContainer;
+    }
+
+    // Festival/lunar label (tiny)
+    String? sub;
+    if (info.hasMarker) {
+      sub = info.festival ?? info.solarTerm;
+    } else if (info.day.isNotEmpty) {
+      sub = info.day;
+    }
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Date number — today gets a primary ring + bold
         Container(
           width: 22,
           height: 22,
           alignment: Alignment.center,
-          decoration: today && !selected
-              ? BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: scheme.primary, width: 1.5),
-                )
-              : null,
+          decoration: bg == null
+              ? null
+              : BoxDecoration(color: bg, shape: BoxShape.circle),
           child: Text(
             '${day.day}',
             style: TextStyle(
               fontSize: 11,
-              fontWeight:
-                  (today || selected) ? FontWeight.bold : FontWeight.normal,
-              color: selected
-                  ? scheme.onPrimary
-                  : today
-                      ? scheme.primary
-                      : scheme.onSurface,
+              fontWeight: (today || selected) ? FontWeight.bold : FontWeight.normal,
+              color: textColor,
             ),
           ),
         ),
-        // Markers row: image thumbs + diary dot
+        // Festival / lunar day (red for festivals, grey otherwise)
+        SizedBox(
+          height: 9,
+          child: sub != null
+              ? Text(
+                  sub,
+                  style: TextStyle(
+                    fontSize: 6,
+                    color: (info.festival != null)
+                        ? Colors.red.shade600
+                        : scheme.outline,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                )
+              : null,
+        ),
+        // Image/diary markers
         SizedBox(
           height: 9,
           child: imgs.isNotEmpty
