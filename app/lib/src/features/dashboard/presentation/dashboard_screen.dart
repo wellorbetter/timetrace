@@ -8,6 +8,8 @@ import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
@@ -64,6 +66,10 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
   List<PageDto>? _pages;
   bool _loadingPages = false;
   final List<GlobalKey> _rowKeys = [];
+  final PageController _carouselCtrl = PageController();
+  int _carouselIndex = 0;
+  DateTime _calSelected = DateTime.now();
+  SummaryRange _summaryRange = SummaryRange.day;
 
   Future<void> _select(int i) async {
     final deselecting = _selected == i;
@@ -112,6 +118,12 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
     } catch (e) {
       if (mounted) setState(() => _loadingPages = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _carouselCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -173,7 +185,7 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Stats
+                // Stats: 活跃 (current range) vs 累计 (since install)
                 Row(
                   children: [
                     StatCard(
@@ -184,20 +196,93 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
                     const SizedBox(width: 10),
                     StatCard(
                         icon: Icons.history,
-                        label: '总时长',
+                        label: '累计',
                         value: _fmt(state.lifetimeSeconds),
+                        subtitle: '安装以来',
                         color: scheme.tertiary),
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Bar chart (按应用) — tap bar to select
+                // ── Data carousel: 柱状图 | 饼图 | 日历 | 汇总 ──
                 SizedBox(
-                  height: size.twoColumn ? 280 : 240,
-                  child: AppChartSection(
-                    apps: apps,
-                    selected: _selected,
-                    onSelect: _select,
-                    tall: true,
+                  height: size.twoColumn ? 380 : 360,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: PageView(
+                          controller: _carouselCtrl,
+                          onPageChanged: (i) =>
+                              setState(() => _carouselIndex = i),
+                          children: [
+                            AppChartSection(
+                              apps: apps,
+                              selected: _selected,
+                              onSelect: _select,
+                              tall: true,
+                            ),
+                            PieChartCard(apps: apps),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: CalendarGrid(
+                                    selected: _calSelected,
+                                    onSelected: (d) =>
+                                        setState(() => _calSelected = d),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: DaySummaryPanel(
+                                    date: _calSelected,
+                                    range: _summaryRange,
+                                    onRangeChanged: (r) => setState(
+                                        () => _summaryRange = r),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Carousel dots (clickable)
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i < 4; i++)
+                            GestureDetector(
+                              onTap: () => _carouselCtrl.animateToPage(
+                                i,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOut,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4),
+                                child: AnimatedContainer(
+                                  duration:
+                                      const Duration(milliseconds: 200),
+                                  width: _carouselIndex == i ? 18 : 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _carouselIndex == i
+                                        ? scheme.primary
+                                        : scheme.outlineVariant,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

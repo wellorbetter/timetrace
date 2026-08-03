@@ -3,19 +3,19 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
-import 'package:timetrace_app/src/core/chinese_calendar.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/widgets/image_preview.dart';
 import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
+import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 
-/// Dashboard calendar: compact calendar (left) + day/week/month summary
-/// (right) + journal (full-width, below) with image upload.
+/// Calendar card (日历日记 tab): calendar grid + day/week/month summary
+/// + journal (Markdown editor, images, entries feed).
 class CalendarCard extends ConsumerStatefulWidget {
   const CalendarCard({super.key, this.compact = false});
 
@@ -25,89 +25,19 @@ class CalendarCard extends ConsumerStatefulWidget {
   ConsumerState<CalendarCard> createState() => _CalendarCardState();
 }
 
-enum _SummaryRange { day, week, month }
+enum SummaryRange { day, week, month }
 
 class _CalendarCardState extends ConsumerState<CalendarCard> {
-  DateTime _focused = DateTime.now();
   DateTime _selected = DateTime.now();
-  _SummaryRange _range = _SummaryRange.day;
-  Map<String, List<String>> _dayImages = {};
-  Set<String> _diaryDays = {};
-  Map<String, int> _dayUsage = {}; // date -> active seconds (heatmap)
-  int _maxDayUsage = 0;
-  List<(String, String)> _diaryEntries = []; // (date, content) newest last
+  SummaryRange _range = SummaryRange.day;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadImages();
-  }
-
-  Future<void> _loadImages() async {
-    try {
-      final api = ref.read(apiProvider);
-      final now = DateTime.now();
-      final entries = api.getDiaryImages(
-        start: _fmt(DateTime(now.year, 1, 1)),
-        end: _fmt(DateTime(now.year, 12, 31)),
-      );
-      // Diary dates (days with journal content)
-      final diaryEntries = api.getDiaryEntries(
-        start: _fmt(DateTime(now.year, 1, 1)),
-        end: _fmt(DateTime(now.year, 12, 31)),
-      );
-      final diaryDays = diaryEntries
-          .where((e) => e.$2.isNotEmpty)
-          .map((e) => e.$1)
-          .toSet();
-      // Cap to the most recent 30 entries (memory: avoid holding long texts)
-      final entriesList = diaryEntries
-          .where((e) => e.$2.isNotEmpty)
-          .toList()
-        ..sort((a, b) => a.$1.compareTo(b.$1));
-      final capped = entriesList.length > 30
-          ? entriesList.sublist(entriesList.length - 30)
-          : entriesList;
-      // Per-day active seconds (heatmap intensity) — one CSV query, parsed locally
-      final usage = <String, int>{};
-      try {
-        final csv = api.exportCsv(
-          start: _fmt(DateTime(now.year, 1, 1)),
-          end: _fmt(DateTime(now.year, 12, 31)),
-        );
-        final re = RegExp(r',(\d{4}-\d{2}-\d{2}),(\d+),(\d+)');
-        for (final m in re.allMatches(csv)) {
-          final date = m.group(1)!;
-          final active = int.tryParse(m.group(2)!) ?? 0;
-          usage[date] = (usage[date] ?? 0) + active;
-        }
-      } catch (e) {
-        AppLogger.log('load daily usage failed: $e');
-      }
-      final maxUsage = usage.values.fold<int>(0, (m, v) => v > m ? v : m);
-      if (mounted) {
-        setState(() {
-          _dayImages = {};
-          for (final (date, path) in entries) {
-            _dayImages.putIfAbsent(date, () => []).add(path);
-          }
-          _diaryDays = diaryDays;
-          _dayUsage = usage;
-          _maxDayUsage = maxUsage;
-          _diaryEntries = capped;
-        });
-      }
-    } catch (e) {
-      AppLogger.log('load diary images failed: $e');
-    }
-  }
-
-  String _fmt(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmt(DateTime d) => calFmt(d);
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final data = ref.watch(calendarDataProvider).value;
+    final entries = data?.entries ?? const <(String, String)>[];
 
     Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,8 +55,8 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.refresh, size: 18),
-              tooltip: '刷新图片',
-              onPressed: _loadImages,
+              tooltip: '刷新',
+              onPressed: () => ref.invalidate(calendarDataProvider),
               visualDensity: VisualDensity.compact,
             ),
           ],
@@ -139,57 +69,16 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           children: [
             Expanded(
               flex: 5,
-              child: TableCalendar(
-                firstDay: DateTime(_focused.year, 1, 1),
-                lastDay: DateTime(_focused.year, 12, 31),
-                focusedDay: _focused,
-                selectedDayPredicate: (d) => isSameDay(d, _selected),
-                onDaySelected: (selected, focused) {
-                  setState(() {
-                    _selected = selected;
-                    _focused = focused;
-                  });
-                },
-                calendarFormat: CalendarFormat.month,
-                headerStyle: HeaderStyle(
-                  titleCentered: true,
-                  formatButtonVisible: false,
-                  titleTextStyle: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface),
-                  leftChevronIcon:
-                      Icon(Icons.chevron_left, size: 20, color: scheme.primary),
-                  rightChevronIcon:
-                      Icon(Icons.chevron_right, size: 20, color: scheme.primary),
-                ),
-                daysOfWeekHeight: 24,
+              child: CalendarGrid(
+                selected: _selected,
+                onSelected: (d) => setState(() => _selected = d),
                 rowHeight: 54,
-                daysOfWeekStyle: DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
-                  weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
-                ),
-                calendarStyle: CalendarStyle(
-                  outsideDaysVisible: false,
-                  defaultTextStyle:
-                      TextStyle(fontSize: 13, color: scheme.onSurface),
-                ),
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focused) =>
-                      _dayCell(day, scheme),
-                  selectedBuilder: (context, day, focused) =>
-                      _dayCell(day, scheme, selected: true),
-                  todayBuilder: (context, day, focused) =>
-                      _dayCell(day, scheme, today: true),
-                  outsideBuilder: (context, day, focused) =>
-                      const SizedBox.shrink(),
-                ),
               ),
             ),
             const SizedBox(width: 14),
             Expanded(
               flex: 4,
-              child: _SummaryPanel(
+              child: DaySummaryPanel(
                 date: _selected,
                 range: _range,
                 onRangeChanged: (r) => setState(() => _range = r),
@@ -204,26 +93,22 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
         // ── Diary (full width, below, separated from calendar) ──
         _DiaryEditor(
           date: _selected,
-          images: _dayImages[_fmt(_selected)] ?? [],
-          onImagesChanged: _loadImages,
+          images: data?.images[_fmt(_selected)] ?? const [],
+          onImagesChanged: () => ref.invalidate(calendarDataProvider),
         ),
         // Recent diary entries feed (list items) — tap jumps to that day
-        if (_diaryEntries.isNotEmpty) ...[
+        if (entries.isNotEmpty) ...[
           const SizedBox(height: 10),
           const Text('最近记录',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          for (final e in _diaryEntries.reversed.take(5))
+          for (final e in entries.reversed.take(5))
             _DiaryEntryTile(
               dateStr: e.$1,
               content: e.$2,
               selected: e.$1 == _fmt(_selected),
               onTap: () {
-                final dt = DateTime.parse(e.$1);
-                setState(() {
-                  _selected = dt;
-                  _focused = dt;
-                });
+                setState(() => _selected = DateTime.parse(e.$1));
               },
             ),
         ],
@@ -247,150 +132,25 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
       child: Padding(padding: const EdgeInsets.all(12), child: content),
     );
   }
-
-  /// Day cell: 3D gradient block + usage heatmap background + markers.
-  Widget _dayCell(DateTime day, ColorScheme scheme,
-      {bool selected = false, bool today = false}) {
-    final dateStr = _fmt(day);
-    final imgs = _dayImages[dateStr] ?? [];
-    final hasDiary = _diaryDays.contains(dateStr);
-    final info = lunarInfo(day);
-    final usage = _dayUsage[dateStr] ?? 0;
-    final intensity = _maxDayUsage == 0
-        ? 0.0
-        : (usage / _maxDayUsage).clamp(0.0, 1.0).toDouble();
-
-    // Xiaomi-style clean cells: no busy blocks.
-    // Selected = filled primary circle; today = light container circle;
-    // festivals = red text; lunar = small grey text; usage = tiny dot.
-    final isFestival = info.festival != null;
-
-    // Subtle heat background only for high-usage days (never muddy)
-    final heat = usage > 0
-        ? scheme.primary.withValues(alpha: 0.05 + 0.15 * intensity)
-        : null;
-
-    String? sub;
-    if (info.hasMarker) {
-      sub = info.festival ?? info.solarTerm;
-    } else if (info.day.isNotEmpty) {
-      sub = info.day;
-    }
-
-    Color dayColor = scheme.onSurface;
-    if (isFestival) {
-      dayColor = Colors.red.shade600;
-    }
-    if (selected) {
-      dayColor = scheme.onPrimary;
-    } else if (today) {
-      dayColor = scheme.primary;
-    }
-
-    return Center(
-      child: Container(
-        width: 40,
-        height: 42,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary
-              : (heat ?? (today ? scheme.primaryContainer : null)),
-          shape: BoxShape.circle,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Day number
-            Text(
-              '${day.day}',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight:
-                    (today || selected) ? FontWeight.bold : FontWeight.w500,
-                color: dayColor,
-                height: 1.1,
-              ),
-            ),
-            // Festival / lunar label
-            SizedBox(
-              height: 12,
-              child: sub != null
-                  ? Text(
-                      sub,
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: (selected || today)
-                            ? dayColor.withValues(alpha: 0.85)
-                            : (isFestival
-                                ? Colors.red.shade600
-                                : scheme.outline),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    )
-                  : (imgs.isNotEmpty || hasDiary)
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (imgs.isNotEmpty)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final p in imgs.take(2))
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 1),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: Image.file(
-                                          File(p),
-                                          width: 7,
-                                          height: 7,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            if (hasDiary && imgs.isEmpty)
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: scheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        )
-                      : const SizedBox(height: 9),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Right panel: day/week/month summary with aggregated sessions.
-class _SummaryPanel extends ConsumerStatefulWidget {
-  const _SummaryPanel({
+class DaySummaryPanel extends ConsumerStatefulWidget {
+  const DaySummaryPanel({
     required this.date,
     required this.range,
     required this.onRangeChanged,
   });
 
   final DateTime date;
-  final _SummaryRange range;
-  final ValueChanged<_SummaryRange> onRangeChanged;
+  final SummaryRange range;
+  final ValueChanged<SummaryRange> onRangeChanged;
 
   @override
-  ConsumerState<_SummaryPanel> createState() => _SummaryPanelState();
+  ConsumerState<DaySummaryPanel> createState() => _DaySummaryPanelState();
 }
 
-class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
+class _DaySummaryPanelState extends ConsumerState<DaySummaryPanel> {
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -399,20 +159,20 @@ class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
         Row(
           children: [
             Text(
-              widget.range == _SummaryRange.day
+              widget.range == SummaryRange.day
                   ? '${widget.date.month}月${widget.date.day}日'
-                  : widget.range == _SummaryRange.week
+                  : widget.range == SummaryRange.week
                       ? '本周'
                       : '本月',
               style:
                   const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
-            SegmentedButton<_SummaryRange>(
+            SegmentedButton<SummaryRange>(
               segments: const [
-                ButtonSegment(value: _SummaryRange.day, label: Text('日')),
-                ButtonSegment(value: _SummaryRange.week, label: Text('周')),
-                ButtonSegment(value: _SummaryRange.month, label: Text('月')),
+                ButtonSegment(value: SummaryRange.day, label: Text('日')),
+                ButtonSegment(value: SummaryRange.week, label: Text('周')),
+                ButtonSegment(value: SummaryRange.month, label: Text('月')),
               ],
               selected: {widget.range},
               onSelectionChanged: (s) => widget.onRangeChanged(s.first),
@@ -425,7 +185,7 @@ class _SummaryPanelState extends ConsumerState<_SummaryPanel> {
           ],
         ),
         const SizedBox(height: 8),
-        if (widget.range == _SummaryRange.day)
+        if (widget.range == SummaryRange.day)
           _DaySummary(date: widget.date)
         else
           _RangeSummary(date: widget.date, range: widget.range),
@@ -591,7 +351,7 @@ class _RangeSummary extends ConsumerWidget {
   const _RangeSummary({required this.date, required this.range});
 
   final DateTime date;
-  final _SummaryRange range;
+  final SummaryRange range;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -642,11 +402,11 @@ class _RangeSummary extends ConsumerWidget {
     );
   }
 
-  (String, String) _rangeBounds(_SummaryRange range) {
+  (String, String) _rangeBounds(SummaryRange range) {
     String fmt(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final now = DateTime.now();
-    if (range == _SummaryRange.week) {
+    if (range == SummaryRange.week) {
       final monday = now.subtract(Duration(days: now.weekday - 1));
       return (fmt(monday), fmt(now));
     }

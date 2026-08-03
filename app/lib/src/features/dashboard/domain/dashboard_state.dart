@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:timetrace_app/src/core/format.dart';
 
 part 'dashboard_state.freezed.dart';
 
@@ -17,11 +18,7 @@ abstract class DashboardState with _$DashboardState {
 
   const DashboardState._();
 
-  String get totalActiveLabel {
-    final h = totalActiveSeconds ~/ 3600;
-    final m = (totalActiveSeconds % 3600) ~/ 60;
-    return h > 0 ? '${h}时${m}分' : '${m}分';
-  }
+  String get totalActiveLabel => formatDuration(totalActiveSeconds);
 }
 
 @freezed
@@ -37,11 +34,7 @@ abstract class AppUsageItem with _$AppUsageItem {
 
   int get totalSeconds => activeSeconds + idleSeconds;
 
-  String get activeLabel {
-    final h = activeSeconds ~/ 3600;
-    final m = (activeSeconds % 3600) ~/ 60;
-    return h > 0 ? '${h}时${m}分' : '${m}分';
-  }
+  String get activeLabel => formatDuration(activeSeconds);
 
   String get idleLabel {
     final m = idleSeconds ~/ 60;
