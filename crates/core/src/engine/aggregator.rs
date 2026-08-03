@@ -92,11 +92,15 @@ impl EventSink for SessionAggregator {
 
             TrackedEvent::IdleStarted { .. } => {
                 debug!("Idle started");
+                // Close the active session and open an IDLE session.
                 self.close_session();
+                self.open_session(&AppInfo::idle());
             }
 
-            TrackedEvent::IdleEnded { current_app, .. } => {
+            TrackedEvent::IdleEnded { idle_duration, current_app, .. } => {
                 debug!("Idle ended: {}", current_app.display_name);
+                // Close the idle session (records idle time), then open the app.
+                self.close_session();
                 self.open_session(&current_app);
             }
 

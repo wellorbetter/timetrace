@@ -24,6 +24,7 @@ struct SHFILEINFOW {
 
 const SHGFI_ICON: u32 = 0x0000_0100;
 const SHGFI_LARGEICON: u32 = 0x0000_0020;
+const SHGFI_USEFILEATTRIBUTES: u32 = 0x0000_0010;
 
 #[link(name = "shell32")]
 unsafe extern "system" {
@@ -48,7 +49,7 @@ pub fn extract_icon_rgba(exe_path: &str) -> Option<(i32, i32, Vec<u8>)> {
             0,
             &mut info,
             mem::size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON,
+            SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES,
         );
         if ret == 0 || info.hIcon.is_null() {
             return None;
@@ -132,5 +133,35 @@ pub fn extract_icon_rgba(exe_path: &str) -> Option<(i32, i32, Vec<u8>)> {
         }
 
         Some((w, h, rgba))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_real_icons() {
+        let paths = [
+            r"C:\Windows\explorer.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"D:\QQ\QQ.exe",
+            r"C:\Windows\system32\SecurityHealthSystray.exe",
+            r"G:\WeGameApps\英雄联盟\Game\League of Legends.exe",
+            r"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe",
+        ];
+        let mut ok = 0;
+        for p in paths {
+            if let Some((w, h, rgba)) = extract_icon_rgba(p) {
+                eprintln!("OK   {:50} -> {}x{}", p, w, h);
+                assert!(w > 0 && h > 0);
+                assert!(!rgba.is_empty());
+                ok += 1;
+            } else {
+                eprintln!("FAIL {:50}", p);
+            }
+        }
+        // explorer.exe must extract
+        assert!(ok >= 1, "no icons extracted at all");
     }
 }

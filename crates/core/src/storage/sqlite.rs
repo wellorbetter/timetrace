@@ -205,7 +205,7 @@ impl DataStore for SqliteStore {
                     COALESCE(SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END), 0)
              FROM usage_sessions
-             WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0
+             WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0 AND app_name != '__IDLE__'
              GROUP BY app_name ORDER BY 3 DESC"
         ).unwrap();
         stmt.query_map(params![start.to_string(), end.to_string()], |row| {

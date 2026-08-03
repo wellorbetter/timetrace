@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
 /// Renders a real exe icon extracted via the Rust bridge.
 class AppIcon extends ConsumerStatefulWidget {
@@ -41,17 +43,40 @@ class _AppIconState extends ConsumerState<AppIcon> {
     try {
       final api = ref.read(apiProvider);
       final icon = api.getAppIcon(exePath: widget.exePath);
-      if (icon == null || icon.rgba.isEmpty) return;
+      if (icon == null || icon.rgba.isEmpty) {
+        AppLogger.log('icon NULL for: ${widget.exePath}');
+        return;
+      }
       final w = icon.width.toInt();
       final h = icon.height.toInt();
+      // decodeImageFromPixels expects NON-premultiplied rgba8888.
+      // Rust premultiplies; un-premultiply here.
+      final rgba = _unPremultiply(icon.rgba);
       final completer = Completer<ui.Image>();
-      ui.decodeImageFromPixels(icon.rgba, w, h, ui.PixelFormat.rgba8888,
-          completer.complete);
+      ui.decodeImageFromPixels(
+          rgba, w, h, ui.PixelFormat.rgba8888, completer.complete);
       final img = await completer.future;
       if (mounted) setState(() => _image = img);
-    } catch (_) {
-      // Fall back to letter avatar.
+    } catch (e, st) {
+      AppLogger.log('icon load FAIL ${widget.exePath}: $e\n$st');
     }
+  }
+
+  /// Convert premultiplied RGBA back to straight alpha.
+  Uint8List _unPremultiply(Uint8List src) {
+    final out = Uint8List(src.length);
+    for (var i = 0; i < src.length; i += 4) {
+      final a = src[i + 3];
+      if (a == 0) {
+        out[i] = out[i + 1] = out[i + 2] = 0;
+      } else {
+        out[i] = (src[i] * 255 ~/ a).clamp(0, 255);
+        out[i + 1] = (src[i + 1] * 255 ~/ a).clamp(0, 255);
+        out[i + 2] = (src[i + 2] * 255 ~/ a).clamp(0, 255);
+      }
+      out[i + 3] = a;
+    }
+    return out;
   }
 
   @override
