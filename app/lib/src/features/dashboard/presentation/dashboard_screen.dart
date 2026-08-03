@@ -21,24 +21,27 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(dashboardProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('使用统计'),
-        bottom: const TabBar(
-          tabs: [
-            Tab(text: '概览'),
-            Tab(text: '日历日记'),
-          ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('使用统计'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '概览'),
+              Tab(text: '日历日记'),
+            ],
+          ),
         ),
-      ),
-      body: asyncState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (state) => TabBarView(
-          children: [
-            _OverviewBody(state: state),
-            const _CalendarBody(),
-          ],
+        body: asyncState.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('加载失败: $e')),
+          data: (state) => TabBarView(
+            children: [
+              _OverviewBody(state: state),
+              const _CalendarBody(),
+            ],
+          ),
         ),
       ),
     );

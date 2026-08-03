@@ -62,14 +62,22 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   void _apply(String prefix, String suffix, {String? placeholder}) {
     final sel = _ctrl.selection;
     final text = _ctrl.text;
-    final selected = sel.isValid && sel.start < sel.end
-        ? text.substring(sel.start, sel.end)
-        : (placeholder ?? '');
-    final newText = text.replaceRange(
-        sel.start, sel.end, '$prefix$selected$suffix');
+    // Selection may be invalid (-1) when the field was never focused —
+    // fall back to appending at the end instead of crashing.
+    final ok = sel.isValid &&
+        sel.start >= 0 &&
+        sel.start <= text.length &&
+        sel.end >= 0 &&
+        sel.end <= text.length &&
+        sel.start < sel.end;
+    final start = ok ? sel.start : text.length;
+    final end = ok ? sel.end : text.length;
+    final selected = ok ? text.substring(start, end) : (placeholder ?? '');
+    final newText =
+        text.replaceRange(start, end, '$prefix$selected$suffix');
     _ctrl.text = newText;
     _ctrl.selection = TextSelection.collapsed(
-        offset: sel.start + prefix.length + selected.length);
+        offset: start + prefix.length + selected.length);
     setState(() {});
     _scheduleSave();
   }
