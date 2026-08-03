@@ -160,16 +160,18 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ],
         ),
         const SizedBox(height: 12),
-        // Charts row: same height for bar card and pie card
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(flex: 6, child: AppChartSection(apps: apps, tall: true)),
-              const SizedBox(width: 12),
-              Expanded(flex: 4, child: PieChartCard(apps: apps)),
-            ],
-          ),
+        // Charts row: chart natural height, pie FIXED height (no jitter)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 6, child: AppChartSection(apps: apps, tall: true)),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 260,
+              height: 360,
+              child: PieChartCard(apps: apps),
+            ),
+          ],
         ),
       ],
     );

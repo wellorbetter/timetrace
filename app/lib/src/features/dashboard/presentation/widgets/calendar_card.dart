@@ -8,6 +8,8 @@ import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/chinese_calendar.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import 'package:timetrace_app/src/core/widgets/image_preview.dart';
+import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
@@ -105,7 +107,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              flex: 2,
+              flex: 5,
               child: TableCalendar(
                 firstDay: DateTime(_focused.year, 1, 1),
                 lastDay: DateTime(_focused.year, 12, 31),
@@ -163,7 +165,7 @@ class _CalendarCardState extends ConsumerState<CalendarCard> {
             ),
             const SizedBox(width: 14),
             Expanded(
-              flex: 3,
+              flex: 4,
               child: _SummaryPanel(
                 date: _selected,
                 range: _range,
@@ -697,6 +699,7 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header
         Row(
           children: [
             Icon(Icons.edit_note, size: 18, color: scheme.primary),
@@ -711,83 +714,37 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
               Text('${widget.images.length} 图',
                   style: TextStyle(fontSize: 11, color: scheme.outline)),
             ],
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+              tooltip: '添加图片',
+              onPressed: _uploadImage,
+              visualDensity: VisualDensity.compact,
+            ),
           ],
         ),
         const SizedBox(height: 6),
-        // Input surface — clear bordered area
-        Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.6)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: asyncDay.when(
-              loading: () => const SizedBox(height: 64),
-              error: (_, __) => const SizedBox(height: 64),
-              data: (day) {
-                _diaryCtrl ??= TextEditingController(text: day.diary);
-                if (_diaryCtrl!.text != day.diary && !_dirty) {
-                  _diaryCtrl!.text = day.diary;
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Text input (full width)
-                    TextField(
-                      controller: _diaryCtrl,
-                      maxLines: 4,
-                      minLines: 2,
-                      decoration: const InputDecoration(
-                        hintText: '写下今天做了什么…',
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                      onChanged: (_) => _dirty = true,
-                    ),
-                    const SizedBox(height: 4),
-                    // Action row: image + save
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.add_photo_alternate_outlined,
-                              size: 20),
-                          tooltip: '添加图片',
-                          onPressed: _uploadImage,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        const SizedBox(width: 4),
-                        FilledButton.tonalIcon(
-                          onPressed: _dirty
-                              ? () async {
-                                  await saveDiary(
-                                      ref, widget.date, _diaryCtrl!.text);
-                                  _dirty = false;
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                          content: Text('已保存'),
-                                          duration: Duration(seconds: 1)),
-                                    );
-                                  }
-                                }
-                              : null,
-                          icon: const Icon(Icons.check, size: 16),
-                          label: const Text('保存'),
-                        ),
-                      ],
-                    ),
-                  ],
+        // Markdown editor (Typora-like) with toolbar + preview
+        asyncDay.when(
+          loading: () => const SizedBox(height: 140),
+          error: (_, __) => const SizedBox(height: 140),
+          data: (day) => MarkdownDiaryEditor(
+            key: ValueKey('diary-${widget.date.toIso8601String()}'),
+            initialText: day.diary,
+            maxLines: 5,
+            onSave: (text) async {
+              await saveDiary(ref, widget.date, text);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('已保存'),
+                      duration: Duration(seconds: 1)),
                 );
-              },
-            ),
+              }
+            },
           ),
         ),
-        // Image grid (Material 3) — larger tiles
+        // Image grid - tap to fullscreen preview
         if (widget.images.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -796,41 +753,45 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
               runSpacing: 8,
               children: [
                 for (final p in widget.images)
-                  SizedBox(
-                    width: 84,
-                    height: 84,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(p),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: scheme.surfaceContainerHighest,
-                              child: const Icon(Icons.broken_image,
-                                  color: Colors.grey),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 3,
-                          right: 3,
-                          child: InkWell(
-                            onTap: () => _removeImage(p),
-                            child: Container(
-                              padding: const EdgeInsets.all(1),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
+                  GestureDetector(
+                    onTap: () => showImagePreview(context, p,
+                        title: '${widget.date.month}月${widget.date.day}日图片'),
+                    child: SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(p),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: scheme.surfaceContainerHighest,
+                                child: const Icon(Icons.broken_image,
+                                    color: Colors.grey),
                               ),
-                              child: const Icon(Icons.close,
-                                  size: 12, color: Colors.white),
                             ),
                           ),
-                        ),
-                      ],
+                          Positioned(
+                            top: 3,
+                            right: 3,
+                            child: InkWell(
+                              onTap: () => _removeImage(p),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close,
+                                    size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -841,7 +802,6 @@ class _DiaryEditorState extends ConsumerState<_DiaryEditor> {
   }
 }
 
-/// 24-hour activity heatmap.
 class _HourlyHeatmap extends ConsumerWidget {
   const _HourlyHeatmap({required this.date});
 
