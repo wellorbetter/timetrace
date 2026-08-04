@@ -335,6 +335,16 @@ impl TimeTraceApi {
         DataStore::get_diary_entries(&*self.db, parse_date(&start), parse_date(&end))
     }
 
+    /// All diary images with their entry link: (date, entry_id, path).
+    #[frb(sync)]
+    pub fn get_diary_images_detailed(
+        &self,
+        start: String,
+        end: String,
+    ) -> Vec<(String, Option<i64>, String)> {
+        DataStore::get_diary_images_detailed(&*self.db, parse_date(&start), parse_date(&end))
+    }
+
     /// All diary entries in a range with ids, newest first: (id, date, content).
     #[frb(sync)]
     pub fn get_diary_entries_detailed(
@@ -385,6 +395,18 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn add_diary_image(&self, date: String, path: String) -> String {
         DataStore::add_diary_image(&*self.db, parse_date(&date), &path)
+    }
+
+    /// Link a staged diary image to a diary entry.
+    #[frb(sync)]
+    pub fn set_diary_image_entry(&self, path: String, entry_id: i64) -> Result<(), String> {
+        DataStore::set_diary_image_entry(&*self.db, &path, entry_id)
+    }
+
+    /// Image paths attached to a diary entry (朋友圈 album).
+    #[frb(sync)]
+    pub fn get_diary_images_for_entry(&self, entry_id: i64) -> Vec<String> {
+        DataStore::get_diary_images_for_entry(&*self.db, entry_id)
     }
 
     /// Remove a diary image.

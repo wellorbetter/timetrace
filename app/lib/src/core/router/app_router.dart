@@ -19,9 +19,38 @@ class AppShell extends ConsumerWidget {
             selectedIndex: _indexOf(context),
             onDestinationSelected: (i) => context.go(_paths[i]),
             labelType: NavigationRailLabelType.all,
-            leading: const Padding(
-              padding: EdgeInsets.only(top: 8, bottom: 16),
-              child: Icon(Icons.timer_outlined, size: 28),
+            leading: Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // App logo: rounded tile with timer glyph
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.tertiary,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.timer_outlined,
+                        size: 24, color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('TimeTrace',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
             ),
             // ── Material 3 selected-state colors ──
             backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,

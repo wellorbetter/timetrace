@@ -81,7 +81,7 @@ class SettingsScreen extends ConsumerWidget {
             // ── 字体 ──
             _SectionHeader(
                 title: l.font, icon: Icons.font_download_outlined),
-            ..._fontPicker(ref, l),
+            ..._fontPicker(ref, l, context),
             const Divider(),
 
             // ── 背景 ──
@@ -92,10 +92,12 @@ class SettingsScreen extends ConsumerWidget {
 
             // ── 仪表盘顺序 ──
             _SectionHeader(title: '仪表盘顺序', icon: Icons.view_carousel_outlined),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 4),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text('调整概览轮播的展示顺序',
-                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.outline)),
             ),
             ..._dashboardOrderPicker(ref),
             const Divider(),
@@ -130,7 +132,9 @@ class SettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 l.appliesOnRestart,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.outline),
               ),
             ),
             const Divider(),
@@ -196,7 +200,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   /// Font picker with live previews.
-  List<Widget> _fontPicker(WidgetRef ref, L10n l) {
+  List<Widget> _fontPicker(WidgetRef ref, L10n l, BuildContext context) {
     final selected = ref.watch(fontProvider);
     return [
       for (final font in AppFont.all)
@@ -213,7 +217,9 @@ class SettingsScreen extends ConsumerWidget {
           subtitle: Text(
             font.preview,
             style: TextStyle(
-                fontFamily: font.family, fontSize: 13, color: Colors.grey),
+                fontFamily: font.family,
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           dense: true,
           secondary: Text(
@@ -264,7 +270,9 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                     ),
                     child: c == null
-                        ? Icon(Icons.close, size: 16, color: Colors.grey)
+                        ? Icon(Icons.close,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.outline)
                         : null,
                   ),
                 ),

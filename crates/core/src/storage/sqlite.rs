@@ -31,6 +31,23 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         }
         tracing::info!("diary_entries migrated: multi-entry per day");
     }
+
+    // Migration 2: diary_images.entry_id — add column if missing + backfill.
+    let has_entry_col: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('diary_images') WHERE name = 'entry_id'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_entry_col == 0 {
+        for stmt in schema::MIGRATIONS_V2 {
+            conn.execute_batch(stmt)?;
+        }
+        tracing::info!("diary_images migrated: entry_id linked");
+    }
+    // Always ensure the entry index exists (fresh DBs + migrated).
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_diary_images_entry ON diary_images(entry_id)",
+    )?;
     Ok(())
 }
 
@@ -575,6 +592,25 @@ impl DataStore for SqliteStore {
         out
     }
 
+    fn get_diary_images_detailed(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Vec<(String, Option<i64>, String)> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT date, entry_id, path FROM diary_images WHERE date >= ?1 AND date <= ?2 ORDER BY id",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            }) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
+    }
+
     fn add_diary_image(&self, date: NaiveDate, path: &str) -> String {
         let conn = self.lock();
         let now = Utc::now().to_rfc3339();
@@ -583,6 +619,29 @@ impl DataStore for SqliteStore {
             params![date.to_string(), path, now],
         );
         path.to_string()
+    }
+
+    fn set_diary_image_entry(&self, path: &str, entry_id: i64) -> Result<(), String> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE diary_images SET entry_id = ?2 WHERE path = ?1",
+            params![path, entry_id],
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
+    fn get_diary_images_for_entry(&self, entry_id: i64) -> Vec<String> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT path FROM diary_images WHERE entry_id = ?1 ORDER BY id",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![entry_id], |row| row.get::<_, String>(0)) {
+                out.extend(rows.flatten());
+            }
+        }
+        out
     }
 
     fn remove_diary_image(&self, path: &str) {
@@ -866,8 +925,24 @@ impl DataStore for MemoryStore {
         vec![]
     }
 
+    fn get_diary_images_detailed(
+        &self,
+        _start: NaiveDate,
+        _end: NaiveDate,
+    ) -> Vec<(String, Option<i64>, String)> {
+        vec![]
+    }
+
     fn add_diary_image(&self, _date: NaiveDate, path: &str) -> String {
         path.to_string()
+    }
+
+    fn set_diary_image_entry(&self, _path: &str, _entry_id: i64) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn get_diary_images_for_entry(&self, _entry_id: i64) -> Vec<String> {
+        vec![]
     }
 
     fn remove_diary_image(&self, _path: &str) {}

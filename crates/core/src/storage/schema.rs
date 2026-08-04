@@ -55,12 +55,15 @@ pub const CREATE_TABLES: &[&str] = &[
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
 
-    // Diary images (stackable per day, overlaid on calendar cells)
+    // Diary images (stackable per day, overlaid on calendar cells).
+    // entry_id links an image to a specific diary entry (nullable: staged
+    // uploads before publish).
     "CREATE TABLE IF NOT EXISTS diary_images (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         date            TEXT    NOT NULL,
         path            TEXT    NOT NULL,
-        created_at      TEXT    NOT NULL
+        created_at      TEXT    NOT NULL,
+        entry_id        INTEGER
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_images_date ON diary_images(date)",
 ];
@@ -84,6 +87,15 @@ pub const MIGRATIONS: &[&str] = &[
     "ALTER TABLE diary_entries_v2 RENAME TO diary_entries",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
+];
+
+/// Migration 2: link existing diary images to an entry.
+/// (entry_id column is added via ALTER TABLE, guarded in open().)
+pub const MIGRATIONS_V2: &[&str] = &[
+    "ALTER TABLE diary_images ADD COLUMN entry_id INTEGER",
+    // Backfill: attach each image to the latest entry of the same date.
+    "UPDATE diary_images SET entry_id = (SELECT MAX(id) FROM diary_entries WHERE date = diary_images.date)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_images_entry ON diary_images(entry_id)",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

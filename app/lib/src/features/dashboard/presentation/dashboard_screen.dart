@@ -231,13 +231,23 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   icon: Icon(Icons.chevron_left,
                                       size: 22, color: scheme.primary),
                                   tooltip: '上一个视图',
-                                  onPressed: _carouselIndex > 0
-                                      ? () => _carouselCtrl.previousPage(
-                                          duration: const Duration(
-                                              milliseconds: 250),
-                                          curve: Curves.easeOut,
-                                        )
-                                      : null,
+                                  // Wrap-around: first page goes to last
+                                  onPressed: () {
+                                    if (_carouselIndex > 0) {
+                                      _carouselCtrl.previousPage(
+                                        duration: const Duration(
+                                            milliseconds: 250),
+                                        curve: Curves.easeOut,
+                                      );
+                                    } else {
+                                      _carouselCtrl.animateToPage(
+                                        pageCount - 1,
+                                        duration: const Duration(
+                                            milliseconds: 300),
+                                        curve: Curves.easeOut,
+                                      );
+                                    }
+                                  },
                                 ),
                                 Expanded(
                                   child: PageView(
@@ -311,13 +321,23 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   icon: Icon(Icons.chevron_right,
                                       size: 22, color: scheme.primary),
                                   tooltip: '下一个视图',
-                                  onPressed: _carouselIndex < pageCount - 1
-                                      ? () => _carouselCtrl.nextPage(
-                                          duration: const Duration(
-                                              milliseconds: 250),
-                                          curve: Curves.easeOut,
-                                        )
-                                      : null,
+                                  // Wrap-around: last page goes to first
+                                  onPressed: () {
+                                    if (_carouselIndex < pageCount - 1) {
+                                      _carouselCtrl.nextPage(
+                                        duration: const Duration(
+                                            milliseconds: 250),
+                                        curve: Curves.easeOut,
+                                      );
+                                    } else {
+                                      _carouselCtrl.animateToPage(
+                                        0,
+                                        duration: const Duration(
+                                            milliseconds: 300),
+                                        curve: Curves.easeOut,
+                                      );
+                                    }
+                                  },
                                 ),
                               ],
                             ),

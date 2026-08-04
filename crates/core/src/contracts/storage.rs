@@ -184,8 +184,21 @@ pub trait DataStore: Send + Sync {
     /// Diary image paths in a range: (date_str, path).
     fn get_diary_images(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)>;
 
+    /// Diary images with their entry link: (date_str, Option<entry_id>, path).
+    fn get_diary_images_detailed(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Vec<(String, Option<i64>, String)>;
+
     /// Add a diary image for a date. Returns the stored path.
     fn add_diary_image(&self, date: NaiveDate, path: &str) -> String;
+
+    /// Link a staged diary image to an entry.
+    fn set_diary_image_entry(&self, path: &str, entry_id: i64) -> Result<(), String>;
+
+    /// Image paths attached to a diary entry.
+    fn get_diary_images_for_entry(&self, entry_id: i64) -> Vec<String>;
 
     /// Remove a diary image by path.
     fn remove_diary_image(&self, path: &str);

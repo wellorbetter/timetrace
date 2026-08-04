@@ -58,6 +58,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConfigDto dco_decode_box_autoadd_config_dto(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
   IconDto dco_decode_box_autoadd_icon_dto(dynamic raw);
 
   @protected
@@ -101,6 +104,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_i_64_string_string(dynamic raw);
 
   @protected
+  List<(String, PlatformInt64?, String)>
+  dco_decode_list_record_string_opt_box_autoadd_i_64_string(dynamic raw);
+
+  @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
@@ -108,6 +115,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
   IconDto? dco_decode_opt_box_autoadd_icon_dto(dynamic raw);
@@ -122,6 +132,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (PlatformInt64, String, String) dco_decode_record_i_64_string_string(
     dynamic raw,
   );
+
+  @protected
+  (String, PlatformInt64?, String)
+  dco_decode_record_string_opt_box_autoadd_i_64_string(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -178,6 +192,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConfigDto sse_decode_box_autoadd_config_dto(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   IconDto sse_decode_box_autoadd_icon_dto(SseDeserializer deserializer);
 
   @protected
@@ -223,6 +240,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_list_record_i_64_string_string(SseDeserializer deserializer);
 
   @protected
+  List<(String, PlatformInt64?, String)>
+  sse_decode_list_record_string_opt_box_autoadd_i_64_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(String, String)> sse_decode_list_record_string_string(
     SseDeserializer deserializer,
   );
@@ -232,6 +255,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   IconDto? sse_decode_opt_box_autoadd_icon_dto(SseDeserializer deserializer);
@@ -246,6 +272,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, String, String) sse_decode_record_i_64_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (String, PlatformInt64?, String)
+  sse_decode_record_string_opt_box_autoadd_i_64_string(
     SseDeserializer deserializer,
   );
 
@@ -318,6 +350,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_i_64(
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_icon_dto(IconDto self, SseSerializer serializer);
 
   @protected
@@ -378,6 +416,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_string_opt_box_autoadd_i_64_string(
+    List<(String, PlatformInt64?, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_string_string(
     List<(String, String)> self,
     SseSerializer serializer,
@@ -391,6 +435,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_icon_dto(
@@ -410,6 +460,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_i_64_string_string(
     (PlatformInt64, String, String) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_string_opt_box_autoadd_i_64_string(
+    (String, PlatformInt64?, String) self,
     SseSerializer serializer,
   );
 

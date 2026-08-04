@@ -18,8 +18,8 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_co
 /// feed for the selected day. Consumes calendarDataProvider directly.
 enum _DiaryRange { day, week, month, custom }
 
-/// Journal: range selector + new/edit entry editor + collapsible image
-/// stack + expandable entry list (edit/delete). Multiple entries per day.
+/// Journal — 朋友圈-style: each entry is an independent post with its own
+/// text + image album (peeking stack). Range selector + publish/edit/delete.
 class DiarySection extends ConsumerStatefulWidget {
   const DiarySection({required this.date, super.key});
 
@@ -33,8 +33,8 @@ class DiarySection extends ConsumerStatefulWidget {
 class _DiarySectionState extends ConsumerState<DiarySection> {
   _DiaryRange _range = _DiaryRange.day;
   DateTime? _customStart;
-  int? _editingId; // null = writing a NEW entry for the selected day
-  bool _imagesOpen = false;
+  int? _editingId; // null = writing a NEW post for the selected day
+  List<String> _staged = []; // images uploaded but not yet attached to a post
 
   (String, String)? _bounds() {
     final d = widget.date;
@@ -80,21 +80,22 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       File(src).copySync(dest);
       final api = ref.read(apiProvider);
       api.addDiaryImage(date: dateStr, path: dest);
-      AppLogger.log('diary image added: $dest');
+      setState(() => _staged = [..._staged, dest]);
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('diary image upload failed: $e');
     }
   }
 
-  Future<void> _removeImage(String path) async {
+  Future<void> _removeStagedImage(String path) async {
     try {
       final api = ref.read(apiProvider);
       api.removeDiaryImage(path: path);
       File(path).deleteSync();
+      setState(() => _staged = _staged.where((p) => p != path).toList());
       ref.invalidate(calendarDataProvider);
     } catch (e) {
-      AppLogger.log('remove diary image failed: $e');
+      AppLogger.log('remove staged image failed: $e');
     }
   }
 
@@ -103,7 +104,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除这篇日记？'),
-        content: const Text('删除后不可恢复。', style: TextStyle(fontSize: 13)),
+        content: const Text('日记及其图片将被删除。', style: TextStyle(fontSize: 13)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -117,12 +118,44 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     if (ok != true) return;
     try {
       final api = ref.read(apiProvider);
+      // Delete the entry's own images too (file + DB row)
+      for (final p in api.getDiaryImagesForEntry(entryId: id)) {
+        try {
+          File(p).deleteSync();
+        } catch (_) {}
+        api.removeDiaryImage(path: p);
+      }
       api.deleteDiaryEntry(id: id);
       if (_editingId == id) setState(() => _editingId = null);
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('delete diary entry failed: $e');
     }
+  }
+
+  /// Publish: attach staged images to the (new or edited) entry.
+  Future<void> _publish(String text) async {
+    if (text.trim().isEmpty) return;
+    final api = ref.read(apiProvider);
+    int id;
+    if (_editingId != null) {
+      api.updateDiaryEntry(id: _editingId!, content: text);
+      id = _editingId!;
+    } else {
+      id = api.addDiaryEntry(date: calFmt(widget.date), content: text);
+    }
+    for (final p in _staged) {
+      try {
+        api.setDiaryImageEntry(path: p, entryId: id);
+      } catch (e) {
+        AppLogger.log('link image failed: $e');
+      }
+    }
+    if (mounted) setState(() {
+      _staged = [];
+      _editingId = null;
+    });
+    ref.invalidate(calendarDataProvider);
   }
 
   @override
@@ -137,7 +170,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             .where((e) =>
                 e.$2.compareTo(bounds.$1) >= 0 && e.$2.compareTo(bounds.$2) <= 0)
             .toList();
-    final images = data?.images[calFmt(widget.date)] ?? const <String>[];
     final editing = _editingId == null
         ? null
         : all.where((e) => e.$1 == _editingId).firstOrNull;
@@ -164,28 +196,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(horizontal: 8)),
               ),
             );
-            if (con.maxWidth < 560) {
-              // Narrow: title row on top, selector below (no overflow)
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.edit_note, size: 18, color: scheme.primary),
-                      const SizedBox(width: 6),
-                      Text('日记',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: scheme.primary)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  seg,
-                ],
-              );
-            }
-            return Row(
+            final title = Row(
               children: [
                 Icon(Icons.edit_note, size: 18, color: scheme.primary),
                 const SizedBox(width: 6),
@@ -194,9 +205,20 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                         color: scheme.primary)),
-                const Spacer(),
-                seg,
               ],
+            );
+            if (con.maxWidth < 560) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(height: 4),
+                  seg,
+                ],
+              );
+            }
+            return Row(
+              children: [title, const Spacer(), seg],
             );
           },
         ),
@@ -215,13 +237,14 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           ),
         ],
         const SizedBox(height: 8),
-        // ── Editor (new entry for selected day, or editing) ──
+        // ── Editor (new post for selected day, or editing) ──
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+            border:
+                Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +252,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
               Row(
                 children: [
                   Text(_editingId == null ? '写新日记' : '编辑日记',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.primary)),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.primary)),
                   const SizedBox(width: 8),
                   Text(calFmt(widget.date),
                       style: TextStyle(fontSize: 11, color: scheme.outline)),
@@ -246,143 +272,67 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 key: ValueKey('diary-${calFmt(widget.date)}-$_editingId'),
                 initialText: editing?.$3 ?? '',
                 maxLines: 4,
-                onSave: (text) async {
-                  if (text.trim().isEmpty) return;
-                  final api = ref.read(apiProvider);
-                  if (_editingId != null) {
-                    api.updateDiaryEntry(id: _editingId!, content: text);
-                  } else {
-                    api.addDiaryEntry(date: calFmt(widget.date), content: text);
-                  }
-                  ref.invalidate(calendarDataProvider);
-                },
+                onSave: _publish,
+              ),
+              // Staged images (this post's own attachments)
+              if (_staged.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final p in _staged)
+                      SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(File(p), fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox.shrink()),
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: InkWell(
+                                onTap: () => _removeStagedImage(p),
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close,
+                                      size: 10, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: OutlinedButton.icon(
+                  onPressed: _uploadImage,
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 15),
+                  label: const Text('添加图片', style: TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        // ── Images: collapsible stack (animated) ──
-        if (images.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InkWell(
-                  onTap: () => setState(() => _imagesOpen = !_imagesOpen),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Icon(_imagesOpen ? Icons.expand_less : Icons.expand_more,
-                            size: 16, color: scheme.outline),
-                        const SizedBox(width: 4),
-                        Text('图片 ${images.length} 张',
-                            style: TextStyle(fontSize: 12, color: scheme.outline)),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_imagesOpen)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final p in images)
-                        GestureDetector(
-                          onTap: () => showImagePreview(context, p,
-                              title: '${widget.date.month}月${widget.date.day}日图片'),
-                          child: SizedBox(
-                            width: 72,
-                            height: 72,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(p),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: scheme.surfaceContainerHighest,
-                                      child: const Icon(Icons.broken_image,
-                                          color: Colors.grey),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 3,
-                                  right: 3,
-                                  child: InkWell(
-                                    onTap: () => _removeImage(p),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.black54,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.close,
-                                          size: 12, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  )
-                else
-                  // Stacked mini-preview: first thumb + "+n" badge
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(
-                            File(images.first),
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: scheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text('+${images.length - 1}',
-                              style: TextStyle(
-                                  fontSize: 10, color: scheme.onSecondaryContainer)),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-        // ── Add-image button (always available) ──
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: OutlinedButton.icon(
-            onPressed: _uploadImage,
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-            label: const Text('上传图片', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-        ),
         const SizedBox(height: 10),
-        // ── Entry list ──
+        // ── Posts (朋友圈) — slide in/out animation ──
         if (inRange.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -392,33 +342,51 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             ),
           )
         else
-          for (final e in inRange)
-            _EntryCard(
-              id: e.$1,
-              dateStr: e.$2,
-              content: e.$3,
-              expanded: _editingId == e.$1,
-              onExpand: () => setState(() {
-                _editingId = _editingId == e.$1 ? null : e.$1;
-              }),
-              onEdit: () => setState(() {
-                _editingId = e.$1;
-                _imagesOpen = false;
-              }),
-              onDelete: () => _delete(e.$1),
-              scheme: scheme,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) => SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
+                  .animate(anim),
+              child: FadeTransition(opacity: anim, child: child),
             ),
+            child: Column(
+              key: ValueKey('posts-${inRange.map((e) => e.$1).join(',')}'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final e in inRange)
+                  _PostCard(
+                    id: e.$1,
+                    dateStr: e.$2,
+                    content: e.$3,
+                    images: data?.entryImages[e.$1] ?? const [],
+                    expanded: _editingId == e.$1,
+                    onExpand: () => setState(() {
+                      _editingId = _editingId == e.$1 ? null : e.$1;
+                    }),
+                    onEdit: () => setState(() {
+                      _editingId = e.$1;
+                      _staged = [];
+                    }),
+                    onDelete: () => _delete(e.$1),
+                    scheme: scheme,
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }
 }
 
-/// One diary entry: expandable card (AnimatedSize) with edit/delete.
-class _EntryCard extends StatefulWidget {
-  const _EntryCard({
+/// A diary post (朋友圈): date + text + its OWN image album (peeking stack).
+class _PostCard extends StatefulWidget {
+  const _PostCard({
     required this.id,
     required this.dateStr,
     required this.content,
+    required this.images,
     required this.expanded,
     required this.onExpand,
     required this.onEdit,
@@ -429,6 +397,7 @@ class _EntryCard extends StatefulWidget {
   final int id;
   final String dateStr;
   final String content;
+  final List<String> images;
   final bool expanded;
   final VoidCallback onExpand;
   final VoidCallback onEdit;
@@ -436,10 +405,10 @@ class _EntryCard extends StatefulWidget {
   final ColorScheme scheme;
 
   @override
-  State<_EntryCard> createState() => _EntryCardState();
+  State<_PostCard> createState() => _PostCardState();
 }
 
-class _EntryCardState extends State<_EntryCard> {
+class _PostCardState extends State<_PostCard> {
   @override
   Widget build(BuildContext context) {
     final firstLine = widget.content
@@ -448,11 +417,11 @@ class _EntryCardState extends State<_EntryCard> {
     final snippet = firstLine.length > 40 ? firstLine.substring(0, 40) : firstLine;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       elevation: 0,
       color: widget.scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(
             color: widget.expanded
                 ? widget.scheme.primary.withValues(alpha: 0.6)
@@ -460,31 +429,48 @@ class _EntryCardState extends State<_EntryCard> {
       ),
       child: InkWell(
         onTap: widget.onExpand,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header: avatar-like date chip + snippet + actions
               Row(
                 children: [
-                  Icon(Icons.article_outlined,
-                      size: 15, color: widget.scheme.primary),
-                  const SizedBox(width: 6),
-                  Text(widget.dateStr,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: widget.scheme.primary)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      snippet.isEmpty ? '(空)' : snippet,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: widget.scheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        widget.dateStr.substring(8), // day
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: widget.scheme.onPrimaryContainer),
+                      ),
                     ),
                   ),
-                  // Action buttons (stop propagation)
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.dateStr,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: widget.scheme.primary)),
+                      if (widget.images.isNotEmpty)
+                        Text('${widget.images.length} 张图片',
+                            style: TextStyle(
+                                fontSize: 9, color: widget.scheme.outline)),
+                    ],
+                  ),
+                  const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 15),
                     tooltip: '编辑',
@@ -497,47 +483,175 @@ class _EntryCardState extends State<_EntryCard> {
                     visualDensity: VisualDensity.compact,
                     onPressed: widget.onDelete,
                   ),
-                  Icon(
-                    widget.expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 16,
-                    color: widget.scheme.outline,
-                  ),
                 ],
               ),
-              // Expanded body: full markdown render
+              const SizedBox(height: 8),
+              // Text (snippet or full when expanded)
               AnimatedSize(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
                 child: widget.expanded
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 6, bottom: 2),
-                        child: widget.content.trim().isEmpty
-                            ? const SizedBox.shrink()
-                            : MarkdownBody(
-                                data: widget.content,
-                                selectable: true,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: const TextStyle(fontSize: 12, height: 1.5),
-                                  h1: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: widget.scheme.onSurface),
-                                  h2: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: widget.scheme.onSurface),
-                                  code: TextStyle(
-                                      fontSize: 11,
-                                      color: widget.scheme.primary),
-                                ),
-                              ),
-                      )
-                    : const SizedBox.shrink(),
+                    ? (widget.content.trim().isEmpty
+                        ? const SizedBox.shrink()
+                        : MarkdownBody(
+                            data: widget.content,
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(fontSize: 13, height: 1.6),
+                              h1: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.scheme.onSurface),
+                              h2: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.scheme.onSurface),
+                              code: TextStyle(
+                                  fontSize: 11,
+                                  color: widget.scheme.primary),
+                            ),
+                          ))
+                    : Text(snippet.isEmpty ? '(无文字)' : snippet,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, height: 1.5)),
               ),
+              // Own images — 相册堆叠 (peeking corners), tap to preview
+              if (widget.images.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _AlbumStack(
+                  images: widget.images,
+                  scheme: widget.scheme,
+                  expanded: widget.expanded,
+                ),
+              ],
+              // Expand hint
+              if (!widget.expanded)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.keyboard_arrow_down,
+                          size: 14, color: widget.scheme.outline),
+                      Text('展开',
+                          style: TextStyle(
+                              fontSize: 10, color: widget.scheme.outline)),
+                    ],
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 相册堆叠：后面的图露出边角（peeking corners）；展开时并排成网格。
+class _AlbumStack extends StatelessWidget {
+  const _AlbumStack({
+    required this.images,
+    required this.scheme,
+    this.expanded = false,
+  });
+
+  final List<String> images;
+  final ColorScheme scheme;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    if (expanded) {
+      // Grid of all images
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final p in images)
+            GestureDetector(
+              onTap: () => showImagePreview(context, p),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(
+                  File(p),
+                  width: 84,
+                  height: 84,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 84,
+                    height: 84,
+                    color: scheme.surfaceContainerHighest,
+                    child: const Icon(Icons.broken_image,
+                        size: 20, color: Colors.grey),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    // Collapsed: peeking stack (each image reveals a corner)
+    final shown = images.take(4).toList();
+    final over = images.length - shown.length;
+    return GestureDetector(
+      onTap: () => showImagePreview(context, images.first),
+      child: SizedBox(
+        height: 76,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (var i = 0; i < shown.length; i++)
+              Positioned(
+                left: i * 14.0,
+                top: i * 4.0,
+                child: Transform.rotate(
+                  angle: (i - (shown.length - 1) / 2) * 0.02,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(shown[i]),
+                        width: 76,
+                        height: 76,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 76,
+                          height: 76,
+                          color: scheme.surfaceContainerHighest,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (over > 0)
+              Positioned(
+                left: shown.length * 14.0 + 4,
+                top: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('+$over',
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.white)),
+                ),
+              ),
+          ],
         ),
       ),
     );

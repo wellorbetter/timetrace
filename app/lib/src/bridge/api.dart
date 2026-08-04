@@ -67,6 +67,15 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String end,
   });
 
+  /// All diary images with their entry link: (date, entry_id, path).
+  List<(String, PlatformInt64?, String)> getDiaryImagesDetailed({
+    required String start,
+    required String end,
+  });
+
+  /// Image paths attached to a diary entry (朋友圈 album).
+  List<String> getDiaryImagesForEntry({required PlatformInt64 entryId});
+
   /// All startup entries.
   List<StartupDto> getStartupEntries();
 
@@ -100,6 +109,12 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Set the diary entry for a date.
   String setDiary({required String date, required String content});
+
+  /// Link a staged diary image to a diary entry.
+  void setDiaryImageEntry({
+    required String path,
+    required PlatformInt64 entryId,
+  });
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});

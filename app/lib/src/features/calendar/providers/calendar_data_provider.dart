@@ -9,13 +9,15 @@ import 'package:timetrace_app/src/core/logging/app_logger.dart';
 class CalendarData {
   const CalendarData({
     required this.images,
+    required this.entryImages,
     required this.diaryDays,
     required this.usage,
     required this.maxUsage,
     required this.entries,
   });
 
-  final Map<String, List<String>> images; // date -> image paths
+  final Map<String, List<String>> images; // date -> image paths (markers)
+  final Map<int, List<String>> entryImages; // entry_id -> image paths (album)
   final Set<String> diaryDays; // dates with non-empty journal
   final Map<String, int> usage; // date -> active seconds (heatmap)
   final int maxUsage;
@@ -30,14 +32,18 @@ final calendarDataProvider =
   final api = ref.read(apiProvider);
   final now = DateTime.now();
 
-  // Image paths for the whole year
-  final entries = api.getDiaryImages(
+  // Image paths for the whole year + per-entry album map
+  final detailedImgs = api.getDiaryImagesDetailed(
     start: calFmt(DateTime(now.year, 1, 1)),
     end: calFmt(DateTime(now.year, 12, 31)),
   );
   final images = <String, List<String>>{};
-  for (final (date, path) in entries) {
+  final entryImages = <int, List<String>>{};
+  for (final (date, entryId, path) in detailedImgs) {
     images.putIfAbsent(date, () => []).add(path);
+    if (entryId != null) {
+      entryImages.putIfAbsent(entryId, () => []).add(path);
+    }
   }
 
   // Diary days (markers) + entries feed with ids
@@ -78,6 +84,7 @@ final calendarDataProvider =
 
   return CalendarData(
     images: images,
+    entryImages: entryImages,
     diaryDays: diaryDays,
     usage: usage,
     maxUsage: maxUsage,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
+import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
@@ -217,7 +218,7 @@ class _PageDetail extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text('${p.seconds.toInt() ~/ 60}分',
+                  Text(formatDuration(p.seconds.toInt()),
                       style:
                           TextStyle(fontSize: 10, color: scheme.outline)),
                 ],
