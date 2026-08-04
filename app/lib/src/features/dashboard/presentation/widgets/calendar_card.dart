@@ -245,18 +245,27 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: scheme.primary)),
-            const SizedBox(width: 8),
-            Text('· ${calFmt(widget.date)}',
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
             const Spacer(),
-            Text(
-              switch (widget.range) {
-                DiaryRange.day => '所选日',
-                DiaryRange.week => '近一周',
-                DiaryRange.month => '本月',
-                DiaryRange.custom => '自定义',
-              },
-              style: TextStyle(fontSize: 11, color: scheme.outline),
+            // Date + range label together, on the right
+            Text('${calFmt(widget.date)}',
+                style: TextStyle(fontSize: 11, color: scheme.outline)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: scheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                switch (widget.range) {
+                  DiaryRange.day => '所选日',
+                  DiaryRange.week => '近一周',
+                  DiaryRange.month => '本月',
+                  DiaryRange.custom => '自定义',
+                },
+                style: TextStyle(
+                    fontSize: 10, color: scheme.onSecondaryContainer),
+              ),
             ),
           ],
         ),

@@ -36,27 +36,12 @@ class _ImageAlbumState extends State<ImageAlbum> {
     final images = widget.images;
     if (images.isEmpty) return const SizedBox.shrink();
 
-    return Stack(
-      clipBehavior: Clip.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 22),
-          child: switch (_mode) {
-            _AlbumMode.grid => _GridBody(
-                images: images,
-                thumbSize: widget.thumbSize,
-                scheme: scheme),
-            _AlbumMode.stack => _StackBody(
-                images: images,
-                maxPeek: widget.maxPeek,
-                thumbSize: widget.thumbSize,
-                scheme: scheme),
-          },
-        ),
-        // Floating corner toggle: stack ↔ grid (no header row, no box)
-        Positioned(
-          top: 0,
-          right: 0,
+        // Top row: stack ↔ grid toggle pinned right (not over the images)
+        Align(
+          alignment: Alignment.centerRight,
           child: IconButton(
             icon: Icon(
                 _mode == _AlbumMode.grid
@@ -70,6 +55,28 @@ class _ImageAlbumState extends State<ImageAlbum> {
                 ? _AlbumMode.stack
                 : _AlbumMode.grid),
           ),
+        ),
+        const SizedBox(height: 2),
+        // Images
+        switch (_mode) {
+          _AlbumMode.grid => _GridBody(
+              images: images,
+              thumbSize: widget.thumbSize,
+              scheme: scheme),
+          _AlbumMode.stack => _StackBody(
+              images: images,
+              maxPeek: widget.maxPeek,
+              thumbSize: widget.thumbSize,
+              scheme: scheme),
+        },
+        // Count BELOW the images (never covering them)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('×${images.length} 张图片',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: scheme.outline,
+                  fontWeight: FontWeight.w500)),
         ),
       ],
     );
@@ -177,25 +184,6 @@ class _StackBody extends StatelessWidget {
                   ),
                 ),
               ),
-            // ×N count badge tucked into the bottom-right corner of the
-            // topmost image (anchored to the last image's right edge)
-            Positioned(
-              left: (shown.length - 1) * step + thumbSize - 34,
-              bottom: 2,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('×${images.length}',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ),
           ],
         ),
       ),
