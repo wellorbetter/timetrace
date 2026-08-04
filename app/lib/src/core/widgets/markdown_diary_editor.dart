@@ -7,18 +7,24 @@ import 'package:timetrace_app/src/core/logging/app_logger.dart';
 /// Markdown diary editor, UI modeled after open-source editors (Typora/StackEdit):
 /// three explicit modes via a segmented control — 编辑 / 分屏 / 预览.
 /// Preview is therefore an OPTION, not forced.
-/// Debounced auto-save (stops typing 900ms → onSave).
+/// Debounced auto-save → onAutoSave (draft); explicit 发布 → onPublish.
 class MarkdownDiaryEditor extends StatefulWidget {
   const MarkdownDiaryEditor({
     required this.initialText,
-    required this.onSave,
+    required this.onAutoSave,
+    required this.onPublish,
     this.placeholder = '写下今天做了什么…（支持 Markdown）',
     this.maxLines = 6,
     super.key,
   });
 
   final String initialText;
-  final Future<void> Function(String text) onSave;
+
+  /// Called by the debounce after typing pauses — saves a DRAFT.
+  final Future<void> Function(String text) onAutoSave;
+
+  /// Called by the 发布 button — publishes (draft → published).
+  final Future<void> Function(String text) onPublish;
   final String placeholder;
   final int maxLines;
 
@@ -82,20 +88,20 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     _scheduleSave();
   }
 
-  /// Debounced auto-save: pushes content to storage after typing pauses.
+  /// Debounced auto-save: saves a DRAFT after typing pauses.
   void _scheduleSave() {
     _saveTimer?.cancel();
     setState(() {
       _dirty = true;
       _saved = false;
     });
-    _saveTimer = Timer(const Duration(milliseconds: 900), () => save());
+    _saveTimer = Timer(const Duration(milliseconds: 900), () => _autosave());
   }
 
-  Future<void> save() async {
+  Future<void> _autosave() async {
     _saveTimer?.cancel();
     try {
-      await widget.onSave(_ctrl.text);
+      await widget.onAutoSave(_ctrl.text);
       if (mounted) {
         setState(() {
           _dirty = false;
@@ -103,7 +109,23 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
         });
       }
     } catch (e) {
-      AppLogger.log('diary save failed: $e');
+      AppLogger.log('diary draft save failed: $e');
+    }
+  }
+
+  /// Explicit publish (发布 button) — draft becomes published.
+  Future<void> publish() async {
+    _saveTimer?.cancel();
+    try {
+      await widget.onPublish(_ctrl.text);
+      if (mounted) {
+        setState(() {
+          _dirty = false;
+          _saved = true;
+        });
+      }
+    } catch (e) {
+      AppLogger.log('diary publish failed: $e');
     }
   }
 
@@ -207,7 +229,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
                   child: Text(
-                    _dirty ? '输入中…' : (_saved ? '✓ 已保存' : ''),
+                    _dirty ? '输入中…' : (_saved ? '✓ 草稿已存' : ''),
                     style: TextStyle(
                         fontSize: 10,
                         color: _dirty ? scheme.outline : scheme.primary),
@@ -215,7 +237,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 ),
                 // ── 发布 (explicit save / publish) ──
                 FilledButton.tonalIcon(
-                  onPressed: () => save(),
+                  onPressed: () => publish(),
                   icon: const Icon(Icons.publish, size: 15),
                   label: const Text('发布', style: TextStyle(fontSize: 12)),
                   style: FilledButton.styleFrom(

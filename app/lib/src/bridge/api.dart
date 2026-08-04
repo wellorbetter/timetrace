@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `parse_date`, `setup_logging`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -49,14 +49,17 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Hourly active-seconds for a day (24 buckets) — for the heatmap.
   Int64List getDayHourly({required String date});
 
+  /// The day's draft content, if any.
+  String? getDiaryDraft({required String date});
+
   /// Get all diary entries for a month range (for calendar markers).
   List<(String, String)> getDiaryEntries({
     required String start,
     required String end,
   });
 
-  /// All diary entries in a range with ids, newest first: (id, date, content).
-  List<(PlatformInt64, String, String)> getDiaryEntriesDetailed({
+  /// All diary entries in a range with ids + status, newest first.
+  List<DiaryEntryDto> getDiaryEntriesDetailed({
     required String start,
     required String end,
   });
@@ -97,12 +100,18 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Whether tracking is currently paused.
   bool isTrackingPaused();
 
+  /// Publish: promote the day's draft or insert a new published entry.
+  PlatformInt64 publishDiary({required String date, required String content});
+
   /// Remove a diary image.
   void removeDiaryImage({required String path});
 
   /// Resolve a startup command line to its clean exe path (env-expanded,
   /// quotes/args stripped). Returns None if no .exe is found.
   String? resolveExePath({required String command});
+
+  /// Autosave a draft for a date (one draft per day). Returns its id.
+  PlatformInt64 saveDiaryDraft({required String date, required String content});
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config});
@@ -295,6 +304,35 @@ class DaySessionDto {
           isIdle == other.isIdle &&
           durationSecs == other.durationSecs &&
           startedAt == other.startedAt;
+}
+
+/// A diary entry with its publish status ('draft' | 'published').
+class DiaryEntryDto {
+  final PlatformInt64 id;
+  final String date;
+  final String content;
+  final String status;
+
+  const DiaryEntryDto({
+    required this.id,
+    required this.date,
+    required this.content,
+    required this.status,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ date.hashCode ^ content.hashCode ^ status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DiaryEntryDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          date == other.date &&
+          content == other.content &&
+          status == other.status;
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.

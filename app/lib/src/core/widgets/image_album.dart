@@ -25,7 +25,7 @@ class ImageAlbum extends StatefulWidget {
   State<ImageAlbum> createState() => _ImageAlbumState();
 }
 
-enum _AlbumMode { stack, grid, hidden }
+enum _AlbumMode { stack, grid }
 
 class _ImageAlbumState extends State<ImageAlbum> {
   _AlbumMode _mode = _AlbumMode.stack;
@@ -47,29 +47,19 @@ class _ImageAlbumState extends State<ImageAlbum> {
             Text(widget.title ?? '${images.length} 张图片',
                 style: TextStyle(fontSize: 11, color: scheme.outline)),
             const Spacer(),
-            if (_mode == _AlbumMode.stack || _mode == _AlbumMode.grid)
-              IconButton(
-                icon: Icon(
-                    _mode == _AlbumMode.grid
-                        ? Icons.view_stream_outlined
-                        : Icons.grid_view_outlined,
-                    size: 15),
-                tooltip: _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
-                    ? _AlbumMode.stack
-                    : _AlbumMode.grid),
-              ),
+            // Expand interaction lives here (stack ↔ grid); hiding is the
+            // parent's 👁 toggle, so no hide button inside the album.
             IconButton(
-              icon: Icon(_mode == _AlbumMode.hidden
-                  ? Icons.expand_more
-                  : Icons.unfold_less,
+              icon: Icon(
+                  _mode == _AlbumMode.grid
+                      ? Icons.view_stream_outlined
+                      : Icons.grid_view_outlined,
                   size: 15),
-              tooltip: _mode == _AlbumMode.hidden ? '显示图片' : '隐藏图片',
+              tooltip: _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
               visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() => _mode = _mode == _AlbumMode.hidden
+              onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
                   ? _AlbumMode.stack
-                  : _AlbumMode.hidden),
+                  : _AlbumMode.grid),
             ),
           ],
         ),
@@ -80,7 +70,6 @@ class _ImageAlbumState extends State<ImageAlbum> {
           switchInCurve: Curves.easeOut,
           switchOutCurve: Curves.easeIn,
           child: switch (_mode) {
-            _AlbumMode.hidden => const SizedBox.shrink(),
             _AlbumMode.grid => _GridBody(images: images, thumbSize: widget.thumbSize, scheme: scheme),
             _AlbumMode.stack => _StackBody(images: images, maxPeek: widget.maxPeek, thumbSize: widget.thumbSize, scheme: scheme),
           },

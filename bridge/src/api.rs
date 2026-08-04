@@ -63,6 +63,15 @@ pub struct StatsDto {
     pub since: Option<String>,
 }
 
+/// A diary entry with its publish status ('draft' | 'published').
+#[derive(Debug, Clone)]
+pub struct DiaryEntryDto {
+    pub id: i64,
+    pub date: String,
+    pub content: String,
+    pub status: String,
+}
+
 /// Raw RGBA icon pixels for rendering in Flutter.
 #[derive(Debug, Clone)]
 pub struct IconDto {
@@ -345,14 +354,40 @@ impl TimeTraceApi {
         DataStore::get_diary_images_detailed(&*self.db, parse_date(&start), parse_date(&end))
     }
 
-    /// All diary entries in a range with ids, newest first: (id, date, content).
+    /// All diary entries in a range with ids + status, newest first.
     #[frb(sync)]
     pub fn get_diary_entries_detailed(
         &self,
         start: String,
         end: String,
-    ) -> Vec<(i64, String, String)> {
+    ) -> Vec<DiaryEntryDto> {
         DataStore::get_diary_entries_detailed(&*self.db, parse_date(&start), parse_date(&end))
+            .into_iter()
+            .map(|(id, date, content, status)| DiaryEntryDto {
+                id,
+                date,
+                content,
+                status,
+            })
+            .collect()
+    }
+
+    /// Autosave a draft for a date (one draft per day). Returns its id.
+    #[frb(sync)]
+    pub fn save_diary_draft(&self, date: String, content: String) -> i64 {
+        DataStore::save_diary_draft(&*self.db, parse_date(&date), &content)
+    }
+
+    /// Publish: promote the day's draft or insert a new published entry.
+    #[frb(sync)]
+    pub fn publish_diary(&self, date: String, content: String) -> i64 {
+        DataStore::publish_diary(&*self.db, parse_date(&date), &content)
+    }
+
+    /// The day's draft content, if any.
+    #[frb(sync)]
+    pub fn get_diary_draft(&self, date: String) -> Option<String> {
+        DataStore::get_diary_draft(&*self.db, parse_date(&date))
     }
 
     /// Add a new diary entry for a date. Returns the new entry id.

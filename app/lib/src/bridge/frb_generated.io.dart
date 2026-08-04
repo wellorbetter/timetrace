@@ -74,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DaySessionDto dco_decode_day_session_dto(dynamic raw);
 
   @protected
+  DiaryEntryDto dco_decode_diary_entry_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -89,6 +92,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<DaySessionDto> dco_decode_list_day_session_dto(dynamic raw);
 
   @protected
+  List<DiaryEntryDto> dco_decode_list_diary_entry_dto(dynamic raw);
+
+  @protected
   List<PageDto> dco_decode_list_page_dto(dynamic raw);
 
   @protected
@@ -96,10 +102,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
-
-  @protected
-  List<(PlatformInt64, String, String)>
-  dco_decode_list_record_i_64_string_string(dynamic raw);
 
   @protected
   List<(String, PlatformInt64?, String)>
@@ -125,11 +127,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, PlatformInt64) dco_decode_record_i_64_i_64(dynamic raw);
-
-  @protected
-  (PlatformInt64, String, String) dco_decode_record_i_64_string_string(
-    dynamic raw,
-  );
 
   @protected
   (String, PlatformInt64?, String)
@@ -208,6 +205,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DaySessionDto sse_decode_day_session_dto(SseDeserializer deserializer);
 
   @protected
+  DiaryEntryDto sse_decode_diary_entry_dto(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
@@ -225,6 +225,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<DiaryEntryDto> sse_decode_list_diary_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PageDto> sse_decode_list_page_dto(SseDeserializer deserializer);
 
   @protected
@@ -232,10 +237,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
-
-  @protected
-  List<(PlatformInt64, String, String)>
-  sse_decode_list_record_i_64_string_string(SseDeserializer deserializer);
 
   @protected
   List<(String, PlatformInt64?, String)>
@@ -265,11 +266,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, PlatformInt64) sse_decode_record_i_64_i_64(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  (PlatformInt64, String, String) sse_decode_record_i_64_string_string(
     SseDeserializer deserializer,
   );
 
@@ -372,6 +368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_day_session_dto(DaySessionDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_diary_entry_dto(DiaryEntryDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
@@ -393,6 +392,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_diary_entry_dto(
+    List<DiaryEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_page_dto(List<PageDto> self, SseSerializer serializer);
 
   @protected
@@ -404,12 +409,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_i_64_string_string(
-    List<(PlatformInt64, String, String)> self,
     SseSerializer serializer,
   );
 
@@ -452,12 +451,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_i_64_i_64(
     (PlatformInt64, PlatformInt64) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_i_64_string_string(
-    (PlatformInt64, String, String) self,
     SseSerializer serializer,
   );
 

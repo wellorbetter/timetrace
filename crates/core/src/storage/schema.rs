@@ -50,7 +50,8 @@ pub const CREATE_TABLES: &[&str] = &[
         date            TEXT    NOT NULL,
         content         TEXT    NOT NULL DEFAULT '',
         created_at      TEXT    NOT NULL,
-        updated_at      TEXT    NOT NULL
+        updated_at      TEXT    NOT NULL,
+        status          TEXT    NOT NULL DEFAULT 'published'
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
@@ -96,6 +97,11 @@ pub const MIGRATIONS_V2: &[&str] = &[
     // Backfill: attach each image to the latest entry of the same date.
     "UPDATE diary_images SET entry_id = (SELECT MAX(id) FROM diary_entries WHERE date = diary_images.date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_images_entry ON diary_images(entry_id)",
+];
+
+/// Migration 3: diary_entries.status — add column, existing rows are published.
+pub const MIGRATIONS_V3: &[&str] = &[
+    "ALTER TABLE diary_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'published'",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

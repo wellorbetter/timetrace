@@ -48,6 +48,19 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_diary_images_entry ON diary_images(entry_id)",
     )?;
+
+    // Migration 3: diary_entries.status — add column if missing.
+    let has_status: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('diary_entries') WHERE name = 'status'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_status == 0 {
+        for stmt in schema::MIGRATIONS_V3 {
+            conn.execute_batch(stmt)?;
+        }
+        tracing::info!("diary_entries migrated: status column");
+    }
     Ok(())
 }
 
@@ -471,7 +484,7 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Ok(mut stmt) = conn.prepare(
-            "SELECT date, content FROM diary_entries WHERE date >= ?1 AND date <= ?2 ORDER BY date"
+            "SELECT date, content FROM diary_entries WHERE date >= ?1 AND date <= ?2 AND status = 'published' ORDER BY date"
         ) {
             if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
                 Ok((row.get(0)?, row.get(1)?))
@@ -485,7 +498,7 @@ impl DataStore for SqliteStore {
     fn get_diary(&self, date: NaiveDate) -> Option<String> {
         let conn = self.lock();
         conn.query_row(
-            "SELECT content FROM diary_entries WHERE date = ?1",
+            "SELECT content FROM diary_entries WHERE date = ?1 AND status = 'published' ORDER BY id DESC LIMIT 1",
             params![date.to_string()],
             |row| row.get::<_, String>(0),
         )
@@ -510,15 +523,15 @@ impl DataStore for SqliteStore {
         &self,
         start: NaiveDate,
         end: NaiveDate,
-    ) -> Vec<(i64, String, String)> {
+    ) -> Vec<(i64, String, String, String)> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Ok(mut stmt) = conn.prepare(
-            "SELECT id, date, content FROM diary_entries
+            "SELECT id, date, content, status FROM diary_entries
              WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, id DESC",
         ) {
             if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             }) {
                 out.extend(rows.flatten());
             }
@@ -530,11 +543,69 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let now = Utc::now().to_rfc3339();
         let _ = conn.execute(
-            "INSERT INTO diary_entries (date, content, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?3)",
+            "INSERT INTO diary_entries (date, content, created_at, updated_at, status)
+             VALUES (?1, ?2, ?3, ?3, 'published')",
             params![date.to_string(), content, now],
         );
         conn.last_insert_rowid()
+    }
+
+    /// Autosave a draft for a date (one draft per day) — returns its id.
+    fn save_diary_draft(&self, date: NaiveDate, content: &str) -> i64 {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        // Reuse the existing draft for the day if present.
+        if let Ok(existing) = conn.query_row(
+            "SELECT id FROM diary_entries WHERE date = ?1 AND status = 'draft' ORDER BY id LIMIT 1",
+            params![date.to_string()],
+            |row| row.get::<_, i64>(0),
+        ) {
+            let _ = conn.execute(
+                "UPDATE diary_entries SET content = ?1, updated_at = ?2 WHERE id = ?3",
+                params![content, now, existing],
+            );
+            return existing;
+        }
+        let _ = conn.execute(
+            "INSERT INTO diary_entries (date, content, created_at, updated_at, status)
+             VALUES (?1, ?2, ?3, ?3, 'draft')",
+            params![date.to_string(), content, now],
+        );
+        conn.last_insert_rowid()
+    }
+
+    /// Publish: promote the day's draft (or insert a new published entry).
+    fn publish_diary(&self, date: NaiveDate, content: &str) -> i64 {
+        let conn = self.lock();
+        let now = Utc::now().to_rfc3339();
+        if let Ok(existing) = conn.query_row(
+            "SELECT id FROM diary_entries WHERE date = ?1 AND status = 'draft' ORDER BY id LIMIT 1",
+            params![date.to_string()],
+            |row| row.get::<_, i64>(0),
+        ) {
+            let _ = conn.execute(
+                "UPDATE diary_entries SET content = ?1, updated_at = ?2, status = 'published' WHERE id = ?3",
+                params![content, now, existing],
+            );
+            return existing;
+        }
+        let _ = conn.execute(
+            "INSERT INTO diary_entries (date, content, created_at, updated_at, status)
+             VALUES (?1, ?2, ?3, ?3, 'published')",
+            params![date.to_string(), content, now],
+        );
+        conn.last_insert_rowid()
+    }
+
+    /// The day's draft content, if any.
+    fn get_diary_draft(&self, date: NaiveDate) -> Option<String> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT content FROM diary_entries WHERE date = ?1 AND status = 'draft' ORDER BY id LIMIT 1",
+            params![date.to_string()],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
     }
 
     fn update_diary_entry(&self, id: i64, content: &str) -> Result<(), String> {
@@ -913,8 +984,20 @@ impl DataStore for MemoryStore {
         &self,
         _start: NaiveDate,
         _end: NaiveDate,
-    ) -> Vec<(i64, String, String)> {
+    ) -> Vec<(i64, String, String, String)> {
         vec![]
+    }
+
+    fn save_diary_draft(&self, _date: NaiveDate, _content: &str) -> i64 {
+        1
+    }
+
+    fn publish_diary(&self, _date: NaiveDate, _content: &str) -> i64 {
+        1
+    }
+
+    fn get_diary_draft(&self, _date: NaiveDate) -> Option<String> {
+        None
     }
 
     fn add_diary_entry(&self, _date: NaiveDate, _content: &str) -> i64 {

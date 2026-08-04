@@ -159,15 +159,24 @@ pub trait DataStore: Send + Sync {
     /// Upsert a diary entry for a date. Returns the new content.
     fn set_diary(&self, date: NaiveDate, content: &str) -> String;
 
-    /// All diary entries in a range, newest first: (id, date_str, content).
+    /// All diary entries in a range, newest first: (id, date_str, content, status).
     fn get_diary_entries_detailed(
         &self,
         start: NaiveDate,
         end: NaiveDate,
-    ) -> Vec<(i64, String, String)>;
+    ) -> Vec<(i64, String, String, String)>;
 
-    /// Add a new diary entry for a date. Returns the new row id.
+    /// Add a new published diary entry for a date. Returns the new row id.
     fn add_diary_entry(&self, date: NaiveDate, content: &str) -> i64;
+
+    /// Autosave a draft for a date (one draft per day). Returns its id.
+    fn save_diary_draft(&self, date: NaiveDate, content: &str) -> i64;
+
+    /// Publish: promote the day's draft or insert a new published entry.
+    fn publish_diary(&self, date: NaiveDate, content: &str) -> i64;
+
+    /// The day's draft content, if any.
+    fn get_diary_draft(&self, date: NaiveDate) -> Option<String>;
 
     /// Update a diary entry's content by id.
     fn update_diary_entry(&self, id: i64, content: &str) -> Result<(), String>;

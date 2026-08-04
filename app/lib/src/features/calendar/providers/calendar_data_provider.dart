@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
@@ -21,7 +22,7 @@ class CalendarData {
   final Set<String> diaryDays; // dates with non-empty journal
   final Map<String, int> usage; // date -> active seconds (heatmap)
   final int maxUsage;
-  final List<(int, String, String)> entries; // (id, date, content) newest first
+  final List<DiaryEntryDto> entries; // published entries, newest first
 }
 
 String calFmt(DateTime d) =>
@@ -59,10 +60,12 @@ final calendarDataProvider =
     start: calFmt(DateTime(now.year, 1, 1)),
     end: calFmt(DateTime(now.year, 12, 31)),
   );
+  // Only published entries in the feed; drafts stay in the editor.
+  final published = detailed.where((e) => e.status == 'published').toList();
   // Cap to the most recent 100 (memory: avoid holding long texts)
-  final capped = detailed.length > 100
-      ? detailed.sublist(0, 100)
-      : detailed;
+  final capped = published.length > 100
+      ? published.sublist(0, 100)
+      : published;
 
   // Per-day active seconds (heatmap) — one CSV query, parsed locally
   final usage = <String, int>{};
@@ -90,4 +93,12 @@ final calendarDataProvider =
     maxUsage: maxUsage,
     entries: capped,
   );
+});
+
+
+/// The selected day's draft content (autosaved, not yet published).
+final diaryDraftProvider = FutureProvider.autoDispose.family<String?, String>(
+    (ref, date) async {
+  final api = ref.read(apiProvider);
+  return api.getDiaryDraft(date: date);
 });

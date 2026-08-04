@@ -135,7 +135,8 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     }
   }
 
-  /// Publish: attach staged images to the (new or edited) entry.
+  /// Publish: draft → published (or update the entry being edited),
+  /// then attach staged images.
   Future<void> _publish(String text) async {
     if (text.trim().isEmpty) return;
     final api = ref.read(apiProvider);
@@ -144,7 +145,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       api.updateDiaryEntry(id: _editingId!, content: text);
       id = _editingId!;
     } else {
-      id = api.addDiaryEntry(date: calFmt(widget.date), content: text);
+      id = api.publishDiary(date: calFmt(widget.date), content: text);
     }
     for (final p in _staged) {
       try {
@@ -158,23 +159,59 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       _editingId = null;
     });
     ref.invalidate(calendarDataProvider);
+    ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
+  }
+
+  /// Autosave (debounced): new post → draft for the day; editing → live update.
+  Future<void> _autosave(String text) async {
+    final api = ref.read(apiProvider);
+    if (_editingId != null) {
+      api.updateDiaryEntry(id: _editingId!, content: text);
+    } else {
+      api.saveDiaryDraft(date: calFmt(widget.date), content: text);
+      ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
+    }
+    ref.invalidate(calendarDataProvider);
+  }
+
+  /// Discard the day's draft.
+  Future<void> _discardDraft() async {
+    final api = ref.read(apiProvider);
+    final draft = ref.read(diaryDraftProvider(calFmt(widget.date))).value;
+    if (draft == null || draft.trim().isEmpty) return;
+    try {
+      final entries = api.getDiaryEntriesDetailed(
+        start: calFmt(DateTime(widget.date.year, 1, 1)),
+        end: calFmt(DateTime(widget.date.year, 12, 31)),
+      );
+      for (final e in entries) {
+        if (e.status == 'draft' && e.date == calFmt(widget.date)) {
+          api.deleteDiaryEntry(id: e.id);
+        }
+      }
+    } catch (e) {
+      AppLogger.log('discard draft failed: $e');
+    }
+    ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
+    ref.invalidate(calendarDataProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final data = ref.watch(calendarDataProvider).value;
-    final all = data?.entries ?? const <(int, String, String)>[];
+    final all = data?.entries ?? const <DiaryEntryDto>[];
+    final draft = ref.watch(diaryDraftProvider(calFmt(widget.date))).value;
     final bounds = _bounds();
     final inRange = bounds == null
         ? all
         : all
             .where((e) =>
-                e.$2.compareTo(bounds.$1) >= 0 && e.$2.compareTo(bounds.$2) <= 0)
+                e.date.compareTo(bounds.$1) >= 0 && e.date.compareTo(bounds.$2) <= 0)
             .toList();
     final editing = _editingId == null
         ? null
-        : all.where((e) => e.$1 == _editingId).firstOrNull;
+        : all.where((e) => e.id == _editingId).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,10 +309,44 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
               const SizedBox(height: 4),
               MarkdownDiaryEditor(
                 key: ValueKey('diary-${calFmt(widget.date)}-$_editingId'),
-                initialText: editing?.$3 ?? '',
+                initialText: editing?.content ?? draft ?? '',
                 maxLines: 4,
-                onSave: _publish,
+                onAutoSave: _autosave,
+                onPublish: _publish,
               ),
+              // Draft badge: autosaved but not published yet
+              if (_editingId == null &&
+                  draft != null &&
+                  draft.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: scheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('草稿',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: scheme.onTertiaryContainer)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('已自动保存，发布后才会出现在日记列表',
+                          style: TextStyle(
+                              fontSize: 10, color: scheme.outline)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: _discardDraft,
+                        child: const Text('放弃草稿',
+                            style: TextStyle(fontSize: 10)),
+                      ),
+                    ],
+                  ),
+                ),
               // Staged images (this post's own attachments)
               if (_staged.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -354,7 +425,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
               child: FadeTransition(opacity: anim, child: child),
             ),
             child: Column(
-              key: ValueKey('posts-${inRange.map((e) => e.$1).join(',')}'),
+              key: ValueKey('posts-${inRange.map((e) => e.id).join(',')}'),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final group in _groupByDay(inRange))
@@ -386,11 +457,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
   }
 
   /// Group posts by day, days newest first, posts newest first.
-  List<(String, List<(int, String, String)>)> _groupByDay(
-      List<(int, String, String)> posts) {
-    final map = <String, List<(int, String, String)>>{};
+  List<(String, List<DiaryEntryDto>)> _groupByDay(List<DiaryEntryDto> posts) {
+    final map = <String, List<DiaryEntryDto>>{};
     for (final e in posts) {
-      map.putIfAbsent(e.$2, () => []).add(e);
+      map.putIfAbsent(e.date, () => []).add(e);
     }
     final days = map.keys.toList()..sort((a, b) => b.compareTo(a));
     return [
@@ -414,7 +484,7 @@ class _DayGroup extends StatelessWidget {
   });
 
   final String dateStr;
-  final List<(int, String, String)> posts;
+  final List<DiaryEntryDto> posts;
   final List<String> Function(int id) images;
   final bool collapsed;
   final VoidCallback onToggleGroup;
@@ -468,13 +538,13 @@ class _DayGroup extends StatelessWidget {
                   children: [
                     for (final e in posts)
                       _PostCard(
-                        id: e.$1,
-                        dateStr: e.$2,
-                        content: e.$3,
-                        images: images(e.$1),
-                        editing: editingId == e.$1,
-                        onEdit: () => onEdit(e.$1),
-                        onDelete: () => onDelete(e.$1),
+                        id: e.id,
+                        dateStr: e.date,
+                        content: e.content,
+                        images: images(e.id),
+                        editing: editingId == e.id,
+                        onEdit: () => onEdit(e.id),
+                        onDelete: () => onDelete(e.id),
                         scheme: scheme,
                       ),
                   ],
