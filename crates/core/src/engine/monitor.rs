@@ -15,8 +15,8 @@ use tracing::{debug, info};
 
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetMessageW, MSG, TranslateMessage, EVENT_SYSTEM_FOREGROUND,
-    WINEVENT_OUTOFCONTEXT,
+    DispatchMessageW, GetMessageW, MSG, TranslateMessage, EVENT_OBJECT_NAMECHANGE,
+    EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT,
 };
 
 use crate::contracts::events::{AppInfo, EventSink, EventSourceHandle, TrackedEvent};
@@ -29,15 +29,21 @@ static FG_EVENT: OnceLock<mpsc::Sender<()>> = OnceLock::new();
 
 unsafe extern "system" fn win_event_proc(
     _hook: HWINEVENTHOOK,
-    _event: u32,
+    event: u32,
     _hwnd: windows::Win32::Foundation::HWND,
-    _id: i32,
+    id_object: i32,
     _id_child: i32,
     _event_thread: u32,
     _ms: u32,
 ) {
-    if let Some(tx) = FG_EVENT.get() {
-        let _ = tx.send(());
+    // Foreground switches AND window-title changes (browser tab switches,
+    // e.g. Edge updates its title on every tab) both push a recheck.
+    if event == EVENT_SYSTEM_FOREGROUND
+        || (event == EVENT_OBJECT_NAMECHANGE && id_object == 0 /* OBJID_WINDOW */)
+    {
+        if let Some(tx) = FG_EVENT.get() {
+            let _ = tx.send(());
+        }
     }
 }
 
@@ -64,9 +70,20 @@ where
         thread::spawn(move || {
             unsafe {
                 FG_EVENT.set(fg_tx).ok();
-                let _hook = SetWinEventHook(
+                // Foreground switches → app switches.
+                let _hook_fg = SetWinEventHook(
                     EVENT_SYSTEM_FOREGROUND,
                     EVENT_SYSTEM_FOREGROUND,
+                    None,
+                    Some(win_event_proc),
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT,
+                );
+                // Window-title changes → browser page switches (Edge etc.).
+                let _hook_name = SetWinEventHook(
+                    EVENT_OBJECT_NAMECHANGE,
+                    EVENT_OBJECT_NAMECHANGE,
                     None,
                     Some(win_event_proc),
                     0,
@@ -93,6 +110,7 @@ where
         let mut is_idle = false;
         let mut last_heartbeat = Instant::now();
         let mut last_poll = Instant::now();
+        let mut last_title_check = Instant::now();
 
         loop {
             if stop_rx.try_recv().is_ok() { info!("Monitor stopped"); break; }
@@ -110,8 +128,13 @@ where
                 is_idle = false;
             }
 
-            // A WinEventHook fired → foreground changed → check immediately.
+            // A WinEventHook fired → foreground/title changed → check now.
+            // Title-change events can be chatty, so cap rechecks at ~2/s.
             let hook_fired = fg_rx.try_recv().is_ok();
+            let can_check = now - last_title_check >= Duration::from_millis(500);
+            if hook_fired && can_check {
+                last_title_check = now;
+            }
 
             if !is_paused {
                 let foreground = window_resolver.get_foreground_app();
@@ -153,9 +176,9 @@ where
                 }
             }
 
-            // Poll cadence: on hook events check again immediately (already
-            // did), otherwise sleep the configured interval (fallback).
-            if hook_fired {
+            // Poll cadence: on a fresh hook event check again immediately,
+            // otherwise sleep the configured interval (fallback).
+            if hook_fired && can_check {
                 continue;
             }
             thread::sleep(poll_interval);

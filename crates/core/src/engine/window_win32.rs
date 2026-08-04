@@ -1,14 +1,16 @@
 //! Win32 window resolution via `GetForegroundWindow` + `OpenProcess`.
 
 use windows::core::PWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM};
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    EnumChildWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId,
 };
 
+use crate::engine::app_identity::{app_name_from_title, display_name_for};
 use crate::contracts::window::WindowResolver;
 use crate::contracts::events::AppInfo;
 
@@ -24,7 +26,28 @@ impl WindowResolver for Win32WindowResolver {
             GetWindowThreadProcessId(hwnd, Some(&mut pid));
             if pid == 0 { return None; }
 
-            let exe_path = get_process_path(pid).unwrap_or_else(|| format!("pid:{}", pid));
+            let mut exe_path = get_process_path(pid).unwrap_or_default();
+
+            // UWP apps (Settings, Photos, Calculator…) run inside the
+            // ApplicationFrameHost / ShellExperienceHost container. The real
+            // app is a CHILD window's process — resolve it (same approach as
+            // Tai / standard UWP tracking).
+            let exe_stem = exe_path
+                .rsplit('\\')
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(".exe")
+                .to_lowercase();
+            if exe_stem == "applicationframehost"
+                || exe_stem == "shellexperiencehost"
+            {
+                if let Some(child_pid) = resolve_child_pid(hwnd, pid) {
+                    if let Some(real) = get_process_path(child_pid) {
+                        exe_path = real;
+                    }
+                }
+            }
+
             let title = get_window_title_text(hwnd).unwrap_or_default();
             let display_name = display_name_for(&exe_path, &title);
 
@@ -35,66 +58,32 @@ impl WindowResolver for Win32WindowResolver {
     fn get_window_title(&self, _hwnd: isize) -> Option<String> { None }
 }
 
-/// Friendly display name for a process.
-/// Priority (matches how ActivityWatch / RescueTime identify apps):
-///  1. non-generic exe file name (msedge → Edge via normalize)
-///  2. generic runtimes (java/javaw/python/node/…) → exe path parent dir,
-///     e.g. `…\JetBrains\IntelliJ IDEA 2024.1\bin\java.exe` → `IntelliJ IDEA 2024.1`
-///  3. if the parent dir is meaningless (jre/jdk/…), fall back to the
-///     window-title keywords (Minecraft Java is javaw.exe from a random
-///     JRE — only the title says “Minecraft”).
-fn display_name_for(exe_path: &str, title: &str) -> String {
-    let file = exe_path.rsplit('\\').next().unwrap_or(exe_path);
-    let stem = file.trim_end_matches(".exe");
-    let lower = stem.to_lowercase();
-    let generic = [
-        "java", "javaw", "javaws", "python", "pythonw", "python3", "node",
-        "dotnet", "electron", "chrome", "ruby", "php", "go", "cargo",
-    ];
-    if generic.contains(&lower.as_str()) {
-        let parts: Vec<&str> = exe_path.rsplit('\\').collect();
-        for p in parts.iter().skip(1) {
-            let pl = p.to_lowercase();
-            let meaningless = pl == "bin"
-                || pl == "bin64"
-                || pl.starts_with("jre")
-                || pl.starts_with("jdk")
-                || pl.contains("runtime")
-                || pl == "openjdk"
-                || pl == "windowsapps";
-            if !meaningless {
-                return (*p).to_string();
-            }
-        }
-        // Nothing meaningful in the path → title keywords (Minecraft, …).
-        return app_name_from_title(title).unwrap_or_else(|| stem.to_string());
-    }
-    stem.to_string()
+/// EnumChildWindows context.
+struct ChildCtx {
+    host_pid: u32,
+    child_pid: u32,
 }
 
-/// Recognize well-known apps from the window title (works for generic
-/// runtimes like javaw.exe running Minecraft, or UWP hosts).
-fn app_name_from_title(title: &str) -> Option<String> {
-    let t = title.to_lowercase();
-    if t.contains("minecraft") || t.contains("mc ") || t.contains(" mc") {
-        return Some("Minecraft".into());
+unsafe extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+    let ctx = &mut *(lparam.0 as *mut ChildCtx);
+    let mut cpid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut cpid));
+    if cpid != 0 && cpid != ctx.host_pid {
+        ctx.child_pid = cpid;
+        return windows::core::BOOL(0); // stop
     }
-    if t.contains("intellij") || t.contains("idea") {
-        return Some("IntelliJ IDEA".into());
-    }
-    if t.contains("visual studio code") {
-        return Some("VS Code".into());
-    }
-    if t.contains("visual studio") {
-        return Some("Visual Studio".into());
-    }
-    if t.contains("pycharm") {
-        return Some("PyCharm".into());
-    }
-    if t.contains("webstorm") {
-        return Some("WebStorm".into());
-    }
-    None
+    windows::core::BOOL(1)
+}
+
+/// Find the real process behind a UWP host window (ApplicationFrameHost).
+unsafe fn resolve_child_pid(hwnd: HWND, host_pid: u32) -> Option<u32> {
+    let mut ctx = ChildCtx { host_pid, child_pid: 0 };
+    let _ = EnumChildWindows(
+        Some(hwnd),
+        Some(enum_child_proc),
+        LPARAM(&mut ctx as *mut ChildCtx as isize),
+    );
+    (ctx.child_pid != 0).then_some(ctx.child_pid)
 }
 
 unsafe fn get_process_path(pid: u32) -> Option<String> {
@@ -102,11 +91,14 @@ unsafe fn get_process_path(pid: u32) -> Option<String> {
     let _guard = HandleGuard(handle);
     let mut buffer = vec![0u16; 260];
     let mut size: u32 = buffer.len() as u32;
-    if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size).is_ok() {
+    if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size).is_ok()
+        && size > 0
+    {
         buffer.truncate(size as usize);
         Some(String::from_utf16_lossy(&buffer))
     } else {
-        Some(format!("process-{}", pid))
+        // Access denied / process gone — caller falls back to "未知应用".
+        None
     }
 }
 

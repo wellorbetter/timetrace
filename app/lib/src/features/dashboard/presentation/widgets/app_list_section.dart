@@ -174,6 +174,8 @@ class _PageDetail extends StatelessWidget {
       );
     }
     final maxSec = list.map((p) => p.seconds).fold<int>(1, (m, v) => v > m ? v : m);
+    final shown = list.take(5).toList();
+    final more = list.length - shown.length;
     return Container(
       margin: const EdgeInsets.fromLTRB(32, 4, 8, 4),
       padding: const EdgeInsets.all(10),
@@ -190,7 +192,7 @@ class _PageDetail extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: scheme.primary)),
           const SizedBox(height: 6),
-          for (final p in list.take(8))
+          for (final p in shown)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
@@ -223,6 +225,15 @@ class _PageDetail extends StatelessWidget {
                           TextStyle(fontSize: 10, color: scheme.outline)),
                 ],
               ),
+            ),
+          if (more > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('等 $more 个页面',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: scheme.outline,
+                      fontStyle: FontStyle.italic)),
             ),
         ],
       ),

@@ -96,8 +96,16 @@ String normalizeAppName(String raw) {
       lower.contains('lol')) {
     return '英雄联盟';
   }
-  if (lower.contains('startmenu') || lower == 'shellhost') {
-    return '开始菜单';
+  if (lower.contains('startmenu') ||
+      lower.contains('shellhost') ||
+      lower.contains('searchhost') ||
+      lower.contains('lockapp') ||
+      lower.contains('applicationframehost') ||
+      lower.contains('shellexperiencehost') ||
+      lower.contains('runtimebroker') ||
+      lower.contains('textinputhost') ||
+      lower.contains('dwm')) {
+    return '系统';
   }
   if (lower.contains('explorer')) return '资源管理器';
   if (lower.contains('windows terminal') || lower.contains('terminal')) {

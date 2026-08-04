@@ -8,6 +8,7 @@ use std::sync::Arc;
 use chrono::{Local, Utc};
 use tracing::{debug, info};
 
+use crate::engine::app_identity::normalize_app_name;
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 use crate::contracts::storage::{DataStore, SessionRecord};
 
@@ -66,7 +67,7 @@ impl SessionAggregator {
         let sid = self.current_session_id.unwrap_or(-1);
         let pid = self.db.start_page_visit(
             sid,
-            &app.display_name,
+            &normalize_app_name(&app.display_name),
             app.window_title.as_deref(),
             Local::now().date_naive(),
         );
@@ -113,34 +114,6 @@ impl Drop for SessionAggregator {
     fn drop(&mut self) {
         self.close_session();
     }
-}
-
-/// Merge the many exe variants of the same app so statistics show one row
-/// (msedge vs browser, LeagueClientUx vs League of Legends, …).
-pub fn normalize_app_name(name: &str) -> String {
-    let lower = name.to_lowercase();
-    if lower.contains("msedge") || lower.contains("webview2") {
-        return "Edge".into();
-    }
-    if lower == "browser" || lower.contains("qbblink") {
-        return "WeGame浏览器".into();
-    }
-    if lower.contains("leagueclient")
-        || lower.contains("league of legends")
-        || lower.contains("lol")
-    {
-        return "英雄联盟".into();
-    }
-    if lower.contains("startmenu") || lower == "shellhost" {
-        return "开始菜单".into();
-    }
-    if lower.contains("explorer") {
-        return "资源管理器".into();
-    }
-    if lower.contains("terminal") {
-        return "终端".into();
-    }
-    name.into()
 }
 
 #[cfg(test)]

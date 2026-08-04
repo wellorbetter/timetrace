@@ -1,3 +1,4 @@
+pub mod app_identity;
 pub mod aggregator;
 pub mod idle_win32;
 pub mod monitor;

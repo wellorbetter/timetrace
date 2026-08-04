@@ -1236,9 +1236,15 @@ class _SessionRowSimple extends StatelessWidget {
 
 /// Diary editor (full-width, below calendar) — Material 3 style.
 class _HourlyHeatmap extends ConsumerWidget {
-  const _HourlyHeatmap({required this.date});
+  const _HourlyHeatmap({
+    required this.date,
+    this.highStart = 0,
+    this.highEnd = 24,
+  });
 
   final DateTime date;
+  final double highStart;
+  final double highEnd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1270,10 +1276,14 @@ class _HourlyHeatmap extends ConsumerWidget {
                           message: '${i}时 · ${formatDuration(hours[i])}',
                           child: Container(
                             decoration: BoxDecoration(
-                              color: hours[i] == 0
+                              color: (i < highStart || i >= highEnd)
+                                  // Outside the selected hours → dimmed
                                   ? scheme.surfaceContainerHighest
-                                  : scheme.primary.withValues(
-                                      alpha: 0.2 + 0.8 * (hours[i] / max)),
+                                      .withValues(alpha: 0.6)
+                                  : hours[i] == 0
+                                      ? scheme.surfaceContainerHighest
+                                      : scheme.primary.withValues(
+                                          alpha: 0.2 + 0.8 * (hours[i] / max)),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
