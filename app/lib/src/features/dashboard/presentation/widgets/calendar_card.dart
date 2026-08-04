@@ -409,16 +409,16 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   ],
                 ),
               ],
+              // Add image — small icon button, tooltip on hover
               Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: OutlinedButton.icon(
+                padding: const EdgeInsets.only(top: 2),
+                child: IconButton(
                   onPressed: _uploadImage,
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 15),
-                  label: const Text('添加图片', style: TextStyle(fontSize: 11)),
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                  tooltip: '添加图片（可多选）',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                  padding: EdgeInsets.zero,
                 ),
               ),
             ],

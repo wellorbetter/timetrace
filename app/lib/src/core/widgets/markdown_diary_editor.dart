@@ -188,33 +188,23 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, con) {
-                          final compact = con.maxWidth < 420;
+                          // Icons only — tooltips carry the labels.
                           return SegmentedButton<_EditMode>(
-                            segments: [
+                            segments: const [
                               ButtonSegment(
                                   value: _EditMode.edit,
-                                  icon: const Icon(Icons.edit_outlined,
-                                      size: 13),
-                                  label: compact
-                                      ? null
-                                      : const Text('编辑',
-                                          style: TextStyle(fontSize: 10))),
+                                  icon: Icon(Icons.edit_outlined, size: 15),
+                                  tooltip: '编辑'),
                               ButtonSegment(
                                   value: _EditMode.split,
-                                  icon: const Icon(Icons.vertical_split,
-                                      size: 13),
-                                  label: compact
-                                      ? null
-                                      : const Text('分屏',
-                                          style: TextStyle(fontSize: 10))),
+                                  icon:
+                                      Icon(Icons.vertical_split, size: 15),
+                                  tooltip: '分屏'),
                               ButtonSegment(
                                   value: _EditMode.preview,
-                                  icon: const Icon(Icons.visibility_outlined,
-                                      size: 13),
-                                  label: compact
-                                      ? null
-                                      : const Text('预览',
-                                          style: TextStyle(fontSize: 10))),
+                                  icon: Icon(Icons.visibility_outlined,
+                                      size: 15),
+                                  tooltip: '预览'),
                             ],
                             selected: {_mode},
                             onSelectionChanged: (s) =>
@@ -225,7 +215,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                               tapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                               padding: WidgetStatePropertyAll(
-                                  const EdgeInsets.symmetric(horizontal: 6)),
+                                  const EdgeInsets.symmetric(horizontal: 5)),
                             ),
                           );
                         },
@@ -251,16 +241,15 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                                 : scheme.onPrimaryContainer),
                       ),
                     ),
-                    // ── 发布 ──
-                    FilledButton.tonalIcon(
+                    // ── 发布 (small icon, tooltip on hover) ──
+                    IconButton.filledTonal(
                       onPressed: () => publish(),
-                      icon: const Icon(Icons.publish, size: 14),
-                      label: const Text('发布', style: TextStyle(fontSize: 11)),
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                      icon: const Icon(Icons.publish, size: 16),
+                      tooltip: '发布',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                          minWidth: 30, minHeight: 30),
+                      padding: EdgeInsets.zero,
                     ),
                   ],
                 ),
