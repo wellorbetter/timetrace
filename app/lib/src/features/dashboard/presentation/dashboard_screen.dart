@@ -6,6 +6,7 @@ import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
+import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
@@ -64,6 +65,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   int _carouselIndex = 0;
   DateTime _calSelected = DateTime.now();
   SummaryRange _summaryRange = SummaryRange.day;
+  DiaryRange _diaryRange = DiaryRange.day;
+  DateTime? _diaryCustomStart;
 
   @override
   void dispose() {
@@ -263,7 +266,23 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                                   child: AppChartSection(
                                                     apps: apps,
                                                     selected: _selected,
-                                                    onSelect: _select,
+                                                    // Clicking a bar also jumps
+                                                    // to the apps page (sessions).
+                                                    onSelect: (i) {
+                                                      _select(i);
+                                                      final appsIdx =
+                                                          order.indexOf('apps');
+                                                      if (appsIdx >= 0) {
+                                                        _carouselCtrl
+                                                            .animateToPage(
+                                                          appsIdx,
+                                                          duration: const Duration(
+                                                              milliseconds:
+                                                                  300),
+                                                          curve: Curves.easeOut,
+                                                        );
+                                                      }
+                                                    },
                                                     tall: true,
                                                   ),
                                                 ),
@@ -394,8 +413,65 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
                                         color: scheme.primary)),
+                                const Spacer(),
+                                // Diary range (linked to the journal below)
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: SegmentedButton<DiaryRange>(
+                                    segments: const [
+                                      ButtonSegment(value: DiaryRange.day, label: Text('当天', style: TextStyle(fontSize: 10))),
+                                      ButtonSegment(value: DiaryRange.week, label: Text('一周', style: TextStyle(fontSize: 10))),
+                                      ButtonSegment(value: DiaryRange.month, label: Text('一月', style: TextStyle(fontSize: 10))),
+                                      ButtonSegment(value: DiaryRange.custom, label: Text('自定义', style: TextStyle(fontSize: 10))),
+                                    ],
+                                    selected: {_diaryRange},
+                                    onSelectionChanged: (s) => setState(
+                                        () => _diaryRange = s.first),
+                                    showSelectedIcon: false,
+                                    style: ButtonStyle(
+                                      visualDensity: VisualDensity.compact,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      padding: WidgetStatePropertyAll(
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 6)),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
+                            if (_diaryRange == DiaryRange.custom) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                      _diaryCustomStart == null
+                                          ? '未选起始日'
+                                          : '从 ${calFmt(_diaryCustomStart!)} 起',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: scheme.outline)),
+                                  const SizedBox(width: 8),
+                                  TextButton(
+                                    onPressed: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _calSelected,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime.now(),
+                                        helpText: '选择起始日期（到所选日）',
+                                      );
+                                      if (picked != null) {
+                                        setState(() =>
+                                            _diaryCustomStart = picked);
+                                      }
+                                    },
+                                    child: const Text('选起始日',
+                                        style: TextStyle(fontSize: 11)),
+                                  ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 8),
                             CalendarGrid(
                               selected: _calSelected,
@@ -435,7 +511,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: DiarySection(date: _calSelected),
+                    child: DiarySection(
+                      date: _calSelected,
+                      range: _diaryRange,
+                      customStart: _diaryCustomStart,
+                    ),
                   ),
                 ),
               ],

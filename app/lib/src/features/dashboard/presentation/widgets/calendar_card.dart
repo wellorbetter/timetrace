@@ -17,87 +17,139 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_co
 
 /// Journal section: 日记 header + Markdown editor + image grid + entries
 /// feed for the selected day. Consumes calendarDataProvider directly.
-enum _DiaryRange { day, week, month, custom }
+/// Diary time range — driven by the calendar above (not the diary itself).
+enum DiaryRange { day, week, month, custom }
 
 /// Journal — 朋友圈-style: each entry is an independent post with its own
-/// text + image album (peeking stack). Range selector + publish/edit/delete.
+/// text + image album. Range comes from the calendar; publish/edit/delete.
 class DiarySection extends ConsumerStatefulWidget {
-  const DiarySection({required this.date, super.key});
+  const DiarySection({
+    required this.date,
+    this.range = DiaryRange.day,
+    this.customStart,
+    this.onRangeChanged,
+    this.onCustomStart,
+    super.key,
+  });
 
   /// Anchor date from the calendar — the selected day.
   final DateTime date;
+
+  /// Shared range selected at the calendar level.
+  final DiaryRange range;
+
+  /// Custom range start date (null until picked).
+  final DateTime? customStart;
+
+  final ValueChanged<DiaryRange>? onRangeChanged;
+  final VoidCallback? onCustomStart;
 
   @override
   ConsumerState<DiarySection> createState() => _DiarySectionState();
 }
 
 class _DiarySectionState extends ConsumerState<DiarySection> {
-  _DiaryRange _range = _DiaryRange.day;
-  DateTime? _customStart;
   int? _editingId; // null = writing a NEW post for the selected day
-  List<String> _staged = []; // images uploaded but not yet attached to a post
+  List<String> _staged = []; // new images to attach on publish
+  List<String> _editingImages = []; // the edited entry's existing images
   final Set<String> _collapsedDays = {}; // collapsed day groups
+
+  @override
+  void didUpdateWidget(covariant DiarySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Switching the calendar day must clear any in-progress edit,
+    // staged images and collapsed groups — otherwise "编辑中" sticks.
+    if (!isSameDayDate(oldWidget.date, widget.date)) {
+      _editingId = null;
+      _staged = [];
+      _editingImages = [];
+      _collapsedDays.clear();
+    }
+  }
+
+  /// Date equality helper (time ignored).
+  static bool isSameDayDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  /// Start editing a post: load its existing images into the editor.
+  Future<void> _startEdit(int id) async {
+    if (_editingId == id) {
+      // Toggle off when tapping the same post's edit again.
+      setState(() {
+        _editingId = null;
+        _staged = [];
+        _editingImages = [];
+      });
+      return;
+    }
+    final api = ref.read(apiProvider);
+    final imgs = api.getDiaryImagesForEntry(entryId: id);
+    setState(() {
+      _editingId = id;
+      _staged = [];
+      _editingImages = imgs;
+    });
+  }
 
   (String, String)? _bounds() {
     final d = widget.date;
     String f(DateTime x) => calFmt(x);
-    switch (_range) {
-      case _DiaryRange.day:
+    switch (widget.range) {
+      case DiaryRange.day:
         return (f(d), f(d));
-      case _DiaryRange.week:
+      case DiaryRange.week:
         return (f(d.subtract(const Duration(days: 6))), f(d));
-      case _DiaryRange.month:
+      case DiaryRange.month:
         return (f(DateTime(d.year, d.month, 1)), f(d));
-      case _DiaryRange.custom:
-        final s = _customStart;
+      case DiaryRange.custom:
+        final s = widget.customStart;
         if (s == null) return null;
         return (f(s), f(d));
     }
   }
 
-  Future<void> _pickCustomStart() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: widget.date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: '选择起始日期（到所选日）',
-    );
-    if (picked != null) setState(() => _customStart = picked);
-  }
-
   Future<void> _uploadImage() async {
     try {
-      final result = await FilePicker.pickFiles(type: FileType.image);
+      final result =
+          await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
-      final src = result.files.single.path;
-      if (src == null) return;
       final dir = Platform.environment['APPDATA'] ?? '.';
       final targetDir = Directory('$dir\\TimeTrace\\diary_images');
       targetDir.createSync(recursive: true);
       final dateStr = calFmt(widget.date);
-      final ext = src.split('.').last;
-      final dest =
-          '${targetDir.path}\\${dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      File(src).copySync(dest);
       final api = ref.read(apiProvider);
-      api.addDiaryImage(date: dateStr, path: dest);
-      setState(() => _staged = [..._staged, dest]);
+      final added = <String>[];
+      for (final f in result.files) {
+        final src = f.path;
+        if (src == null) continue;
+        final ext = src.split('.').last;
+        final dest =
+            '${targetDir.path}\\${dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        File(src).copySync(dest);
+        api.addDiaryImage(date: dateStr, path: dest);
+        added.add(dest);
+      }
+      if (mounted) setState(() => _staged = [..._staged, ...added]);
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('diary image upload failed: $e');
     }
   }
 
-  Future<void> _removeStagedImage(String path) async {
+  Future<void> _removeImage(String path) async {
     try {
       final api = ref.read(apiProvider);
       api.removeDiaryImage(path: path);
-      File(path).deleteSync();
-      setState(() => _staged = _staged.where((p) => p != path).toList());
+      try {
+        File(path).deleteSync();
+      } catch (_) {}
+      setState(() {
+        _staged = _staged.where((p) => p != path).toList();
+        _editingImages = _editingImages.where((p) => p != path).toList();
+      });
       ref.invalidate(calendarDataProvider);
     } catch (e) {
-      AppLogger.log('remove staged image failed: $e');
+      AppLogger.log('remove image failed: $e');
     }
   }
 
@@ -128,7 +180,11 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         api.removeDiaryImage(path: p);
       }
       api.deleteDiaryEntry(id: id);
-      if (_editingId == id) setState(() => _editingId = null);
+      if (_editingId == id) setState(() {
+        _editingId = null;
+        _staged = [];
+        _editingImages = [];
+      });
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('delete diary entry failed: $e');
@@ -156,6 +212,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     }
     if (mounted) setState(() {
       _staged = [];
+      _editingImages = [];
       _editingId = null;
     });
     ref.invalidate(calendarDataProvider);
@@ -216,65 +273,28 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Range selector ──
-        LayoutBuilder(
-          builder: (context, con) {
-            final seg = SegmentedButton<_DiaryRange>(
-              segments: const [
-                ButtonSegment(value: _DiaryRange.day, label: Text('当天', style: TextStyle(fontSize: 11))),
-                ButtonSegment(value: _DiaryRange.week, label: Text('一周', style: TextStyle(fontSize: 11))),
-                ButtonSegment(value: _DiaryRange.month, label: Text('一月', style: TextStyle(fontSize: 11))),
-                ButtonSegment(value: _DiaryRange.custom, label: Text('自定义', style: TextStyle(fontSize: 11))),
-              ],
-              selected: {_range},
-              onSelectionChanged: (s) => setState(() => _range = s.first),
-              showSelectedIcon: false,
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(horizontal: 8)),
-              ),
-            );
-            final title = Row(
-              children: [
-                Icon(Icons.edit_note, size: 18, color: scheme.primary),
-                const SizedBox(width: 6),
-                Text('日记',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: scheme.primary)),
-              ],
-            );
-            if (con.maxWidth < 560) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  title,
-                  const SizedBox(height: 4),
-                  seg,
-                ],
-              );
-            }
-            return Row(
-              children: [title, const Spacer(), seg],
-            );
-          },
+        // ── Diary title (range lives at the calendar above) ──
+        Row(
+          children: [
+            Icon(Icons.edit_note, size: 18, color: scheme.primary),
+            const SizedBox(width: 6),
+            Text('日记',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: scheme.primary)),
+            const SizedBox(width: 8),
+            Text(
+              switch (widget.range) {
+                DiaryRange.day => '所选日',
+                DiaryRange.week => '近一周',
+                DiaryRange.month => '本月',
+                DiaryRange.custom => '自定义',
+              },
+              style: TextStyle(fontSize: 11, color: scheme.outline),
+            ),
+          ],
         ),
-        if (_range == _DiaryRange.custom) ...[
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(_customStart == null ? '未选起始日' : '从 ${calFmt(_customStart!)} 起',
-                  style: TextStyle(fontSize: 11, color: scheme.outline)),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: _pickCustomStart,
-                child: const Text('选起始日', style: TextStyle(fontSize: 11)),
-              ),
-            ],
-          ),
-        ],
         const SizedBox(height: 8),
         // ── Editor (new post for selected day, or editing) ──
         Container(
@@ -347,14 +367,14 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     ],
                   ),
                 ),
-              // Staged images (this post's own attachments)
-              if (_staged.isNotEmpty) ...[
+              // Images: edited entry's existing images (removable) + staged new
+              if (_editingImages.isNotEmpty || _staged.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final p in _staged)
+                    for (final p in [..._editingImages, ..._staged])
                       SizedBox(
                         width: 56,
                         height: 56,
@@ -371,7 +391,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                               top: 2,
                               right: 2,
                               child: InkWell(
-                                onTap: () => _removeStagedImage(p),
+                                onTap: () => _removeImage(p),
                                 child: Container(
                                   padding: const EdgeInsets.all(2),
                                   decoration: const BoxDecoration(
@@ -442,10 +462,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                       }
                     }),
                     editingId: _editingId,
-                    onEdit: (id) => setState(() {
-                      _editingId = id;
-                      _staged = [];
-                    }),
+                    onEdit: _startEdit,
                     onDelete: _delete,
                     scheme: scheme,
                   ),

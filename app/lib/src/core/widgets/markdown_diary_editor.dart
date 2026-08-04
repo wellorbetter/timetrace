@@ -151,100 +151,118 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toolbar: format buttons (wrap) | mode switch + status + publish
+          // Toolbar — two rows so the status/publish never crowd the buttons:
+          // row 1 = format buttons (wrap), row 2 = mode switch + status + 发布
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 2,
-                    runSpacing: 2,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _toolbarBtn(Icons.format_bold, '加粗',
-                          () => _apply('**', '**', placeholder: '粗体')),
-                      _toolbarBtn(Icons.format_italic, '斜体',
-                          () => _apply('*', '*', placeholder: '斜体')),
-                      _toolbarBtn(Icons.format_strikethrough, '删除线',
-                          () => _apply('~~', '~~', placeholder: '删除')),
-                      _toolbarBtn(Icons.title, '标题',
-                          () => _apply('## ', '', placeholder: '标题')),
-                      _toolbarBtn(Icons.format_list_bulleted, '列表',
-                          () => _apply('\n- ', '', placeholder: '项目')),
-                      _toolbarBtn(Icons.format_quote, '引用',
-                          () => _apply('\n> ', '', placeholder: '引用')),
-                      _toolbarBtn(Icons.code, '代码',
-                          () => _apply('`', '`', placeholder: '代码')),
-                      _toolbarBtn(Icons.terminal, '代码块',
-                          () => _apply('\n```\n', '\n```')),
-                    ],
-                  ),
+                // Row 1: format buttons
+                Wrap(
+                  spacing: 2,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _toolbarBtn(Icons.format_bold, '加粗',
+                        () => _apply('**', '**', placeholder: '粗体')),
+                    _toolbarBtn(Icons.format_italic, '斜体',
+                        () => _apply('*', '*', placeholder: '斜体')),
+                    _toolbarBtn(Icons.format_strikethrough, '删除线',
+                        () => _apply('~~', '~~', placeholder: '删除')),
+                    _toolbarBtn(Icons.title, '标题',
+                        () => _apply('## ', '', placeholder: '标题')),
+                    _toolbarBtn(Icons.format_list_bulleted, '列表',
+                        () => _apply('\n- ', '', placeholder: '项目')),
+                    _toolbarBtn(Icons.format_quote, '引用',
+                        () => _apply('\n> ', '', placeholder: '引用')),
+                    _toolbarBtn(Icons.code, '代码',
+                        () => _apply('`', '`', placeholder: '代码')),
+                    _toolbarBtn(Icons.terminal, '代码块',
+                        () => _apply('\n```\n', '\n```')),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                // ── Mode switch: 编辑 / 分屏 / 预览 (preview is an OPTION) ──
-                // Narrow: icons only; wide: icons + labels
-                LayoutBuilder(
-                  builder: (context, con) {
-                    final compact = con.maxWidth < 480;
-                    return SegmentedButton<_EditMode>(
-                      segments: [
-                        ButtonSegment(
-                            value: _EditMode.edit,
-                            icon: const Icon(Icons.edit_outlined, size: 14),
-                            label: compact
-                                ? null
-                                : const Text('编辑',
-                                    style: TextStyle(fontSize: 11))),
-                        ButtonSegment(
-                            value: _EditMode.split,
-                            icon: const Icon(Icons.vertical_split, size: 14),
-                            label: compact
-                                ? null
-                                : const Text('分屏',
-                                    style: TextStyle(fontSize: 11))),
-                        ButtonSegment(
-                            value: _EditMode.preview,
-                            icon: const Icon(Icons.visibility_outlined, size: 14),
-                            label: compact
-                                ? null
-                                : const Text('预览',
-                                    style: TextStyle(fontSize: 11))),
-                      ],
-                      selected: {_mode},
-                      onSelectionChanged: (s) =>
-                          setState(() => _mode = s.first),
-                      showSelectedIcon: false,
-                      style: ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: WidgetStatePropertyAll(
-                            const EdgeInsets.symmetric(horizontal: 8)),
+                // Row 2: mode switch + status + publish (VS Code corner style)
+                Row(
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, con) {
+                          final compact = con.maxWidth < 420;
+                          return SegmentedButton<_EditMode>(
+                            segments: [
+                              ButtonSegment(
+                                  value: _EditMode.edit,
+                                  icon: const Icon(Icons.edit_outlined,
+                                      size: 13),
+                                  label: compact
+                                      ? null
+                                      : const Text('编辑',
+                                          style: TextStyle(fontSize: 10))),
+                              ButtonSegment(
+                                  value: _EditMode.split,
+                                  icon: const Icon(Icons.vertical_split,
+                                      size: 13),
+                                  label: compact
+                                      ? null
+                                      : const Text('分屏',
+                                          style: TextStyle(fontSize: 10))),
+                              ButtonSegment(
+                                  value: _EditMode.preview,
+                                  icon: const Icon(Icons.visibility_outlined,
+                                      size: 13),
+                                  label: compact
+                                      ? null
+                                      : const Text('预览',
+                                          style: TextStyle(fontSize: 10))),
+                            ],
+                            selected: {_mode},
+                            onSelectionChanged: (s) =>
+                                setState(() => _mode = s.first),
+                            showSelectedIcon: false,
+                            style: ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              padding: WidgetStatePropertyAll(
+                                  const EdgeInsets.symmetric(horizontal: 6)),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-                // Save status
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text(
-                    _dirty ? '输入中…' : (_saved ? '✓ 草稿已存' : ''),
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: _dirty ? scheme.outline : scheme.primary),
-                  ),
-                ),
-                // ── 发布 (explicit save / publish) ──
-                FilledButton.tonalIcon(
-                  onPressed: () => publish(),
-                  icon: const Icon(Icons.publish, size: 15),
-                  label: const Text('发布', style: TextStyle(fontSize: 12)),
-                  style: FilledButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                    ),
+                    // Save status (compact chip — no overlap with 发布)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _dirty
+                            ? scheme.surfaceContainerHighest
+                            : scheme.primaryContainer.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _dirty ? '输入中' : (_saved ? '✓ 草稿已存' : ''),
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: _dirty
+                                ? scheme.outline
+                                : scheme.onPrimaryContainer),
+                      ),
+                    ),
+                    // ── 发布 ──
+                    FilledButton.tonalIcon(
+                      onPressed: () => publish(),
+                      icon: const Icon(Icons.publish, size: 14),
+                      label: const Text('发布', style: TextStyle(fontSize: 11)),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
