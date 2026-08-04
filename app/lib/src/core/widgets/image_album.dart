@@ -56,8 +56,7 @@ class _ImageAlbumState extends State<ImageAlbum> {
                 : _AlbumMode.grid),
           ),
         ),
-        const SizedBox(height: 2),
-        // Images
+        // Images (tight — no big gap between text and album)
         switch (_mode) {
           _AlbumMode.grid => _GridBody(
               images: images,
@@ -69,15 +68,6 @@ class _ImageAlbumState extends State<ImageAlbum> {
               thumbSize: widget.thumbSize,
               scheme: scheme),
         },
-        // Count BELOW the images (never covering them)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text('×${images.length} 张图片',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: scheme.outline,
-                  fontWeight: FontWeight.w500)),
-        ),
       ],
     );
   }
@@ -156,31 +146,56 @@ class _StackBody extends StatelessWidget {
                 top: 2 + i * 3.0,
                 child: Transform.rotate(
                   angle: (i - (shown.length - 1) / 2) * 0.02,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(shown[i]),
-                        width: thumbSize,
-                        height: thumbSize,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: thumbSize,
-                          height: thumbSize,
-                          color: scheme.surfaceContainerHighest,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(shown[i]),
+                            width: thumbSize,
+                            height: thumbSize,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: thumbSize,
+                              height: thumbSize,
+                              color: scheme.surfaceContainerHighest,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      // Corner badge on the TOPMOST image only — small,
+                      // tucked into the corner (doesn't cover the photo).
+                      if (i == shown.length - 1)
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('×${images.length}',
+                                style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),

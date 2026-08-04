@@ -25,8 +25,7 @@ impl WindowResolver for Win32WindowResolver {
             if pid == 0 { return None; }
 
             let exe_path = get_process_path(pid).unwrap_or_else(|| format!("pid:{}", pid));
-            let display_name = exe_path.rsplit('\\').next().unwrap_or(&exe_path)
-                .trim_end_matches(".exe").to_string();
+            let display_name = display_name_for(&exe_path);
             let title = get_window_title_text(hwnd);
 
             Some(AppInfo::new(exe_path, display_name).with_title(title.unwrap_or_default()))
@@ -34,6 +33,32 @@ impl WindowResolver for Win32WindowResolver {
     }
 
     fn get_window_title(&self, _hwnd: isize) -> Option<String> { None }
+}
+
+/// Friendly display name for a process.
+/// Generic runtimes (java/javaw/python/node/…) all share the SAME exe name,
+/// so we fall back to the exe path's parent directory (like ActivityWatch /
+/// RescueTime do) — e.g. `…\JetBrains\IntelliJ IDEA 2024.1\bin\java.exe`
+/// becomes `IntelliJ IDEA 2024.1`, distinguishing multiple Java apps.
+fn display_name_for(exe_path: &str) -> String {
+    let file = exe_path.rsplit('\\').next().unwrap_or(exe_path);
+    let stem = file.trim_end_matches(".exe");
+    let lower = stem.to_lowercase();
+    let generic = [
+        "java", "javaw", "javaws", "python", "pythonw", "python3", "node",
+        "dotnet", "electron", "chrome", "ruby", "php", "go", "cargo",
+    ];
+    if generic.contains(&lower.as_str()) {
+        let parts: Vec<&str> = exe_path.rsplit('\\').collect();
+        // exe_path\<maybe bin>\<app dir>
+        for p in parts.iter().skip(1) {
+            if !p.eq_ignore_ascii_case("bin") && !p.eq_ignore_ascii_case("bin64") {
+                return (*p).to_string();
+            }
+        }
+        return stem.to_string();
+    }
+    stem.to_string()
 }
 
 unsafe fn get_process_path(pid: u32) -> Option<String> {

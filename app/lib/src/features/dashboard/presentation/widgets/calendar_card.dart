@@ -734,7 +734,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
               ),
             // ── Images: edit = expanded grid with ✕ + add; else 👁 toggle ──
             if (widget.images.isNotEmpty || editing) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               if (editing)
                 _EditImageGrid(
                   images: [..._editImages, ..._newImages],
