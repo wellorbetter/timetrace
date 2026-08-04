@@ -39,35 +39,41 @@ class _ImageAlbumState extends State<ImageAlbum> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Top row: stack ↔ grid toggle pinned right (not over the images)
-        Align(
-          alignment: Alignment.centerRight,
-          child: IconButton(
-            icon: Icon(
-                _mode == _AlbumMode.grid
-                    ? Icons.view_stream_outlined
-                    : Icons.grid_view_outlined,
-                size: 15),
-            tooltip:
-                _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
-                ? _AlbumMode.stack
-                : _AlbumMode.grid),
-          ),
+        // Images + toggle button on the SAME row — the button sits at the
+        // top-right of the images, so it adds no extra height between the
+        // post text and the album.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: switch (_mode) {
+                _AlbumMode.grid => _GridBody(
+                    images: images,
+                    thumbSize: widget.thumbSize,
+                    scheme: scheme),
+                _AlbumMode.stack => _StackBody(
+                    images: images,
+                    maxPeek: widget.maxPeek,
+                    thumbSize: widget.thumbSize,
+                    scheme: scheme),
+              },
+            ),
+            const SizedBox(width: 2),
+            IconButton(
+              icon: Icon(
+                  _mode == _AlbumMode.grid
+                      ? Icons.view_stream_outlined
+                      : Icons.grid_view_outlined,
+                  size: 15),
+              tooltip:
+                  _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
+                  ? _AlbumMode.stack
+                  : _AlbumMode.grid),
+            ),
+          ],
         ),
-        // Images (tight — no big gap between text and album)
-        switch (_mode) {
-          _AlbumMode.grid => _GridBody(
-              images: images,
-              thumbSize: widget.thumbSize,
-              scheme: scheme),
-          _AlbumMode.stack => _StackBody(
-              images: images,
-              maxPeek: widget.maxPeek,
-              thumbSize: widget.thumbSize,
-              scheme: scheme),
-        },
       ],
     );
   }

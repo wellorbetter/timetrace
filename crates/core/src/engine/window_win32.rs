@@ -25,10 +25,10 @@ impl WindowResolver for Win32WindowResolver {
             if pid == 0 { return None; }
 
             let exe_path = get_process_path(pid).unwrap_or_else(|| format!("pid:{}", pid));
-            let display_name = display_name_for(&exe_path);
-            let title = get_window_title_text(hwnd);
+            let title = get_window_title_text(hwnd).unwrap_or_default();
+            let display_name = display_name_for(&exe_path, &title);
 
-            Some(AppInfo::new(exe_path, display_name).with_title(title.unwrap_or_default()))
+            Some(AppInfo::new(exe_path, display_name).with_title(title))
         }
     }
 
@@ -36,11 +36,14 @@ impl WindowResolver for Win32WindowResolver {
 }
 
 /// Friendly display name for a process.
-/// Generic runtimes (java/javaw/python/node/…) all share the SAME exe name,
-/// so we fall back to the exe path's parent directory (like ActivityWatch /
-/// RescueTime do) — e.g. `…\JetBrains\IntelliJ IDEA 2024.1\bin\java.exe`
-/// becomes `IntelliJ IDEA 2024.1`, distinguishing multiple Java apps.
-fn display_name_for(exe_path: &str) -> String {
+/// Priority (matches how ActivityWatch / RescueTime identify apps):
+///  1. non-generic exe file name (msedge → Edge via normalize)
+///  2. generic runtimes (java/javaw/python/node/…) → exe path parent dir,
+///     e.g. `…\JetBrains\IntelliJ IDEA 2024.1\bin\java.exe` → `IntelliJ IDEA 2024.1`
+///  3. if the parent dir is meaningless (jre/jdk/…), fall back to the
+///     window-title keywords (Minecraft Java is javaw.exe from a random
+///     JRE — only the title says “Minecraft”).
+fn display_name_for(exe_path: &str, title: &str) -> String {
     let file = exe_path.rsplit('\\').next().unwrap_or(exe_path);
     let stem = file.trim_end_matches(".exe");
     let lower = stem.to_lowercase();
@@ -50,15 +53,48 @@ fn display_name_for(exe_path: &str) -> String {
     ];
     if generic.contains(&lower.as_str()) {
         let parts: Vec<&str> = exe_path.rsplit('\\').collect();
-        // exe_path\<maybe bin>\<app dir>
         for p in parts.iter().skip(1) {
-            if !p.eq_ignore_ascii_case("bin") && !p.eq_ignore_ascii_case("bin64") {
+            let pl = p.to_lowercase();
+            let meaningless = pl == "bin"
+                || pl == "bin64"
+                || pl.starts_with("jre")
+                || pl.starts_with("jdk")
+                || pl.contains("runtime")
+                || pl == "openjdk"
+                || pl == "windowsapps";
+            if !meaningless {
                 return (*p).to_string();
             }
         }
-        return stem.to_string();
+        // Nothing meaningful in the path → title keywords (Minecraft, …).
+        return app_name_from_title(title).unwrap_or_else(|| stem.to_string());
     }
     stem.to_string()
+}
+
+/// Recognize well-known apps from the window title (works for generic
+/// runtimes like javaw.exe running Minecraft, or UWP hosts).
+fn app_name_from_title(title: &str) -> Option<String> {
+    let t = title.to_lowercase();
+    if t.contains("minecraft") || t.contains("mc ") || t.contains(" mc") {
+        return Some("Minecraft".into());
+    }
+    if t.contains("intellij") || t.contains("idea") {
+        return Some("IntelliJ IDEA".into());
+    }
+    if t.contains("visual studio code") {
+        return Some("VS Code".into());
+    }
+    if t.contains("visual studio") {
+        return Some("Visual Studio".into());
+    }
+    if t.contains("pycharm") {
+        return Some("PyCharm".into());
+    }
+    if t.contains("webstorm") {
+        return Some("WebStorm".into());
+    }
+    None
 }
 
 unsafe fn get_process_path(pid: u32) -> Option<String> {
