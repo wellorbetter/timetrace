@@ -33,10 +33,25 @@ where
         let mut is_paused = false;
         let mut is_idle = false;
         let mut last_heartbeat = Instant::now();
+        let mut last_poll = Instant::now();
 
         loop {
             if stop_rx.try_recv().is_ok() { info!("Monitor stopped"); break; }
             if let Ok(pause) = pause_rx.try_recv() { is_paused = pause; }
+
+            let now = Instant::now();
+            // Sleep/resume detection: when the machine sleeps the thread is
+            // frozen; on resume the poll gap is far larger than the interval.
+            // Reset the dangling session so the whole sleep period is NOT
+            // attributed to whatever app was foreground before sleeping.
+            let gap = now - last_poll;
+            last_poll = now;
+            if gap > poll_interval * 5 {
+                info!("Monitor: sleep gap {gap:?} detected — resetting session");
+                current_app = None;
+                session_start = now;
+                is_idle = false;
+            }
 
             if !is_paused {
                 let foreground = window_resolver.get_foreground_app();

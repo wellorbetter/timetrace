@@ -567,9 +567,25 @@ impl DataStore for SqliteStore {
             }) {
                 for row in rows.flatten() {
                     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&row.0) {
-                        let local = dt.with_timezone(&chrono::Local);
-                        let h = local.hour() as usize;
-                        if h < 24 { hours[h] += row.1; }
+                        let start = dt.with_timezone(&chrono::Local);
+                        let end = start + chrono::Duration::seconds(row.1);
+                        // Split the session across hour buckets so an
+                        // hour never exceeds 60 minutes (was: whole session
+                        // counted into its start hour → e.g. "9时 · 79分").
+                        let mut cur = start;
+                        while cur < end {
+                            let h = cur.hour() as usize;
+                            if h >= 24 { break; }
+                            let next_hour = cur
+                                .with_minute(0)
+                                .and_then(|c| c.with_second(0))
+                                .map(|c| c + chrono::Duration::hours(1))
+                                .unwrap_or(end);
+                            let seg_end = end.min(next_hour);
+                            let seg = (seg_end - cur).num_seconds().max(0);
+                            hours[h] += seg;
+                            cur = next_hour;
+                        }
                     }
                 }
             }

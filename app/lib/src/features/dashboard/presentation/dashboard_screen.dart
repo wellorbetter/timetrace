@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
-import 'package:timetrace_app/src/core/widgets/empty_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';

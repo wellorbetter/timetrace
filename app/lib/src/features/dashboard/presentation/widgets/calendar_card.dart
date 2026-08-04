@@ -6,8 +6,9 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
-import 'package:timetrace_app/src/core/widgets/image_preview.dart';
+import 'package:timetrace_app/src/core/widgets/image_album.dart';
 import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
@@ -516,13 +517,12 @@ class _PostCardState extends State<_PostCard> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13, height: 1.5)),
               ),
-              // Own images — 相册堆叠 (peeking corners), tap to preview
+              // Own images — reusable album (stack / grid / hide + gallery)
               if (widget.images.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _AlbumStack(
+                ImageAlbum(
                   images: widget.images,
-                  scheme: widget.scheme,
-                  expanded: widget.expanded,
+                  title: '${widget.images.length} 张图片',
                 ),
               ],
               // Expand hint
@@ -542,116 +542,6 @@ class _PostCardState extends State<_PostCard> {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 相册堆叠：后面的图露出边角（peeking corners）；展开时并排成网格。
-class _AlbumStack extends StatelessWidget {
-  const _AlbumStack({
-    required this.images,
-    required this.scheme,
-    this.expanded = false,
-  });
-
-  final List<String> images;
-  final ColorScheme scheme;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    if (expanded) {
-      // Grid of all images
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final p in images)
-            GestureDetector(
-              onTap: () => showImagePreview(context, p),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(
-                  File(p),
-                  width: 84,
-                  height: 84,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 84,
-                    height: 84,
-                    color: scheme.surfaceContainerHighest,
-                    child: const Icon(Icons.broken_image,
-                        size: 20, color: Colors.grey),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-    // Collapsed: peeking stack (each image reveals a corner)
-    final shown = images.take(4).toList();
-    final over = images.length - shown.length;
-    return GestureDetector(
-      onTap: () => showImagePreview(context, images.first),
-      child: SizedBox(
-        height: 76,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            for (var i = 0; i < shown.length; i++)
-              Positioned(
-                left: i * 14.0,
-                top: i * 4.0,
-                child: Transform.rotate(
-                  angle: (i - (shown.length - 1) / 2) * 0.02,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(shown[i]),
-                        width: 76,
-                        height: 76,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 76,
-                          height: 76,
-                          color: scheme.surfaceContainerHighest,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (over > 0)
-              Positioned(
-                left: shown.length * 14.0 + 4,
-                top: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('+$over',
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white)),
-                ),
-              ),
-          ],
         ),
       ),
     );
@@ -1006,7 +896,7 @@ class _HourlyHeatmap extends ConsumerWidget {
                       child: Padding(
                         padding: const EdgeInsets.only(right: 1),
                         child: Tooltip(
-                          message: '${i}时 · ${_mm(hours[i])}',
+                          message: '${i}时 · ${formatDuration(hours[i])}',
                           child: Container(
                             decoration: BoxDecoration(
                               color: hours[i] == 0
@@ -1041,8 +931,4 @@ class _HourlyHeatmap extends ConsumerWidget {
     );
   }
 
-  String _mm(int secs) {
-    final m = secs ~/ 60;
-    return m > 0 ? '${m}分' : '0分';
-  }
 }
