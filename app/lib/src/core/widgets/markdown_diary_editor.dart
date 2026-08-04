@@ -138,6 +138,29 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     );
   }
 
+  /// Unboxed mode icons (编辑/分屏/预览) — the selected one is highlighted.
+  List<Widget> _modeIcons(ColorScheme scheme) {
+    Widget item(_EditMode m, IconData icon, String tip) => IconButton(
+          icon: Icon(icon, size: 16),
+          tooltip: tip,
+          visualDensity: VisualDensity.compact,
+          onPressed: () => setState(() => _mode = m),
+          style: IconButton.styleFrom(
+            backgroundColor: _mode == m
+                ? scheme.primaryContainer
+                : Colors.transparent,
+            foregroundColor: _mode == m
+                ? scheme.onPrimaryContainer
+                : scheme.onSurfaceVariant,
+          ),
+        );
+    return [
+      item(_EditMode.edit, Icons.edit_outlined, '编辑'),
+      item(_EditMode.split, Icons.vertical_split, '分屏'),
+      item(_EditMode.preview, Icons.visibility_outlined, '预览'),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -178,32 +201,8 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 _toolbarBtn(Icons.terminal, '代码块',
                     () => _apply('\n```\n', '\n```')),
                 const SizedBox(width: 4),
-                // Mode switch — icons only, tooltips carry the labels
-                SegmentedButton<_EditMode>(
-                  segments: const [
-                    ButtonSegment(
-                        value: _EditMode.edit,
-                        icon: Icon(Icons.edit_outlined, size: 15),
-                        tooltip: '编辑'),
-                    ButtonSegment(
-                        value: _EditMode.split,
-                        icon: Icon(Icons.vertical_split, size: 15),
-                        tooltip: '分屏'),
-                    ButtonSegment(
-                        value: _EditMode.preview,
-                        icon: Icon(Icons.visibility_outlined, size: 15),
-                        tooltip: '预览'),
-                  ],
-                  selected: {_mode},
-                  onSelectionChanged: (s) => setState(() => _mode = s.first),
-                  showSelectedIcon: false,
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: WidgetStatePropertyAll(
-                        const EdgeInsets.symmetric(horizontal: 5)),
-                  ),
-                ),
+                // Mode switch — no box; selected icon gets a soft highlight.
+                ..._modeIcons(scheme),
                 const SizedBox(width: 4),
                 // Save status (compact chip)
                 Container(

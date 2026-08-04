@@ -235,10 +235,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Diary title (range lives at the calendar above) ──
+        // ── Diary: single title row (title · date · range label) ──
         Row(
           children: [
-            Icon(Icons.edit_note, size: 18, color: scheme.primary),
+            Icon(Icons.edit_note, size: 16, color: scheme.primary),
             const SizedBox(width: 6),
             Text('日记',
                 style: TextStyle(
@@ -246,6 +246,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     fontSize: 14,
                     color: scheme.primary)),
             const SizedBox(width: 8),
+            Text('· ${calFmt(widget.date)}',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            const Spacer(),
             Text(
               switch (widget.range) {
                 DiaryRange.day => '所选日',
@@ -258,31 +261,23 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           ],
         ),
         const SizedBox(height: 8),
-        // ── Editor (new post for selected day, or editing) ──
+        // ── Editor: tone + soft shadow instead of a hard border ──
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Text('写新日记',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF635BFF))),
-                  const SizedBox(width: 8),
-                  Text(calFmt(widget.date),
-                      style: TextStyle(fontSize: 11, color: scheme.outline)),
-                ],
-              ),
-              const SizedBox(height: 4),
               MarkdownDiaryEditor(
                 key: ValueKey('diary-${calFmt(widget.date)}'),
                 initialText: draft ?? '',
@@ -657,15 +652,17 @@ class _PostCardState extends ConsumerState<_PostCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
       color: widget.scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-            color: editing
-                ? widget.scheme.primary.withValues(alpha: 0.6)
-                : widget.scheme.outlineVariant.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(14),
+        side: editing
+            ? BorderSide(
+                color: widget.scheme.primary.withValues(alpha: 0.6))
+            : BorderSide.none,
       ),
+      elevation: editing ? 2 : 1,
+      shadowColor:
+          editing ? widget.scheme.primary.withValues(alpha: 0.2) : null,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
         child: Column(
@@ -757,17 +754,14 @@ class _PostCardState extends ConsumerState<_PostCard> {
               child: editing
                   ? Row(
                       children: [
-                        FilledButton.tonal(
-                          onPressed: _save,
-                          style: FilledButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text('保存',
-                              style: TextStyle(fontSize: 12)),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 15),
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onDelete,
                         ),
-                        const SizedBox(width: 6),
+                        const Spacer(),
+                        // Save/cancel on the RIGHT — same side as ✎
                         TextButton(
                           onPressed: widget.onEdit, // toggle off
                           style: TextButton.styleFrom(
@@ -777,12 +771,16 @@ class _PostCardState extends ConsumerState<_PostCard> {
                           child: const Text('取消',
                               style: TextStyle(fontSize: 12)),
                         ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 15),
-                          tooltip: '删除',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: widget.onDelete,
+                        const SizedBox(width: 4),
+                        FilledButton.tonal(
+                          onPressed: _save,
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('保存',
+                              style: TextStyle(fontSize: 12)),
                         ),
                       ],
                     )

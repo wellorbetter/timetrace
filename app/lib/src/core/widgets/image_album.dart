@@ -36,43 +36,40 @@ class _ImageAlbumState extends State<ImageAlbum> {
     final images = widget.images;
     if (images.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        // Header row: count + mode toggle + hide
-        Row(
-          children: [
-            Icon(Icons.photo_library_outlined, size: 14, color: scheme.primary),
-            const SizedBox(width: 4),
-            Text(widget.title ?? '${images.length} 张图片',
-                style: TextStyle(fontSize: 11, color: scheme.outline)),
-            const Spacer(),
-            // Expand interaction lives here (stack ↔ grid); hiding is the
-            // parent's 👁 toggle, so no hide button inside the album.
-            IconButton(
-              icon: Icon(
-                  _mode == _AlbumMode.grid
-                      ? Icons.view_stream_outlined
-                      : Icons.grid_view_outlined,
-                  size: 15),
-              tooltip: _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
-                  ? _AlbumMode.stack
-                  : _AlbumMode.grid),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        // Body with slide/fade animation between modes
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+        Padding(
+          padding: const EdgeInsets.only(top: 22),
           child: switch (_mode) {
-            _AlbumMode.grid => _GridBody(images: images, thumbSize: widget.thumbSize, scheme: scheme),
-            _AlbumMode.stack => _StackBody(images: images, maxPeek: widget.maxPeek, thumbSize: widget.thumbSize, scheme: scheme),
+            _AlbumMode.grid => _GridBody(
+                images: images,
+                thumbSize: widget.thumbSize,
+                scheme: scheme),
+            _AlbumMode.stack => _StackBody(
+                images: images,
+                maxPeek: widget.maxPeek,
+                thumbSize: widget.thumbSize,
+                scheme: scheme),
           },
+        ),
+        // Floating corner toggle: stack ↔ grid (no header row, no box)
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton(
+            icon: Icon(
+                _mode == _AlbumMode.grid
+                    ? Icons.view_stream_outlined
+                    : Icons.grid_view_outlined,
+                size: 15),
+            tooltip:
+                _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
+                ? _AlbumMode.stack
+                : _AlbumMode.grid),
+          ),
         ),
       ],
     );
@@ -138,7 +135,6 @@ class _StackBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = images.take(maxPeek).toList();
-    final over = images.length - shown.length;
     final step = thumbSize * 0.18;
     return GestureDetector(
       onTap: () => showImageGallery(context, images),
@@ -181,20 +177,24 @@ class _StackBody extends StatelessWidget {
                   ),
                 ),
               ),
-            if (over > 0)
-              Positioned(
-                left: shown.length * step + 4,
-                top: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('+$over',
-                      style: const TextStyle(fontSize: 11, color: Colors.white)),
+            // ×N count badge on the bottom-right corner of the stack
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: Text('×${images.length}',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600)),
               ),
+            ),
           ],
         ),
       ),
