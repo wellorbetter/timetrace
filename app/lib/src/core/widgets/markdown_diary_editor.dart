@@ -168,46 +168,58 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toolbar — ONE row: format buttons, then mode switch, status,
-          // publish. Wrap flows to a second line on narrow widths instead
-          // of overlapping.
+          // Toolbar: format/mode on the left, draft-status + 发布 pinned right.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Wrap(
-              spacing: 2,
-              runSpacing: 2,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _toolbarBtn(Icons.format_bold, '加粗',
-                    () => _apply('**', '**', placeholder: '粗体')),
-                _toolbarBtn(Icons.format_italic, '斜体',
-                    () => _apply('*', '*', placeholder: '斜体')),
-                _toolbarBtn(Icons.format_strikethrough, '删除线',
-                    () => _apply('~~', '~~', placeholder: '删除')),
-                _toolbarBtn(Icons.title, '标题',
-                    () => _apply('## ', '', placeholder: '标题')),
-                _toolbarBtn(Icons.format_list_bulleted, '列表',
-                    () => _apply('\n- ', '', placeholder: '项目')),
-                _toolbarBtn(Icons.format_quote, '引用',
-                    () => _apply('\n> ', '', placeholder: '引用')),
-                _toolbarBtn(Icons.code, '代码',
-                    () => _apply('`', '`', placeholder: '代码')),
-                _toolbarBtn(Icons.terminal, '代码块',
-                    () => _apply('\n```\n', '\n```')),
-                const SizedBox(width: 4),
-                // Mode switch — no box; selected icon gets a soft highlight.
-                ..._modeIcons(scheme),
-                const SizedBox(width: 4),
-                // Save status (compact chip)
+                // Left: format buttons (wrap) + unboxed mode icons
+                Expanded(
+                  child: Wrap(
+                    spacing: 2,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _toolbarBtn(Icons.format_bold, '加粗',
+                          () => _apply('**', '**', placeholder: '粗体')),
+                      _toolbarBtn(Icons.format_italic, '斜体',
+                          () => _apply('*', '*', placeholder: '斜体')),
+                      _toolbarBtn(Icons.format_strikethrough, '删除线',
+                          () => _apply('~~', '~~', placeholder: '删除')),
+                      _toolbarBtn(Icons.title, '标题',
+                          () => _apply('## ', '', placeholder: '标题')),
+                      _toolbarBtn(Icons.format_list_bulleted, '列表',
+                          () => _apply('\n- ', '', placeholder: '项目')),
+                      _toolbarBtn(Icons.format_quote, '引用',
+                          () => _apply('\n> ', '', placeholder: '引用')),
+                      _toolbarBtn(Icons.code, '代码',
+                          () => _apply('`', '`', placeholder: '代码')),
+                      _toolbarBtn(Icons.terminal, '代码块',
+                          () => _apply('\n```\n', '\n```')),
+                      const SizedBox(width: 4),
+                      // Mode switch — no box; selected icon highlighted.
+                      ..._modeIcons(scheme),
+                    ],
+                  ),
+                ),
+                // Right: draft status (bigger text) + 发布
                 Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: _dirty
                         ? scheme.surfaceContainerHighest
@@ -217,13 +229,13 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                   child: Text(
                     _dirty ? '输入中' : (_saved ? '✓ 草稿已存' : ''),
                     style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                         color: _dirty
                             ? scheme.outline
                             : scheme.onPrimaryContainer),
                   ),
                 ),
-                // 发布 (small icon, tooltip)
                 IconButton.filledTonal(
                   onPressed: () => publish(),
                   icon: const Icon(Icons.publish, size: 16),

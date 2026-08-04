@@ -505,15 +505,14 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 ),
                 const SizedBox(height: 12),
                 // ── Journal (selected day) ──
-                Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: DiarySection(
-                      date: _calSelected,
-                      range: _diaryRange,
-                      customStart: _diaryCustomStart,
-                    ),
+                // Diary section — no outer Card (avoids card-in-card);
+                // posts/editor carry their own tone+shadow.
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: DiarySection(
+                    date: _calSelected,
+                    range: _diaryRange,
+                    customStart: _diaryCustomStart,
                   ),
                 ),
               ],

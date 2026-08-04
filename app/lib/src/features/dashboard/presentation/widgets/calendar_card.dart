@@ -652,17 +652,18 @@ class _PostCardState extends ConsumerState<_PostCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: widget.scheme.surfaceContainerLow,
+      // Unified effect: tone + soft shadow; editing uses a different tint.
+      elevation: editing ? 3 : 2,
+      color: editing
+          ? widget.scheme.primaryContainer.withValues(alpha: 0.5)
+          : widget.scheme.surfaceContainerLow,
+      shadowColor: editing
+          ? widget.scheme.primary.withValues(alpha: 0.35)
+          : Colors.black.withValues(alpha: 0.18),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: editing
-            ? BorderSide(
-                color: widget.scheme.primary.withValues(alpha: 0.6))
-            : BorderSide.none,
+        side: BorderSide.none,
       ),
-      elevation: editing ? 2 : 1,
-      shadowColor:
-          editing ? widget.scheme.primary.withValues(alpha: 0.2) : null,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
         child: Column(
