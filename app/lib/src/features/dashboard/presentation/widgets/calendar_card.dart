@@ -51,7 +51,6 @@ class DiarySection extends ConsumerStatefulWidget {
 class _DiarySectionState extends ConsumerState<DiarySection> {
   int? _editingId; // null = writing a NEW post for the selected day
   List<String> _staged = []; // new images to attach on publish
-  List<String> _editingImages = []; // the edited entry's existing images
   final Set<String> _collapsedDays = {}; // collapsed day groups
 
   @override
@@ -62,7 +61,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     if (!isSameDayDate(oldWidget.date, widget.date)) {
       _editingId = null;
       _staged = [];
-      _editingImages = [];
       _collapsedDays.clear();
     }
   }
@@ -71,24 +69,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
   static bool isSameDayDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  /// Start editing a post: load its existing images into the editor.
-  Future<void> _startEdit(int id) async {
-    if (_editingId == id) {
-      // Toggle off when tapping the same post's edit again.
-      setState(() {
-        _editingId = null;
-        _staged = [];
-        _editingImages = [];
-      });
-      return;
-    }
-    final api = ref.read(apiProvider);
-    final imgs = api.getDiaryImagesForEntry(entryId: id);
-    setState(() {
-      _editingId = id;
-      _staged = [];
-      _editingImages = imgs;
-    });
+  /// Toggle inline editing for a post (images are managed inside the card).
+  void _startEdit(int id) {
+    setState(() => _editingId = _editingId == id ? null : id);
   }
 
   (String, String)? _bounds() {
@@ -136,20 +119,17 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     }
   }
 
-  Future<void> _removeImage(String path) async {
+  Future<void> _removeStaged(String path) async {
     try {
       final api = ref.read(apiProvider);
       api.removeDiaryImage(path: path);
       try {
         File(path).deleteSync();
       } catch (_) {}
-      setState(() {
-        _staged = _staged.where((p) => p != path).toList();
-        _editingImages = _editingImages.where((p) => p != path).toList();
-      });
+      setState(() => _staged = _staged.where((p) => p != path).toList());
       ref.invalidate(calendarDataProvider);
     } catch (e) {
-      AppLogger.log('remove image failed: $e');
+      AppLogger.log('remove staged image failed: $e');
     }
   }
 
@@ -183,7 +163,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       if (_editingId == id) setState(() {
         _editingId = null;
         _staged = [];
-        _editingImages = [];
       });
       ref.invalidate(calendarDataProvider);
     } catch (e) {
@@ -196,13 +175,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
   Future<void> _publish(String text) async {
     if (text.trim().isEmpty) return;
     final api = ref.read(apiProvider);
-    int id;
-    if (_editingId != null) {
-      api.updateDiaryEntry(id: _editingId!, content: text);
-      id = _editingId!;
-    } else {
-      id = api.publishDiary(date: calFmt(widget.date), content: text);
-    }
+    final id = api.publishDiary(date: calFmt(widget.date), content: text);
     for (final p in _staged) {
       try {
         api.setDiaryImageEntry(path: p, entryId: id);
@@ -210,24 +183,16 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         AppLogger.log('link image failed: $e');
       }
     }
-    if (mounted) setState(() {
-      _staged = [];
-      _editingImages = [];
-      _editingId = null;
-    });
+    if (mounted) setState(() => _staged = []);
     ref.invalidate(calendarDataProvider);
     ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
   }
 
-  /// Autosave (debounced): new post → draft for the day; editing → live update.
+  /// Autosave (debounced): new post → draft for the day.
   Future<void> _autosave(String text) async {
     final api = ref.read(apiProvider);
-    if (_editingId != null) {
-      api.updateDiaryEntry(id: _editingId!, content: text);
-    } else {
-      api.saveDiaryDraft(date: calFmt(widget.date), content: text);
-      ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
-    }
+    api.saveDiaryDraft(date: calFmt(widget.date), content: text);
+    ref.invalidate(diaryDraftProvider(calFmt(widget.date)));
     ref.invalidate(calendarDataProvider);
   }
 
@@ -266,9 +231,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             .where((e) =>
                 e.date.compareTo(bounds.$1) >= 0 && e.date.compareTo(bounds.$2) <= 0)
             .toList();
-    final editing = _editingId == null
-        ? null
-        : all.where((e) => e.id == _editingId).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,26 +272,20 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             children: [
               Row(
                 children: [
-                  Text(_editingId == null ? '写新日记' : '编辑日记',
+                  const Text('写新日记',
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: scheme.primary)),
+                          color: Color(0xFF635BFF))),
                   const SizedBox(width: 8),
                   Text(calFmt(widget.date),
                       style: TextStyle(fontSize: 11, color: scheme.outline)),
-                  const Spacer(),
-                  if (_editingId != null)
-                    TextButton(
-                      onPressed: () => setState(() => _editingId = null),
-                      child: const Text('取消编辑', style: TextStyle(fontSize: 11)),
-                    ),
                 ],
               ),
               const SizedBox(height: 4),
               MarkdownDiaryEditor(
-                key: ValueKey('diary-${calFmt(widget.date)}-$_editingId'),
-                initialText: editing?.content ?? draft ?? '',
+                key: ValueKey('diary-${calFmt(widget.date)}'),
+                initialText: draft ?? '',
                 maxLines: 4,
                 onAutoSave: _autosave,
                 onPublish: _publish,
@@ -367,14 +323,14 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     ],
                   ),
                 ),
-              // Images: edited entry's existing images (removable) + staged new
-              if (_editingImages.isNotEmpty || _staged.isNotEmpty) ...[
+              // Staged images for the new post (removable)
+              if (_staged.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final p in [..._editingImages, ..._staged])
+                    for (final p in _staged)
                       SizedBox(
                         width: 56,
                         height: 56,
@@ -391,7 +347,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                               top: 2,
                               right: 2,
                               child: InkWell(
-                                onTap: () => _removeImage(p),
+                                onTap: () => _removeStaged(p),
                                 child: Container(
                                   padding: const EdgeInsets.all(2),
                                   decoration: const BoxDecoration(
@@ -574,7 +530,10 @@ class _DayGroup extends StatelessWidget {
 
 /// One diary post: text + its own images, each with an 👁 toggle
 /// (visibility / visibility_off) — hide/show independently.
-class _PostCard extends StatefulWidget {
+/// One diary post (朋友圈): text + own images. Tapping ✎ edits INLINE —
+/// text becomes a field, images expand as a grid with per-image ✕ and a
+/// trailing + to add more. 👁 toggles hide/show when not editing.
+class _PostCard extends ConsumerStatefulWidget {
   const _PostCard({
     required this.id,
     required this.dateStr,
@@ -596,21 +555,97 @@ class _PostCard extends StatefulWidget {
   final ColorScheme scheme;
 
   @override
-  State<_PostCard> createState() => _PostCardState();
+  ConsumerState<_PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<_PostCard> {
+class _PostCardState extends ConsumerState<_PostCard> {
   bool _textVisible = true;
   bool _imagesVisible = true;
+  late TextEditingController _editCtrl;
+  List<String> _editImages = []; // existing images (removable while editing)
+  List<String> _newImages = []; // uploaded during this edit session
+
+  @override
+  void initState() {
+    super.initState();
+    _editCtrl = TextEditingController(text: widget.content);
+    _editImages = List.of(widget.images);
+  }
 
   @override
   void didUpdateWidget(covariant _PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset visibility when switching to another post.
     if (oldWidget.id != widget.id) {
       _textVisible = true;
       _imagesVisible = true;
     }
+    // Entering edit mode: snapshot images for inline management.
+    if (widget.editing && !oldWidget.editing) {
+      _editCtrl.text = widget.content;
+      _editImages = List.of(widget.images);
+      _newImages = [];
+    }
+    // Exiting edit mode (saved/cancelled elsewhere): reset new additions.
+    if (!widget.editing && oldWidget.editing) {
+      _newImages = [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _editCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _removeEditImage(String path) async {
+    final api = ref.read(apiProvider);
+    api.removeDiaryImage(path: path);
+    try {
+      File(path).deleteSync();
+    } catch (_) {}
+    setState(() => _editImages = _editImages.where((p) => p != path).toList());
+    ref.invalidate(calendarDataProvider);
+  }
+
+  Future<void> _addImages() async {
+    try {
+      final result =
+          await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
+      if (result == null || result.files.isEmpty) return;
+      final dir = Platform.environment['APPDATA'] ?? '.';
+      final targetDir = Directory('$dir\\TimeTrace\\diary_images');
+      targetDir.createSync(recursive: true);
+      final api = ref.read(apiProvider);
+      final added = <String>[];
+      for (final f in result.files) {
+        final src = f.path;
+        if (src == null) continue;
+        final ext = src.split('.').last;
+        final dest =
+            '${targetDir.path}\\${widget.dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        File(src).copySync(dest);
+        api.addDiaryImage(date: widget.dateStr, path: dest);
+        added.add(dest);
+      }
+      setState(() => _newImages = [..._newImages, ...added]);
+      ref.invalidate(calendarDataProvider);
+    } catch (e) {
+      AppLogger.log('add images to post failed: $e');
+    }
+  }
+
+  Future<void> _save() async {
+    final api = ref.read(apiProvider);
+    api.updateDiaryEntry(id: widget.id, content: _editCtrl.text);
+    for (final p in _newImages) {
+      try {
+        api.setDiaryImageEntry(path: p, entryId: widget.id);
+      } catch (e) {
+        AppLogger.log('link image failed: $e');
+      }
+    }
+    ref.invalidate(calendarDataProvider);
+    if (mounted) widget.onEdit(); // toggles edit off (same id)
   }
 
   @override
@@ -618,6 +653,7 @@ class _PostCardState extends State<_PostCard> {
     final firstLine = widget.content
         .split('\n')
         .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    final editing = widget.editing;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -626,7 +662,7 @@ class _PostCardState extends State<_PostCard> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-            color: widget.editing
+            color: editing
                 ? widget.scheme.primary.withValues(alpha: 0.6)
                 : widget.scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
@@ -635,111 +671,242 @@ class _PostCardState extends State<_PostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Text (👁 toggle)
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              child: _textVisible
-                  ? (widget.content.trim().isEmpty
-                      ? Text('(无文字)',
-                          style: TextStyle(
-                              fontSize: 12, color: widget.scheme.outline))
-                      : MarkdownBody(
-                          data: widget.content,
-                          selectable: true,
-                          styleSheet: MarkdownStyleSheet(
-                            p: const TextStyle(fontSize: 13, height: 1.6),
-                            h1: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: widget.scheme.onSurface),
-                            h2: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: widget.scheme.onSurface),
-                            code: TextStyle(
-                                fontSize: 11,
-                                color: widget.scheme.primary),
-                          ),
-                        ))
-                  : Text(firstLine.isEmpty ? '内容已隐藏' : '内容已隐藏 · $firstLine',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                          color: widget.scheme.outline)),
-            ),
-            // Images (👁 toggle) — reusable album component
-            if (widget.images.isNotEmpty) ...[
-              const SizedBox(height: 8),
+            // ── Text: inline field while editing, 👁 toggle otherwise ──
+            if (editing)
+              TextField(
+                controller: _editCtrl,
+                minLines: 2,
+                maxLines: 10,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.all(8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  hintText: '写点什么…',
+                  hintStyle: TextStyle(
+                      fontSize: 12, color: widget.scheme.outline),
+                ),
+                style: const TextStyle(fontSize: 13, height: 1.5),
+              )
+            else
               AnimatedSize(
-                duration: const Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
-                child: _imagesVisible
-                    ? ImageAlbum(
-                        images: widget.images,
-                        title: '${widget.images.length} 张图片',
-                      )
-                    : Text('图片已隐藏',
+                child: _textVisible
+                    ? (widget.content.trim().isEmpty
+                        ? Text('(无文字)',
+                            style: TextStyle(
+                                fontSize: 12, color: widget.scheme.outline))
+                        : MarkdownBody(
+                            data: widget.content,
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(fontSize: 13, height: 1.6),
+                              h1: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.scheme.onSurface),
+                              h2: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.scheme.onSurface),
+                              code: TextStyle(
+                                  fontSize: 11,
+                                  color: widget.scheme.primary),
+                            ),
+                          ))
+                    : Text(
+                        firstLine.isEmpty ? '内容已隐藏' : '内容已隐藏 · $firstLine',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 12,
                             fontStyle: FontStyle.italic,
                             color: widget.scheme.outline)),
               ),
+            // ── Images: edit = expanded grid with ✕ + add; else 👁 toggle ──
+            if (widget.images.isNotEmpty || editing) ...[
+              const SizedBox(height: 8),
+              if (editing)
+                _EditImageGrid(
+                  images: [..._editImages, ..._newImages],
+                  onRemove: _removeEditImage,
+                  onAdd: _addImages,
+                  scheme: widget.scheme,
+                )
+              else
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  child: _imagesVisible
+                      ? ImageAlbum(
+                          images: widget.images,
+                          title: '${widget.images.length} 张图片',
+                        )
+                      : Text('图片已隐藏',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: widget.scheme.outline)),
+                ),
             ],
-            // Action row: 👁 text / 👁 images / edit / delete
+            // ── Actions ──
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                        _textVisible
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: 16),
-                    tooltip: _textVisible ? '隐藏文字' : '显示文字',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () =>
-                        setState(() => _textVisible = !_textVisible),
-                  ),
-                  if (widget.images.isNotEmpty)
-                    IconButton(
-                      icon: Icon(
-                          _imagesVisible
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          size: 16),
-                      tooltip: _imagesVisible ? '隐藏图片' : '显示图片',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () =>
-                          setState(() => _imagesVisible = !_imagesVisible),
+              child: editing
+                  ? Row(
+                      children: [
+                        FilledButton.tonal(
+                          onPressed: _save,
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('保存',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 6),
+                        TextButton(
+                          onPressed: widget.onEdit, // toggle off
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('取消',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 15),
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onDelete,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                              _textVisible
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 16),
+                          tooltip: _textVisible ? '隐藏文字' : '显示文字',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => setState(
+                              () => _textVisible = !_textVisible),
+                        ),
+                        if (widget.images.isNotEmpty)
+                          IconButton(
+                            icon: Icon(
+                                _imagesVisible
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 16),
+                            tooltip: _imagesVisible ? '隐藏图片' : '显示图片',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(
+                                () => _imagesVisible = !_imagesVisible),
+                          ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 15),
+                          tooltip: '编辑',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onEdit,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 15),
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onDelete,
+                        ),
+                      ],
                     ),
-                  const Spacer(),
-                  if (widget.editing)
-                    Text('编辑中',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: widget.scheme.primary)),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 15),
-                    tooltip: '编辑',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: widget.onEdit,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 15),
-                    tooltip: '删除',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: widget.onDelete,
-                  ),
-                ],
-              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Editing image grid: expanded thumbnails with per-image ✕ + trailing add.
+class _EditImageGrid extends StatelessWidget {
+  const _EditImageGrid({
+    required this.images,
+    required this.onRemove,
+    required this.onAdd,
+    required this.scheme,
+  });
+
+  final List<String> images;
+  final ValueChanged<String> onRemove;
+  final VoidCallback onAdd;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final p in images)
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(File(p), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                            color: scheme.surfaceContainerHighest,
+                            child: const Icon(Icons.broken_image,
+                                size: 16, color: Colors.grey),
+                          )),
+                ),
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: InkWell(
+                    onTap: () => onRemove(p),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child:
+                          const Icon(Icons.close, size: 11, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Add-more tile
+        InkWell(
+          onTap: onAdd,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+              border:
+                  Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+            ),
+            child: Icon(Icons.add, size: 22, color: scheme.primary),
+          ),
+        ),
+      ],
     );
   }
 }

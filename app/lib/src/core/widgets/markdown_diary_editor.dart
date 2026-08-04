@@ -151,107 +151,88 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toolbar — two rows so the status/publish never crowd the buttons:
-          // row 1 = format buttons (wrap), row 2 = mode switch + status + 发布
+          // Toolbar — ONE row: format buttons, then mode switch, status,
+          // publish. Wrap flows to a second line on narrow widths instead
+          // of overlapping.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Wrap(
+              spacing: 2,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                // Row 1: format buttons
-                Wrap(
-                  spacing: 2,
-                  runSpacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _toolbarBtn(Icons.format_bold, '加粗',
-                        () => _apply('**', '**', placeholder: '粗体')),
-                    _toolbarBtn(Icons.format_italic, '斜体',
-                        () => _apply('*', '*', placeholder: '斜体')),
-                    _toolbarBtn(Icons.format_strikethrough, '删除线',
-                        () => _apply('~~', '~~', placeholder: '删除')),
-                    _toolbarBtn(Icons.title, '标题',
-                        () => _apply('## ', '', placeholder: '标题')),
-                    _toolbarBtn(Icons.format_list_bulleted, '列表',
-                        () => _apply('\n- ', '', placeholder: '项目')),
-                    _toolbarBtn(Icons.format_quote, '引用',
-                        () => _apply('\n> ', '', placeholder: '引用')),
-                    _toolbarBtn(Icons.code, '代码',
-                        () => _apply('`', '`', placeholder: '代码')),
-                    _toolbarBtn(Icons.terminal, '代码块',
-                        () => _apply('\n```\n', '\n```')),
+                _toolbarBtn(Icons.format_bold, '加粗',
+                    () => _apply('**', '**', placeholder: '粗体')),
+                _toolbarBtn(Icons.format_italic, '斜体',
+                    () => _apply('*', '*', placeholder: '斜体')),
+                _toolbarBtn(Icons.format_strikethrough, '删除线',
+                    () => _apply('~~', '~~', placeholder: '删除')),
+                _toolbarBtn(Icons.title, '标题',
+                    () => _apply('## ', '', placeholder: '标题')),
+                _toolbarBtn(Icons.format_list_bulleted, '列表',
+                    () => _apply('\n- ', '', placeholder: '项目')),
+                _toolbarBtn(Icons.format_quote, '引用',
+                    () => _apply('\n> ', '', placeholder: '引用')),
+                _toolbarBtn(Icons.code, '代码',
+                    () => _apply('`', '`', placeholder: '代码')),
+                _toolbarBtn(Icons.terminal, '代码块',
+                    () => _apply('\n```\n', '\n```')),
+                const SizedBox(width: 4),
+                // Mode switch — icons only, tooltips carry the labels
+                SegmentedButton<_EditMode>(
+                  segments: const [
+                    ButtonSegment(
+                        value: _EditMode.edit,
+                        icon: Icon(Icons.edit_outlined, size: 15),
+                        tooltip: '编辑'),
+                    ButtonSegment(
+                        value: _EditMode.split,
+                        icon: Icon(Icons.vertical_split, size: 15),
+                        tooltip: '分屏'),
+                    ButtonSegment(
+                        value: _EditMode.preview,
+                        icon: Icon(Icons.visibility_outlined, size: 15),
+                        tooltip: '预览'),
                   ],
+                  selected: {_mode},
+                  onSelectionChanged: (s) => setState(() => _mode = s.first),
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: WidgetStatePropertyAll(
+                        const EdgeInsets.symmetric(horizontal: 5)),
+                  ),
                 ),
-                // Row 2: mode switch + status + publish (VS Code corner style)
-                Row(
-                  children: [
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, con) {
-                          // Icons only — tooltips carry the labels.
-                          return SegmentedButton<_EditMode>(
-                            segments: const [
-                              ButtonSegment(
-                                  value: _EditMode.edit,
-                                  icon: Icon(Icons.edit_outlined, size: 15),
-                                  tooltip: '编辑'),
-                              ButtonSegment(
-                                  value: _EditMode.split,
-                                  icon:
-                                      Icon(Icons.vertical_split, size: 15),
-                                  tooltip: '分屏'),
-                              ButtonSegment(
-                                  value: _EditMode.preview,
-                                  icon: Icon(Icons.visibility_outlined,
-                                      size: 15),
-                                  tooltip: '预览'),
-                            ],
-                            selected: {_mode},
-                            onSelectionChanged: (s) =>
-                                setState(() => _mode = s.first),
-                            showSelectedIcon: false,
-                            style: ButtonStyle(
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              padding: WidgetStatePropertyAll(
-                                  const EdgeInsets.symmetric(horizontal: 5)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    // Save status (compact chip — no overlap with 发布)
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
+                const SizedBox(width: 4),
+                // Save status (compact chip)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _dirty
+                        ? scheme.surfaceContainerHighest
+                        : scheme.primaryContainer.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _dirty ? '输入中' : (_saved ? '✓ 草稿已存' : ''),
+                    style: TextStyle(
+                        fontSize: 9,
                         color: _dirty
-                            ? scheme.surfaceContainerHighest
-                            : scheme.primaryContainer.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _dirty ? '输入中' : (_saved ? '✓ 草稿已存' : ''),
-                        style: TextStyle(
-                            fontSize: 9,
-                            color: _dirty
-                                ? scheme.outline
-                                : scheme.onPrimaryContainer),
-                      ),
-                    ),
-                    // ── 发布 (small icon, tooltip on hover) ──
-                    IconButton.filledTonal(
-                      onPressed: () => publish(),
-                      icon: const Icon(Icons.publish, size: 16),
-                      tooltip: '发布',
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints(
-                          minWidth: 30, minHeight: 30),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ],
+                            ? scheme.outline
+                            : scheme.onPrimaryContainer),
+                  ),
+                ),
+                // 发布 (small icon, tooltip)
+                IconButton.filledTonal(
+                  onPressed: () => publish(),
+                  icon: const Icon(Icons.publish, size: 16),
+                  tooltip: '发布',
+                  visualDensity: VisualDensity.compact,
+                  constraints:
+                      const BoxConstraints(minWidth: 30, minHeight: 30),
+                  padding: EdgeInsets.zero,
                 ),
               ],
             ),

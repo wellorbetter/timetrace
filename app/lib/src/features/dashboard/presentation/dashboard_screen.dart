@@ -273,14 +273,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                                       final appsIdx =
                                                           order.indexOf('apps');
                                                       if (appsIdx >= 0) {
+                                                        // Jump directly — no
+                                                        // swiping through the
+                                                        // middle pages.
                                                         _carouselCtrl
-                                                            .animateToPage(
-                                                          appsIdx,
-                                                          duration: const Duration(
-                                                              milliseconds:
-                                                                  300),
-                                                          curve: Curves.easeOut,
-                                                        );
+                                                            .jumpToPage(
+                                                                appsIdx);
                                                       }
                                                     },
                                                     tall: true,
