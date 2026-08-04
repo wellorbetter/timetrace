@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 
@@ -29,7 +30,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     _timer?.cancel();
     // Refresh less aggressively; 3s is smooth enough for a local DB.
     _timer = Timer.periodic(
-        const Duration(seconds: 3), (_) => ref.invalidateSelf());
+        const Duration(seconds: 2), (_) => ref.invalidateSelf());
     ref.onDispose(() => _timer?.cancel());
     return _load();
   }
@@ -42,14 +43,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final data = api.getDashboardData(start: start, end: end);
     final (thisWeek, lastWeek) = api.getWeekTotals();
     return DashboardState(
-      apps: data.apps
-          .map((s) => AppUsageItem(
-                appName: s.appName,
-                activeSeconds: s.activeSeconds.toInt(),
-                idleSeconds: s.idleSeconds.toInt(),
-                exePath: s.exePath.isEmpty ? null : s.exePath,
-              ))
-          .toList(),
+      apps: _mergeApps(data.apps),
       totalActiveSeconds: data.activeSeconds.toInt(),
       totalIdleSeconds: data.idleSeconds.toInt(),
       lifetimeSeconds: data.totalSeconds.toInt(),
@@ -83,3 +77,62 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 final dashboardProvider =
     AsyncNotifierProvider.autoDispose<DashboardNotifier, DashboardState>(
         DashboardNotifier.new);
+
+
+/// Normalize a raw process name to a friendly display name, merging the
+/// many exe variants of the same app (msedge vs browser, LeagueClientUx
+/// vs League of Legends) so statistics show ONE row.
+String normalizeAppName(String raw) {
+  final lower = raw.toLowerCase();
+  if (lower.contains('msedge') ||
+      lower.contains('edge') ||
+      lower == 'browser' ||
+      lower.contains('webview2')) {
+    return 'Edge';
+  }
+  if (lower.contains('leagueclient') ||
+      lower.contains('league of legends') ||
+      lower.contains('lol')) {
+    return '英雄联盟';
+  }
+  if (lower.contains('startmenu') || lower == 'shellhost') {
+    return '开始菜单';
+  }
+  if (lower.contains('explorer')) return '资源管理器';
+  if (lower.contains('windows terminal') || lower.contains('terminal')) {
+    return '终端';
+  }
+  return raw;
+}
+
+/// Merge DTO rows by normalized name (sum durations, keep first exe path).
+List<AppUsageItem> _mergeApps(List<AppUsageDto> rows) {
+  final merged = <String, _MergedApp>{};
+  for (final s in rows) {
+    final name = normalizeAppName(s.appName);
+    final e = merged[name] ??
+        _MergedApp(active: 0, idle: 0, exePath: s.exePath.isEmpty ? null : s.exePath);
+    e.active += (s.activeSeconds as num).toInt();
+    e.idle += (s.idleSeconds as num).toInt();
+
+    if (e.exePath == null && s.exePath.isNotEmpty) e.exePath = s.exePath;
+    merged[name] = e;
+  }
+  final list = merged.entries
+      .map((e) => AppUsageItem(
+            appName: e.key,
+            activeSeconds: e.value.active,
+            idleSeconds: e.value.idle,
+            exePath: e.value.exePath,
+          ))
+      .toList();
+  list.sort((a, b) => b.activeSeconds.compareTo(a.activeSeconds));
+  return list;
+}
+
+class _MergedApp {
+  _MergedApp({required this.active, required this.idle, this.exePath});
+  int active;
+  int idle;
+  String? exePath;
+}

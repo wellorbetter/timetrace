@@ -111,6 +111,7 @@ class SettingsScreen extends ConsumerWidget {
               max: 5000,
               divisions: 9,
               display: '${settings.pollIntervalMs} ${l.seconds}',
+              description: '多久检测一次当前前台应用（越小越精确，越费电）',
               onChanged: (v) => _update(
                 ref,
                 settings.copyWith(pollIntervalMs: v),
@@ -123,6 +124,7 @@ class SettingsScreen extends ConsumerWidget {
               max: 60,
               divisions: 59,
               display: '${settings.idleThresholdMinutes} ${l.minutes}',
+              description: '键盘/鼠标停止操作多久后视为离开，暂停计时',
               onChanged: (v) => _update(
                 ref,
                 settings.copyWith(idleThresholdMinutes: v),
@@ -396,6 +398,7 @@ class _SliderTile<T> extends StatelessWidget {
     required this.divisions,
     required this.display,
     required this.onChanged,
+    this.description,
   });
 
   final String label;
@@ -404,19 +407,30 @@ class _SliderTile<T> extends StatelessWidget {
   final double max;
   final int divisions;
   final String display;
+  final String? description;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(label),
-      subtitle: Slider(
-        value: (value as num).toDouble().clamp(min, max),
-        min: min,
-        max: max,
-        divisions: divisions,
-        label: display,
-        onChanged: (v) => onChanged(v as T),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Slider(
+            value: (value as num).toDouble().clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: display,
+            onChanged: (v) => onChanged(v as T),
+          ),
+          if (description != null)
+            Text(description!,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.outline)),
+        ],
       ),
       trailing: SizedBox(
         width: 70,

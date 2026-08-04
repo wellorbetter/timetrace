@@ -46,7 +46,7 @@ impl SessionAggregator {
         let session = SessionRecord {
             id: 0,
             app_path: app.exe_path.clone(),
-            app_name: app.display_name.clone(),
+            app_name: normalize_app_name(&app.display_name),
             window_title: None,
             started_at: now,
             ended_at: None,
@@ -113,6 +113,35 @@ impl Drop for SessionAggregator {
     fn drop(&mut self) {
         self.close_session();
     }
+}
+
+/// Merge the many exe variants of the same app so statistics show one row
+/// (msedge vs browser, LeagueClientUx vs League of Legends, …).
+pub fn normalize_app_name(name: &str) -> String {
+    let lower = name.to_lowercase();
+    if lower.contains("msedge")
+        || lower.contains("edge")
+        || lower == "browser"
+        || lower.contains("webview2")
+    {
+        return "Edge".into();
+    }
+    if lower.contains("leagueclient")
+        || lower.contains("league of legends")
+        || lower.contains("lol")
+    {
+        return "英雄联盟".into();
+    }
+    if lower.contains("startmenu") || lower == "shellhost" {
+        return "开始菜单".into();
+    }
+    if lower.contains("explorer") {
+        return "资源管理器".into();
+    }
+    if lower.contains("terminal") {
+        return "终端".into();
+    }
+    name.into()
 }
 
 #[cfg(test)]

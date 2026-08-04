@@ -177,10 +177,11 @@ class _StackBody extends StatelessWidget {
                   ),
                 ),
               ),
-            // ×N count badge on the bottom-right corner of the stack
+            // ×N count badge tucked into the bottom-right corner of the
+            // topmost image
             Positioned(
-              right: 0,
-              bottom: 0,
+              right: 2,
+              bottom: 2,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

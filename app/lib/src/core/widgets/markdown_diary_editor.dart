@@ -237,9 +237,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                   ),
                 ),
                 IconButton.filledTonal(
-                  onPressed: () => publish(),
+                  onPressed: _ctrl.text.trim().isEmpty ? null : publish,
                   icon: const Icon(Icons.publish, size: 16),
-                  tooltip: '发布',
+                  tooltip:
+                      _ctrl.text.trim().isEmpty ? '先写点什么再发布' : '发布',
                   visualDensity: VisualDensity.compact,
                   constraints:
                       const BoxConstraints(minWidth: 30, minHeight: 30),
