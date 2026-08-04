@@ -36,6 +36,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
   DateTime? _customStart;
   int? _editingId; // null = writing a NEW post for the selected day
   List<String> _staged = []; // images uploaded but not yet attached to a post
+  final Set<String> _collapsedDays = {}; // collapsed day groups
 
   (String, String)? _bounds() {
     final d = widget.date;
@@ -333,7 +334,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           ),
         ),
         const SizedBox(height: 10),
-        // ── Posts (朋友圈) — slide in/out animation ──
+        // ── Posts — grouped by day (collapsible), each item has 👁 toggles ──
         if (inRange.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -356,21 +357,25 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
               key: ValueKey('posts-${inRange.map((e) => e.$1).join(',')}'),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final e in inRange)
-                  _PostCard(
-                    id: e.$1,
-                    dateStr: e.$2,
-                    content: e.$3,
-                    images: data?.entryImages[e.$1] ?? const [],
-                    expanded: _editingId == e.$1,
-                    onExpand: () => setState(() {
-                      _editingId = _editingId == e.$1 ? null : e.$1;
+                for (final group in _groupByDay(inRange))
+                  _DayGroup(
+                    dateStr: group.$1,
+                    posts: group.$2,
+                    images: (id) => data?.entryImages[id] ?? const [],
+                    collapsed: _collapsedDays.contains(group.$1),
+                    onToggleGroup: () => setState(() {
+                      if (_collapsedDays.contains(group.$1)) {
+                        _collapsedDays.remove(group.$1);
+                      } else {
+                        _collapsedDays.add(group.$1);
+                      }
                     }),
-                    onEdit: () => setState(() {
-                      _editingId = e.$1;
+                    editingId: _editingId,
+                    onEdit: (id) => setState(() {
+                      _editingId = id;
                       _staged = [];
                     }),
-                    onDelete: () => _delete(e.$1),
+                    onDelete: _delete,
                     scheme: scheme,
                   ),
               ],
@@ -379,17 +384,116 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       ],
     );
   }
+
+  /// Group posts by day, days newest first, posts newest first.
+  List<(String, List<(int, String, String)>)> _groupByDay(
+      List<(int, String, String)> posts) {
+    final map = <String, List<(int, String, String)>>{};
+    for (final e in posts) {
+      map.putIfAbsent(e.$2, () => []).add(e);
+    }
+    final days = map.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [
+      for (final d in days) (d, map[d]!),
+    ];
+  }
 }
 
-/// A diary post (朋友圈): date + text + its OWN image album (peeking stack).
+/// Day group header: date + count, tap to collapse/expand the whole day.
+class _DayGroup extends StatelessWidget {
+  const _DayGroup({
+    required this.dateStr,
+    required this.posts,
+    required this.images,
+    required this.collapsed,
+    required this.onToggleGroup,
+    required this.editingId,
+    required this.onEdit,
+    required this.onDelete,
+    required this.scheme,
+  });
+
+  final String dateStr;
+  final List<(int, String, String)> posts;
+  final List<String> Function(int id) images;
+  final bool collapsed;
+  final VoidCallback onToggleGroup;
+  final int? editingId;
+  final void Function(int id) onEdit;
+  final void Function(int id) onDelete;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Group header — tap to collapse/expand
+        InkWell(
+          onTap: onToggleGroup,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today_outlined,
+                    size: 14, color: scheme.primary),
+                const SizedBox(width: 6),
+                Text(dateStr,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface)),
+                const SizedBox(width: 8),
+                Text('${posts.length} 条',
+                    style: TextStyle(fontSize: 11, color: scheme.outline)),
+                const Spacer(),
+                Icon(
+                    collapsed
+                        ? Icons.keyboard_arrow_right
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: scheme.outline),
+              ],
+            ),
+          ),
+        ),
+        // Day's posts (collapse animation)
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          child: collapsed
+              ? const SizedBox.shrink()
+              : Column(
+                  children: [
+                    for (final e in posts)
+                      _PostCard(
+                        id: e.$1,
+                        dateStr: e.$2,
+                        content: e.$3,
+                        images: images(e.$1),
+                        editing: editingId == e.$1,
+                        onEdit: () => onEdit(e.$1),
+                        onDelete: () => onDelete(e.$1),
+                        scheme: scheme,
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One diary post: text + its own images, each with an 👁 toggle
+/// (visibility / visibility_off) — hide/show independently.
 class _PostCard extends StatefulWidget {
   const _PostCard({
     required this.id,
     required this.dateStr,
     required this.content,
     required this.images,
-    required this.expanded,
-    required this.onExpand,
+    required this.editing,
     required this.onEdit,
     required this.onDelete,
     required this.scheme,
@@ -399,8 +503,7 @@ class _PostCard extends StatefulWidget {
   final String dateStr;
   final String content;
   final List<String> images;
-  final bool expanded;
-  final VoidCallback onExpand;
+  final bool editing;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final ColorScheme scheme;
@@ -410,68 +513,128 @@ class _PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<_PostCard> {
+  bool _textVisible = true;
+  bool _imagesVisible = true;
+
+  @override
+  void didUpdateWidget(covariant _PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset visibility when switching to another post.
+    if (oldWidget.id != widget.id) {
+      _textVisible = true;
+      _imagesVisible = true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final firstLine = widget.content
         .split('\n')
         .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
-    final snippet = firstLine.length > 40 ? firstLine.substring(0, 40) : firstLine;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
       color: widget.scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-            color: widget.expanded
+            color: widget.editing
                 ? widget.scheme.primary.withValues(alpha: 0.6)
                 : widget.scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
-      child: InkWell(
-        onTap: widget.onExpand,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header: avatar-like date chip + snippet + actions
-              Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: widget.scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        widget.dateStr.substring(8), // day
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: widget.scheme.onPrimaryContainer),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.dateStr,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Text (👁 toggle)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: _textVisible
+                  ? (widget.content.trim().isEmpty
+                      ? Text('(无文字)',
                           style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: widget.scheme.primary)),
-                      if (widget.images.isNotEmpty)
-                        Text('${widget.images.length} 张图片',
-                            style: TextStyle(
-                                fontSize: 9, color: widget.scheme.outline)),
-                    ],
+                              fontSize: 12, color: widget.scheme.outline))
+                      : MarkdownBody(
+                          data: widget.content,
+                          selectable: true,
+                          styleSheet: MarkdownStyleSheet(
+                            p: const TextStyle(fontSize: 13, height: 1.6),
+                            h1: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: widget.scheme.onSurface),
+                            h2: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: widget.scheme.onSurface),
+                            code: TextStyle(
+                                fontSize: 11,
+                                color: widget.scheme.primary),
+                          ),
+                        ))
+                  : Text(firstLine.isEmpty ? '内容已隐藏' : '内容已隐藏 · $firstLine',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: widget.scheme.outline)),
+            ),
+            // Images (👁 toggle) — reusable album component
+            if (widget.images.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                child: _imagesVisible
+                    ? ImageAlbum(
+                        images: widget.images,
+                        title: '${widget.images.length} 张图片',
+                      )
+                    : Text('图片已隐藏',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: widget.scheme.outline)),
+              ),
+            ],
+            // Action row: 👁 text / 👁 images / edit / delete
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                        _textVisible
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 16),
+                    tooltip: _textVisible ? '隐藏文字' : '显示文字',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () =>
+                        setState(() => _textVisible = !_textVisible),
                   ),
+                  if (widget.images.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                          _imagesVisible
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 16),
+                      tooltip: _imagesVisible ? '隐藏图片' : '显示图片',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () =>
+                          setState(() => _imagesVisible = !_imagesVisible),
+                    ),
                   const Spacer(),
+                  if (widget.editing)
+                    Text('编辑中',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: widget.scheme.primary)),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 15),
                     tooltip: '编辑',
@@ -486,62 +649,8 @@ class _PostCardState extends State<_PostCard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              // Text (snippet or full when expanded)
-              AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                child: widget.expanded
-                    ? (widget.content.trim().isEmpty
-                        ? const SizedBox.shrink()
-                        : MarkdownBody(
-                            data: widget.content,
-                            selectable: true,
-                            styleSheet: MarkdownStyleSheet(
-                              p: const TextStyle(fontSize: 13, height: 1.6),
-                              h1: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.scheme.onSurface),
-                              h2: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.scheme.onSurface),
-                              code: TextStyle(
-                                  fontSize: 11,
-                                  color: widget.scheme.primary),
-                            ),
-                          ))
-                    : Text(snippet.isEmpty ? '(无文字)' : snippet,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, height: 1.5)),
-              ),
-              // Own images — reusable album (stack / grid / hide + gallery)
-              if (widget.images.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                ImageAlbum(
-                  images: widget.images,
-                  title: '${widget.images.length} 张图片',
-                ),
-              ],
-              // Expand hint
-              if (!widget.expanded)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.keyboard_arrow_down,
-                          size: 14, color: widget.scheme.outline),
-                      Text('展开',
-                          style: TextStyle(
-                              fontSize: 10, color: widget.scheme.outline)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
