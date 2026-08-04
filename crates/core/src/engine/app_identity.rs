@@ -107,6 +107,9 @@ pub fn normalize_app_name(name: &str) -> String {
     {
         return "系统".into();
     }
+    if lower == "code" || lower == "code.exe" {
+        return "VS Code".into();
+    }
     if lower.contains("explorer") {
         return "资源管理器".into();
     }

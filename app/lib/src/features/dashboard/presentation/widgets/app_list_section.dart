@@ -139,7 +139,7 @@ class _AppRow extends StatelessWidget {
 }
 
 /// Inline page breakdown for the selected app (Edge → bilibili/github).
-class _PageDetail extends StatelessWidget {
+class _PageDetail extends StatefulWidget {
   const _PageDetail({
     required this.pages,
     required this.loading,
@@ -151,7 +151,24 @@ class _PageDetail extends StatelessWidget {
   final ColorScheme scheme;
 
   @override
+  State<_PageDetail> createState() => _PageDetailState();
+}
+
+class _PageDetailState extends State<_PageDetail> {
+  bool _showAll = false;
+
+  @override
+  void didUpdateWidget(covariant _PageDetail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset expansion when the selection changes to another app.
+    if (oldWidget.pages != widget.pages) _showAll = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final pages = widget.pages;
+    final loading = widget.loading;
+    final scheme = widget.scheme;
     if (loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
@@ -174,7 +191,7 @@ class _PageDetail extends StatelessWidget {
       );
     }
     final maxSec = list.map((p) => p.seconds).fold<int>(1, (m, v) => v > m ? v : m);
-    final shown = list.take(5).toList();
+    final shown = (_showAll ? list : list.take(5)).toList();
     final more = list.length - shown.length;
     return Container(
       margin: const EdgeInsets.fromLTRB(32, 4, 8, 4),
@@ -229,11 +246,29 @@ class _PageDetail extends StatelessWidget {
           if (more > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('等 $more 个页面',
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: scheme.outline,
-                      fontStyle: FontStyle.italic)),
+              child: InkWell(
+                onTap: () => setState(() => _showAll = !_showAll),
+                borderRadius: BorderRadius.circular(6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                        _showAll
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 14,
+                        color: scheme.primary),
+                    const SizedBox(width: 2),
+                    Text(
+                      _showAll ? '收起' : '展开全部 $more 个页面',
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
             ),
         ],
       ),

@@ -107,6 +107,7 @@ String normalizeAppName(String raw) {
       lower.contains('dwm')) {
     return '系统';
   }
+  if (lower == 'code' || lower == 'code.exe') return 'VS Code';
   if (lower.contains('explorer')) return '资源管理器';
   if (lower.contains('windows terminal') || lower.contains('terminal')) {
     return '终端';

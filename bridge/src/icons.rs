@@ -62,12 +62,15 @@ fn get_hicon(exe_path: &str) -> Option<*mut std::ffi::c_void> {
     unsafe {
         // Try 1: SHGetFileInfoW (resolves .lnk, handles most exes)
         let mut info: SHFILEINFOW = mem::zeroed();
+        // NOTE: no SHGFI_USEFILEATTRIBUTES — that flag tells the shell NOT
+        // to touch the file, so .exe icons come back generic/empty. We want
+        // the real exe icon (as .NET ExtractAssociatedIcon does).
         let ret = SHGetFileInfoW(
             path.as_ptr(),
             0,
             &mut info,
             mem::size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES,
+            SHGFI_ICON | SHGFI_LARGEICON,
         );
         if ret != 0 && !info.hIcon.is_null() {
             return Some(info.hIcon);
