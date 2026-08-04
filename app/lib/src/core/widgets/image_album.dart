@@ -178,9 +178,9 @@ class _StackBody extends StatelessWidget {
                 ),
               ),
             // ×N count badge tucked into the bottom-right corner of the
-            // topmost image
+            // topmost image (anchored to the last image's right edge)
             Positioned(
-              right: 2,
+              left: (shown.length - 1) * step + thumbSize - 34,
               bottom: 2,
               child: Container(
                 padding:

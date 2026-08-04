@@ -1,16 +1,45 @@
 //! Foreground window monitor — the core tracking loop.
 //!
-//! Spawns a dedicated thread that polls the foreground window and emits events.
+//! Event-driven (like RescueTime): a WinEventHook on
+//! EVENT_SYSTEM_FOREGROUND pushes foreground switches instantly, so
+//! switching apps is captured in milliseconds instead of waiting for the
+//! poll tick. The timed poll remains as a fallback (covers fullscreen
+//! games / UAC where the hook may not fire).
 
 use std::sync::mpsc;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use tracing::{debug, info};
 
+use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, GetMessageW, MSG, TranslateMessage, EVENT_SYSTEM_FOREGROUND,
+    WINEVENT_OUTOFCONTEXT,
+};
+
 use crate::contracts::events::{AppInfo, EventSink, EventSourceHandle, TrackedEvent};
 use crate::contracts::idle::IdleDetector;
 use crate::contracts::window::WindowResolver;
+
+/// Bridge from the WinEvent callback (extern fn) to the monitor thread.
+/// HWND is not Send on windows 0.57, so we only pass a signal.
+static FG_EVENT: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+
+unsafe extern "system" fn win_event_proc(
+    _hook: HWINEVENTHOOK,
+    _event: u32,
+    _hwnd: windows::Win32::Foundation::HWND,
+    _id: i32,
+    _id_child: i32,
+    _event_thread: u32,
+    _ms: u32,
+) {
+    if let Some(tx) = FG_EVENT.get() {
+        let _ = tx.send(());
+    }
+}
 
 pub fn run_monitor_loop<W, I>(
     window_resolver: W,
@@ -25,7 +54,37 @@ where
 {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (pause_tx, pause_rx) = mpsc::channel::<bool>();
+    let (fg_tx, fg_rx) = mpsc::channel::<()>();
     let heartbeat_interval = Duration::from_secs(60);
+
+    // Event-hook thread: SetWinEventHook needs a message loop on the
+    // registering thread. Foreground switches are pushed to the monitor.
+    {
+        let fg_tx = fg_tx.clone();
+        thread::spawn(move || {
+            unsafe {
+                FG_EVENT.set(fg_tx).ok();
+                let _hook = SetWinEventHook(
+                    EVENT_SYSTEM_FOREGROUND,
+                    EVENT_SYSTEM_FOREGROUND,
+                    None,
+                    Some(win_event_proc),
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT,
+                );
+                let mut msg = MSG::default();
+                loop {
+                    let r = GetMessageW(&mut msg, None, 0, 0);
+                    if r.0 == 0 || r.0 == -1 {
+                        break;
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+        });
+    }
 
     thread::spawn(move || {
         let mut current_app: Option<AppInfo> = None;
@@ -40,10 +99,8 @@ where
             if let Ok(pause) = pause_rx.try_recv() { is_paused = pause; }
 
             let now = Instant::now();
-            // Sleep/resume detection: when the machine sleeps the thread is
-            // frozen; on resume the poll gap is far larger than the interval.
-            // Reset the dangling session so the whole sleep period is NOT
-            // attributed to whatever app was foreground before sleeping.
+            // Sleep/resume detection: reset the dangling session so a whole
+            // sleep period is never attributed to the pre-sleep app.
             let gap = now - last_poll;
             last_poll = now;
             if gap > poll_interval * 5 {
@@ -52,6 +109,9 @@ where
                 session_start = now;
                 is_idle = false;
             }
+
+            // A WinEventHook fired → foreground changed → check immediately.
+            let hook_fired = fg_rx.try_recv().is_ok();
 
             if !is_paused {
                 let foreground = window_resolver.get_foreground_app();
@@ -93,6 +153,11 @@ where
                 }
             }
 
+            // Poll cadence: on hook events check again immediately (already
+            // did), otherwise sleep the configured interval (fallback).
+            if hook_fired {
+                continue;
+            }
             thread::sleep(poll_interval);
         }
     });

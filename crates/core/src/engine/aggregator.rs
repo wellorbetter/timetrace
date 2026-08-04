@@ -119,12 +119,11 @@ impl Drop for SessionAggregator {
 /// (msedge vs browser, LeagueClientUx vs League of Legends, …).
 pub fn normalize_app_name(name: &str) -> String {
     let lower = name.to_lowercase();
-    if lower.contains("msedge")
-        || lower.contains("edge")
-        || lower == "browser"
-        || lower.contains("webview2")
-    {
+    if lower.contains("msedge") || lower.contains("webview2") {
         return "Edge".into();
+    }
+    if lower == "browser" || lower.contains("qbblink") {
+        return "WeGame浏览器".into();
     }
     if lower.contains("leagueclient")
         || lower.contains("league of legends")

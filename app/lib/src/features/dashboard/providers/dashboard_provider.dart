@@ -84,11 +84,12 @@ final dashboardProvider =
 /// vs League of Legends) so statistics show ONE row.
 String normalizeAppName(String raw) {
   final lower = raw.toLowerCase();
-  if (lower.contains('msedge') ||
-      lower.contains('edge') ||
-      lower == 'browser' ||
-      lower.contains('webview2')) {
+  if (lower.contains('msedge') || lower.contains('webview2')) {
     return 'Edge';
+  }
+  // qbblinktrial/browser is WeGame's bundled browser trial — NOT Edge.
+  if (lower == 'browser' || lower.contains('qbblink')) {
+    return 'WeGame浏览器';
   }
   if (lower.contains('leagueclient') ||
       lower.contains('league of legends') ||
