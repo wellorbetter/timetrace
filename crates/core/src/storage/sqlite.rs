@@ -64,6 +64,31 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+
+
+/// Split a session [start, end) across hour-of-day buckets (local time).
+/// An hour never exceeds 60 minutes even for long sessions.
+fn add_session_to_hours(hours: &mut [i64; 24], start: DateTime<Utc>, end: DateTime<Utc>) {
+    let start_local = start.with_timezone(&chrono::Local);
+    let end_local = end.with_timezone(&chrono::Local);
+    let mut cur = start_local;
+    while cur < end_local {
+        let h = cur.hour() as usize;
+        if h >= 24 {
+            break;
+        }
+        let next_hour = cur
+            .with_minute(0)
+            .and_then(|c| c.with_second(0))
+            .map(|c| c + chrono::Duration::hours(1))
+            .unwrap_or(end_local);
+        let seg_end = end_local.min(next_hour);
+        let seg = (seg_end - cur).num_seconds().max(0);
+        hours[h] += seg;
+        cur = next_hour;
+    }
+}
+
 pub struct SqliteStore {
     conn: Mutex<Connection>,
 }
@@ -136,7 +161,7 @@ impl DataStore for SqliteStore {
             |row| row.get::<_, String>(0),
         ) {
             if let Ok(started_at) = DateTime::parse_from_rfc3339(&started_at_str) {
-                let duration = (end_time - started_at.with_timezone(&Utc)).num_seconds();
+                let duration = (end_time - started_at.with_timezone(&Utc)).num_seconds().max(0);
                 if let Err(e) = conn.execute(
                     "UPDATE usage_sessions SET ended_at = ?1, duration_secs = ?2 WHERE id = ?3",
                     params![end_time.to_rfc3339(), duration, id],
@@ -664,6 +689,59 @@ impl DataStore for SqliteStore {
         hours
     }
 
+    fn get_hour_apps(&self, date: NaiveDate, hour: u32) -> Vec<(String, i64)> {
+        let conn = self.lock();
+        let mut acc: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT app_name, started_at, duration_secs FROM usage_sessions
+             WHERE date = ?1 AND is_idle = 0 AND duration_secs > 0",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![date.to_string()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?))
+            }) {
+                for row in rows.flatten() {
+                    let (app, started, dur) = row;
+                    if let Ok(dt) = DateTime::parse_from_rfc3339(&started) {
+                        let start = dt.with_timezone(&Utc);
+                        let end = start + chrono::Duration::seconds(dur);
+                        let mut buckets = [0i64; 24];
+                        add_session_to_hours(&mut buckets, start, end);
+                        let secs = buckets.get(hour as usize).copied().unwrap_or(0);
+                        if secs > 0 {
+                            *acc.entry(app).or_insert(0) += secs;
+                        }
+                    }
+                }
+            }
+        }
+        let mut out: Vec<(String, i64)> = acc.into_iter().collect();
+        out.sort_by(|a, b| b.1.cmp(&a.1));
+        out
+    }
+
+    fn get_app_hourly(&self, app_name: &str, date: NaiveDate) -> Vec<i64> {
+        let conn = self.lock();
+        let mut hours = [0i64; 24];
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT started_at, duration_secs FROM usage_sessions
+             WHERE app_name = ?1 AND date = ?2 AND is_idle = 0 AND duration_secs > 0",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![app_name, date.to_string()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }) {
+                for row in rows.flatten() {
+                    if let Ok(parsed) = DateTime::parse_from_rfc3339(&row.0) {
+                        let start = parsed.with_timezone(&Utc);
+                        let end = start + chrono::Duration::seconds(row.1);
+                        add_session_to_hours(&mut hours, start, end);
+                    }
+                }
+            }
+        }
+        hours.to_vec()
+    }
+
+
     fn get_diary_images(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)> {
         let conn = self.lock();
         let mut out = Vec::new();
@@ -1020,6 +1098,15 @@ impl DataStore for MemoryStore {
         vec![0; 24]
     }
 
+    fn get_hour_apps(&self, _date: NaiveDate, _hour: u32) -> Vec<(String, i64)> {
+        vec![]
+    }
+
+    fn get_app_hourly(&self, _app_name: &str, _date: NaiveDate) -> Vec<i64> {
+        vec![0; 24]
+    }
+
+
     fn get_diary_images(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String)> {
         vec![]
     }
@@ -1171,5 +1258,38 @@ mod sqlite_tests {
         assert_eq!(store.recording_started_at().unwrap().date_naive(), t1.date_naive());
         assert_eq!(store.total_tracked_seconds(), 7200); // idle not counted
         assert!(store.total_tracked_in_range(today, today) >= 0);
+    }
+    #[test]
+    fn test_hour_apps_and_app_hourly_cross_boundary() {
+        let store = temp_store();
+        let day = chrono::Local::now().date_naive();
+        let start10 = day
+            .and_hms_opt(10, 55, 0)
+            .unwrap()
+            .and_local_timezone(chrono::Local)
+            .unwrap()
+            .with_timezone(&Utc);
+        let start11 = day
+            .and_hms_opt(11, 0, 0)
+            .unwrap()
+            .and_local_timezone(chrono::Local)
+            .unwrap()
+            .with_timezone(&Utc);
+        // code: 10:55 -> 11:05 (5min in hour 10, 5min in hour 11)
+        store.insert_session(&sess("code", start10, 600, false));
+        // edge: 11:00 -> 11:05 (5min in hour 11)
+        store.insert_session(&sess("edge", start11, 300, false));
+        let h10 = store.get_hour_apps(day, 10);
+        let h11 = store.get_hour_apps(day, 11);
+        let find = |list: &[(String, i64)], name: &str| {
+            list.iter().find(|(a, _)| a == name).map(|(_, s)| *s).unwrap_or(0)
+        };
+        assert_eq!(find(&h10, "code"), 300, "hour10 code should be 300s");
+        assert_eq!(find(&h11, "code"), 300, "hour11 code should be 300s");
+        assert_eq!(find(&h11, "edge"), 300, "hour11 edge should be 300s");
+        assert_eq!(find(&h10, "edge"), 0, "hour10 edge should be 0s");
+        let code_hourly = store.get_app_hourly("code", day);
+        assert_eq!(code_hourly[10], 300);
+        assert_eq!(code_hourly[11], 300);
     }
 }

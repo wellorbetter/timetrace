@@ -190,6 +190,13 @@ pub trait DataStore: Send + Sync {
     /// Hourly active-seconds for a day (24 buckets).
     fn get_day_hourly(&self, date: NaiveDate) -> Vec<i64>;
 
+    /// Apps active within a specific hour of a date (seconds per app,
+    /// sessions split across hour boundaries).
+    fn get_hour_apps(&self, date: NaiveDate, hour: u32) -> Vec<(String, i64)>;
+
+    /// Hourly active-seconds for one app on a date (24 buckets, hour-split).
+    fn get_app_hourly(&self, app_name: &str, date: NaiveDate) -> Vec<i64>;
+
     /// Diary image paths in a range: (date_str, path).
     fn get_diary_images(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)>;
 

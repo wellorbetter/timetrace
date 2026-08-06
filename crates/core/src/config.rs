@@ -34,14 +34,14 @@ pub struct AppConfig {
     pub excluded_apps: Vec<String>,
 }
 
-fn default_poll_interval() -> u64 { 1000 }
+fn default_poll_interval() -> u64 { 3000 }
 fn default_idle_threshold() -> u64 { 5 }
 fn default_true() -> bool { true }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            poll_interval_ms: 1000,
+            poll_interval_ms: 3000,
             idle_threshold_minutes: 5,
             minimize_to_tray: true,
             start_minimized: false,

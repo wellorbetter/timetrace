@@ -420,6 +420,26 @@ impl TimeTraceApi {
         DataStore::get_day_hourly(&*self.db, parse_date(&date))
     }
 
+    /// Apps active within a specific hour of a date (seconds per app).
+    #[frb(sync)]
+    pub fn get_hour_apps(&self, date: String, hour: u32) -> Vec<AppUsageDto> {
+        DataStore::get_hour_apps(&*self.db, parse_date(&date), hour)
+            .into_iter()
+            .map(|(app_name, secs)| AppUsageDto {
+                app_name,
+                active_seconds: secs,
+                idle_seconds: 0,
+                exe_path: String::new(),
+            })
+            .collect()
+    }
+
+    /// Hourly active-seconds for one app on a date (24 buckets).
+    #[frb(sync)]
+    pub fn get_app_hourly(&self, app_name: String, date: String) -> Vec<i64> {
+        DataStore::get_app_hourly(&*self.db, &app_name, parse_date(&date))
+    }
+
     /// Diary image paths in a date range (for calendar cell overlays).
     #[frb(sync)]
     pub fn get_diary_images(&self, start: String, end: String) -> Vec<(String, String)> {
@@ -486,10 +506,13 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
         return None;
     }
     let before = &cmd[..end];
+    // The exe path itself may contain spaces (e.g. "C:\\Program Files\\...").
+    // Only a quoted command lets us trim leading tokens; otherwise the whole
+    // prefix up to ".exe" IS the path (arguments can only follow ".exe").
     let start = before
         .rfind('"')
         .map(|q| q + 1)
-        .or_else(|| before.rfind(' ').map(|s| s + 1))
+        
         .unwrap_or(0);
     if start >= end {
         return None;
@@ -522,3 +545,26 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
     }
     Some(expanded)
 }
+#[cfg(test)]
+mod tests {
+    use super::clean_exe_path;
+
+    #[test]
+    fn spaced_unquoted_path_kept_intact() {
+        let p = clean_exe_path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").unwrap();
+        assert_eq!(p, r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe");
+    }
+
+    #[test]
+    fn quoted_path_strips_quotes() {
+        let p = clean_exe_path(r#""C:\Program Files\App\app.exe" --flag"#).unwrap();
+        assert_eq!(p, r"C:\Program Files\App\app.exe");
+    }
+
+    #[test]
+    fn no_space_path_unchanged() {
+        let p = clean_exe_path(r"D:\QQ\QQ.exe").unwrap();
+        assert_eq!(p, r"D:\QQ\QQ.exe");
+    }
+}
+

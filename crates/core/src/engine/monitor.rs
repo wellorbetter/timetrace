@@ -61,7 +61,6 @@ where
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (pause_tx, pause_rx) = mpsc::channel::<bool>();
     let (fg_tx, fg_rx) = mpsc::channel::<()>();
-    let heartbeat_interval = Duration::from_secs(60);
 
     // Event-hook thread: SetWinEventHook needs a message loop on the
     // registering thread. Foreground switches are pushed to the monitor.
@@ -105,30 +104,36 @@ where
 
     thread::spawn(move || {
         let mut current_app: Option<AppInfo> = None;
-        let mut session_start = Instant::now();
         let mut is_paused = false;
         let mut is_idle = false;
-        let mut last_heartbeat = Instant::now();
         let mut last_poll = Instant::now();
         let mut last_title_check = Instant::now();
 
         loop {
-            if stop_rx.try_recv().is_ok() { info!("Monitor stopped"); break; }
-            if let Ok(pause) = pause_rx.try_recv() { is_paused = pause; }
+            if stop_rx.try_recv().is_ok() {
+                info!("Monitor stopped");
+                break;
+            }
+            if let Ok(pause) = pause_rx.try_recv() {
+                is_paused = pause;
+            }
 
             let now = Instant::now();
-            // Sleep/resume detection: reset the dangling session so a whole
-            // sleep period is never attributed to the pre-sleep app.
+            // Sleep/resume (or system freeze): close the dangling DB session
+            // at the last known active time so the gap is never attributed
+            // to the pre-gap app.
             let gap = now - last_poll;
             last_poll = now;
             if gap > poll_interval * 5 {
-                info!("Monitor: sleep gap {gap:?} detected — resetting session");
+                info!("Monitor: sleep gap {gap:?} detected - closing session at gap start");
+                let gap_start = chrono::Utc::now()
+                    - chrono::Duration::from_std(gap).unwrap_or_default();
+                sink.accept(TrackedEvent::GapDetected { timestamp: gap_start });
                 current_app = None;
-                session_start = now;
                 is_idle = false;
             }
 
-            // A WinEventHook fired → foreground/title changed → check now.
+            // A WinEventHook fired -> foreground/title changed -> check now.
             // Title-change events can be chatty, so cap rechecks at ~2/s.
             let hook_fired = fg_rx.try_recv().is_ok();
             let can_check = now - last_title_check >= Duration::from_millis(500);
@@ -137,42 +142,62 @@ where
             }
 
             if !is_paused {
-                let foreground = window_resolver.get_foreground_app();
-                let now_idle = idle_detector.is_idle(idle_threshold);
+                // While already idle, only re-check input (cheap); skip the
+                // expensive foreground/process resolution entirely.
+                let now_idle_input = idle_detector.is_idle(idle_threshold);
 
-                if now_idle && !is_idle {
+                if now_idle_input && !is_idle {
+                    // User stopped typing: idle started (input threshold ago).
                     is_idle = true;
-                    info!("Monitor: idle started");
-                    sink.accept(TrackedEvent::IdleStarted { timestamp: chrono::Utc::now() });
+                    info!("Monitor: idle started (input)");
+                    sink.accept(TrackedEvent::IdleStarted {
+                        timestamp: chrono::Utc::now(),
+                        grace: idle_threshold,
+                    });
                     current_app = None;
-                } else if !now_idle && is_idle {
-                    is_idle = false;
-                    let ts = chrono::Utc::now();
-                    let dur = idle_detector.idle_duration();
-                    let cur = foreground.unwrap_or_else(AppInfo::idle);
-                    sink.accept(TrackedEvent::IdleEnded { idle_duration: dur, current_app: cur.clone(), timestamp: ts });
-                    current_app = Some(cur);
-                    session_start = Instant::now();
-                } else if !is_idle {
-                    if let Some(fg) = foreground {
-                        // Track per-window-title: "Edge — Bilibili" vs "Edge — GitHub"
-                        let same = current_app.as_ref().map_or(false, |c| {
-                            c.exe_path == fg.exe_path && c.window_title == fg.window_title
+                } else if !now_idle_input {
+                    let foreground = window_resolver.get_foreground_app();
+                    let lock = foreground
+                        .as_ref()
+                        .map_or(false, is_lock_or_screensaver);
+
+                    if lock && !is_idle {
+                        // Lock screen / screensaver: away instantly, no grace.
+                        is_idle = true;
+                        info!("Monitor: idle started (lock/screensaver)");
+                        sink.accept(TrackedEvent::IdleStarted {
+                            timestamp: chrono::Utc::now(),
+                            grace: Duration::ZERO,
                         });
-                        if !same {
-                            let prev = current_app.take();
-                            sink.accept(TrackedEvent::AppSwitched { previous: prev, current: fg.clone(), timestamp: chrono::Utc::now() });
-                            current_app = Some(fg);
-                            session_start = Instant::now();
+                        current_app = None;
+                    } else if !lock && is_idle {
+                        is_idle = false;
+                        let ts = chrono::Utc::now();
+                        let dur = idle_detector.idle_duration();
+                        let cur = foreground.unwrap_or_else(AppInfo::idle);
+                        sink.accept(TrackedEvent::IdleEnded {
+                            idle_duration: dur,
+                            current_app: cur.clone(),
+                            timestamp: ts,
+                        });
+                        current_app = Some(cur);
+                    } else if !is_idle {
+                        if let Some(fg) = foreground {
+                            // Track per-window-title: "Edge - Bilibili" vs "Edge - GitHub".
+                            let same = current_app.as_ref().map_or(false, |c| {
+                                c.exe_path == fg.exe_path && c.window_title == fg.window_title
+                            });
+                            if !same {
+                                let prev = current_app.take();
+                                sink.accept(TrackedEvent::AppSwitched {
+                                    previous: prev,
+                                    current: fg.clone(),
+                                    timestamp: chrono::Utc::now(),
+                                });
+                                current_app = Some(fg);
+                            }
                         }
                     }
-                }
-            }
-
-            if last_heartbeat.elapsed() >= heartbeat_interval {
-                last_heartbeat = Instant::now();
-                if let Some(ref app) = current_app {
-                    sink.accept(TrackedEvent::Heartbeat { current_app: app.clone(), session_duration: session_start.elapsed(), timestamp: chrono::Utc::now() });
                 }
             }
 
@@ -185,5 +210,19 @@ where
         }
     });
 
+
+
+/// Lock screen / screensaver / logon foreground processes: the user is
+/// away instantly (no input-threshold grace).
+fn is_lock_or_screensaver(app: &AppInfo) -> bool {
+    let stem = app
+        .exe_path
+        .rsplit("\\")
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(".exe")
+        .to_lowercase();
+    stem == "lockapp" || stem == "logonui" || stem.ends_with(".scr")
+}
     EventSourceHandle::new(stop_tx, pause_tx)
 }

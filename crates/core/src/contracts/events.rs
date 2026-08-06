@@ -64,8 +64,23 @@ pub enum TrackedEvent {
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 
-    /// User became idle (no input for longer than the threshold).
+    /// User became idle (no input for longer than the threshold, or the
+    /// screen was locked / a screensaver started).
     IdleStarted {
+        /// When idle was detected.
+        timestamp: chrono::DateTime<chrono::Utc>,
+        /// Trailing grace period (input-threshold minutes) that must NOT be
+        /// attributed to the previous app. Zero for lock/screensaver (the
+        /// user left instantly).
+        grace: Duration,
+    },
+
+    /// The monitor stopped observing for longer than expected (sleep,
+    /// hibernate, or a system freeze). Closes any dangling session at
+    /// `timestamp` (the last known active time) so the gap is never
+    /// attributed to the pre-gap app.
+    GapDetected {
+        /// Last known active time (gap start).
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 
