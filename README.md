@@ -1,25 +1,44 @@
-# TimeTrace
+<p align="center">
+  <img src="app/assets/icon_preview.png" width="96" alt="TimeTrace">
+</p>
 
-> 本地优先的 Windows 使用统计 + 日记应用
-> Local-first Windows time tracking & journal app
+<h1 align="center">TimeTrace</h1>
 
-**Rust 核心 + Flutter UI · 100% 本地运行，无网络、无遥测**
-**Rust core + Flutter UI · 100% local, no network, no telemetry**
+<p align="center">
+  本地优先的 Windows 使用统计 + 日记应用
+  <br>
+  <b>Rust</b> 核心 + <b>Flutter</b> UI · 100% 本地运行，无网络、无遥测
+</p>
 
-使用统计 · 应用图标 · 数据仪表盘 · 日记
-Usage stats · App icons · Data dashboard · Journal
+<p align="center">
+  <a href="README_EN.md">English</a>
+  ·
+  <a href="https://github.com/wellorbetter/timetrace/releases">
+    <img src="https://img.shields.io/github/v/release/wellorbetter/timetrace" alt="Release">
+  </a>
+  ·
+  <img src="https://github.com/wellorbetter/timetrace/actions/workflows/ci.yml/badge.svg" alt="CI">
+</p>
 
 ---
 
-## 功能 / Features
+## 功能特性
 
-- **使用统计 / Usage stats** — 自动记录前台应用活跃时长；自动识别空闲、锁屏与睡眠，不计入活跃时间。
-- **应用图标 / App icons** — 实时识别前台应用与图标；系统托盘常驻，右键菜单快速控制。
-- **数据仪表盘 / Dashboard** — 柱状图、饼图、24h 时段分布、当日汇总、应用分布轮播，与日历联动。
-- **日记 / Journal** — 朋友圈式日记：Markdown 编辑、图片相册、草稿自动保存、按天分组折叠。
-- **设置 / Settings** — 空闲阈值、开机启动等可配置。
+- **使用统计** — 自动记录前台应用活跃时长；自动识别空闲、锁屏与睡眠，不计入活跃时间
+- **应用图标** — 实时识别前台应用与图标；系统托盘常驻，右键菜单快速控制
+- **数据仪表盘** — 柱状图 / 饼图 / 24h 时段分布 / 当日汇总 / 应用分布轮播，与日历联动
+- **日记** — 朋友圈式日记：Markdown 编辑、图片相册、草稿自动保存、按天分组折叠
+- **设置** — 空闲阈值、开机启动等可配置
 
-## 技术栈 / Tech Stack
+## 截图
+
+| | |
+| --- | --- |
+| ![柱状图](docs/screenshots/dashboard-bar.png) | ![饼图](docs/screenshots/dashboard-pie.png) |
+| ![当日汇总](docs/screenshots/dashboard-summary.png) | ![应用分布](docs/screenshots/dashboard-apps.png) |
+| ![时段分布](docs/screenshots/dashboard-hourly.png) | |
+
+## 技术栈
 
 | 模块 | 说明 |
 | --- | --- |
@@ -27,33 +46,42 @@ Usage stats · App icons · Data dashboard · Journal
 | `bridge` | flutter_rust_bridge 跨语言绑定 |
 | `app/` | Flutter UI：Riverpod 3 + Material 3，Windows 桌面 |
 
-## 截图 / Screenshots
+## 构建
 
-| 仪表盘 Dashboard | 日记 Journal |
-| --- | --- |
-| ![dashboard](docs/screenshots/dashboard.png) | ![journal](docs/screenshots/journal.png) |
+### 环境要求
 
-> 截图待补充。如何添加截图：见 [docs/screenshots/README.md](docs/screenshots/README.md)。
+- Windows 10/11
+- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows)（stable 渠道）
+- [Rust 工具链](https://rustup.rs/)（`cargo` 需在 PATH 中，构建时自动编译 Rust 桥接库）
+- Visual Studio 2022（含「使用 C++ 的桌面开发」工作负载）
 
-## 构建 / Build
+### 命令
 
 ```bash
-# Rust 核心测试
+# 1) Rust 核心测试
 cargo test -p timetrace-core --lib
 
-# Flutter 静态分析（0 error）
-cd app && flutter analyze
+# 2) Flutter 静态分析
+cd app && flutter analyze --no-fatal-infos
 
-# Windows Release 构建
+# 3) Windows Release 构建（自动编译并拷贝 timetrace_bridge.dll）
 cd app && flutter build windows --release
+# 产物：app/build/windows/x64/runner/Release/
 ```
 
-## 开发过程 / How It Was Built
+## 下载
+
+- 最新版本：<https://github.com/wellorbetter/timetrace/releases>
+- 下载 `TimeTrace-vX.Y.Z-windows-x64.zip`，解压后直接运行 `timetrace_app.exe`，无需安装。
+
+## 开发过程
 
 全程 vibe coding：前期用 DeepSeek V4 Flash + Pi 快速搭出原型，后期切换到 Codex 持续做性能与交互优化。
-Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished with Codex for performance and UX.
 
-## 隐私 / Privacy
+## 隐私
 
 所有数据只保存在本地 SQLite（`%APPDATA%\TimeTrace\time.db`），不上传任何内容。
-All data stays in local SQLite; nothing is uploaded.
+
+## License
+
+[MIT](LICENSE)
