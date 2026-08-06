@@ -45,6 +45,33 @@ class StatChip extends StatelessWidget {
   }
 }
 
+/// 小问号图标：鼠标悬停（或长按）显示说明文字，用于解释不易理解的概念。
+class HelpIcon extends StatelessWidget {
+  const HelpIcon({required this.message, this.size = 14, super.key});
+
+  final String message;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        width: size + 6,
+        height: size + 6,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.help_outline, size: size, color: scheme.outline),
+      ),
+    );
+  }
+}
+
 /// Reusable session/app row (colored dot + time + name + duration).
 class DotRow extends StatelessWidget {
   const DotRow({

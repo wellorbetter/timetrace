@@ -10,6 +10,7 @@ import 'package:timetrace_app/src/core/logging/app_logger.dart';
 /// In-memory cache of decoded exe icons (keyed by exe path).
 class _IconCache {
   static final Map<String, ui.Image> _cache = {};
+  static final Set<String> _failedPaths = {};
 
   static ui.Image? get(String path) => _cache[path];
   static void put(String path, ui.Image img) {
@@ -19,6 +20,15 @@ class _IconCache {
       _cache.remove(oldest);
     }
     _cache[path] = img;
+  }
+
+  /// Record a path whose icon extraction failed so we skip repeated FFI.
+  static void markFailed(String path) {
+    _failedPaths.add(path);
+    // Bound blacklist size — drop the oldest entry when over the cap.
+    if (_failedPaths.length > 256) {
+      _failedPaths.remove(_failedPaths.first);
+    }
   }
 }
 
@@ -55,6 +65,8 @@ class _AppIconState extends ConsumerState<AppIcon> {
 
   Future<void> _load() async {
     if (_loading || widget.exePath.isEmpty) return;
+    // Skip paths that already failed — avoids repeated FFI calls.
+    if (_IconCache._failedPaths.contains(widget.exePath)) return;
     // Another instance may have loaded it while we waited.
     final cached = _IconCache.get(widget.exePath);
     if (cached != null) {
@@ -67,6 +79,7 @@ class _AppIconState extends ConsumerState<AppIcon> {
       final icon = api.getAppIcon(exePath: widget.exePath);
       if (icon == null || icon.rgba.isEmpty) {
         AppLogger.log('icon NULL for: ${widget.exePath}');
+        _IconCache.markFailed(widget.exePath);
         return;
       }
       final w = icon.width.toInt();
@@ -75,12 +88,18 @@ class _AppIconState extends ConsumerState<AppIcon> {
       final rgba = _unPremultiply(icon.rgba);
       final completer = Completer<ui.Image>();
       ui.decodeImageFromPixels(
-          rgba, w, h, ui.PixelFormat.rgba8888, completer.complete);
+        rgba,
+        w,
+        h,
+        ui.PixelFormat.rgba8888,
+        completer.complete,
+      );
       final img = await completer.future;
       _IconCache.put(widget.exePath, img);
       if (mounted) setState(() => _image = img);
     } catch (e, st) {
       AppLogger.log('icon load FAIL ${widget.exePath}: $e\n$st');
+      _IconCache.markFailed(widget.exePath);
     }
   }
 
@@ -145,7 +164,12 @@ class _AppIconState extends ConsumerState<AppIcon> {
     if (start < 0) start = 0;
     if (start >= end) return null;
     final path = cmd.substring(
-        start + (start < cmd.length && (cmd[start] == '"' || cmd[start] == ' ') ? 1 : 0), end);
+      start +
+          (start < cmd.length && (cmd[start] == '"' || cmd[start] == ' ')
+              ? 1
+              : 0),
+      end,
+    );
     final slash = path.lastIndexOf('\\');
     return slash < 0 ? path : path.substring(slash + 1);
   }

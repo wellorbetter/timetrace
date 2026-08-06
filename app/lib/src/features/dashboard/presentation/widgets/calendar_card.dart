@@ -14,11 +14,12 @@ import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
 
 /// Journal section: 日记 header + Markdown editor + image grid + entries
 /// feed for the selected day. Consumes calendarDataProvider directly.
 /// Diary time range — driven by the calendar above (not the diary itself).
-enum DiaryRange { day, week, month, custom }
+enum DiaryRange { day, week, month }
 
 /// Journal — 朋友圈-style: each entry is an independent post with its own
 /// text + image album. Range comes from the calendar; publish/edit/delete.
@@ -26,23 +27,14 @@ class DiarySection extends ConsumerStatefulWidget {
   const DiarySection({
     required this.date,
     this.range = DiaryRange.day,
-    this.customStart,
-    this.onRangeChanged,
-    this.onCustomStart,
     super.key,
   });
 
   /// Anchor date from the calendar — the selected day.
   final DateTime date;
 
-  /// Shared range selected at the calendar level.
+  /// Diary scope, derived from the dashboard range (merged).
   final DiaryRange range;
-
-  /// Custom range start date (null until picked).
-  final DateTime? customStart;
-
-  final ValueChanged<DiaryRange>? onRangeChanged;
-  final VoidCallback? onCustomStart;
 
   @override
   ConsumerState<DiarySection> createState() => _DiarySectionState();
@@ -81,13 +73,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       case DiaryRange.day:
         return (f(d), f(d));
       case DiaryRange.week:
-        return (f(d.subtract(const Duration(days: 6))), f(d));
+        // 与顶部“本周”一致：周一起算。
+        return (f(d.subtract(Duration(days: d.weekday - 1))), f(d));
       case DiaryRange.month:
         return (f(DateTime(d.year, d.month, 1)), f(d));
-      case DiaryRange.custom:
-        final s = widget.customStart;
-        if (s == null) return null;
-        return (f(s), f(d));
     }
   }
 
@@ -261,7 +250,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   DiaryRange.day => '所选日',
                   DiaryRange.week => '近一周',
                   DiaryRange.month => '本月',
-                  DiaryRange.custom => '自定义',
                 },
                 style: TextStyle(
                     fontSize: 10, color: scheme.onSecondaryContainer),
@@ -661,20 +649,21 @@ class _PostCardState extends ConsumerState<_PostCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      // Unified effect: tone + soft shadow; editing uses a different tint.
-      elevation: editing ? 3 : 2,
+      // 扁平化卡片：去掉浮动阴影改用细边框，视觉更干净，编辑态换高亮边框。
+      elevation: 0,
       color: editing
-          ? widget.scheme.primaryContainer.withValues(alpha: 0.5)
+          ? widget.scheme.primaryContainer.withValues(alpha: 0.45)
           : widget.scheme.surfaceContainerLow,
-      shadowColor: editing
-          ? widget.scheme.primary.withValues(alpha: 0.35)
-          : Colors.black.withValues(alpha: 0.18),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide.none,
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: editing
+              ? widget.scheme.primary.withValues(alpha: 0.55)
+              : widget.scheme.outlineVariant.withValues(alpha: 0.5),
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -759,8 +748,12 @@ class _PostCardState extends ConsumerState<_PostCard> {
                 ),
             ],
             // ── Actions ──
+            const SizedBox(height: 4),
+            Divider(
+                height: 1,
+                color: widget.scheme.outlineVariant.withValues(alpha: 0.35)),
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 2),
               child: editing
                   ? Row(
                       children: [
@@ -919,62 +912,33 @@ class _EditImageGrid extends StatelessWidget {
   }
 }
 
-enum SummaryRange { day, week, month }
 
-class DaySummaryPanel extends ConsumerStatefulWidget {
-  const DaySummaryPanel({
-    required this.date,
-    required this.range,
-    required this.onRangeChanged,
-  });
+class DaySummaryPanel extends ConsumerWidget {
+  const DaySummaryPanel({required this.date});
 
   final DateTime date;
-  final SummaryRange range;
-  final ValueChanged<SummaryRange> onRangeChanged;
 
   @override
-  ConsumerState<DaySummaryPanel> createState() => _DaySummaryPanelState();
-}
-
-class _DaySummaryPanelState extends ConsumerState<DaySummaryPanel> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Text(
-              widget.range == SummaryRange.day
-                  ? '${widget.date.month}月${widget.date.day}日'
-                  : widget.range == SummaryRange.week
-                      ? '本周'
-                      : '本月',
-              style:
-                  const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              '${date.month}月${date.day}日 · 周${'一二三四五六日'[date.weekday - 1]}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
-            SegmentedButton<SummaryRange>(
-              segments: const [
-                ButtonSegment(value: SummaryRange.day, label: Text('日')),
-                ButtonSegment(value: SummaryRange.week, label: Text('周')),
-                ButtonSegment(value: SummaryRange.month, label: Text('月')),
-              ],
-              selected: {widget.range},
-              onSelectionChanged: (s) => widget.onRangeChanged(s.first),
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStateProperty.all(
-                    const TextStyle(fontSize: 11)),
-              ),
-            ),
+            // 汇总页固定展示当日视图（热力图 + 使用记录），周/月由应用分布页承载。
+            Text('当日汇总',
+                style: TextStyle(fontSize: 11, color: scheme.outline)),
           ],
         ),
         const SizedBox(height: 8),
-        if (widget.range == SummaryRange.day)
-          _DaySummary(date: widget.date)
-        else
-          _RangeSummary(date: widget.date, range: widget.range),
+        // 内容区填满剩余高度，超长时内部滚动。
+        Expanded(child: _DaySummary(date: date)),
       ],
     );
   }
@@ -993,6 +957,16 @@ class _DaySummary extends ConsumerStatefulWidget {
 class _DaySummaryState extends ConsumerState<_DaySummary> {
   bool _showAll = false;
 
+  @override
+  void didUpdateWidget(covariant _DaySummary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.date.year != oldWidget.date.year ||
+        widget.date.month != oldWidget.date.month ||
+        widget.date.day != oldWidget.date.day) {
+      _showAll = false;
+    }
+  }
+
   /// Merge consecutive same-app sessions into one aggregated row.
   List<_AggRow> _aggregate(List<DaySessionDto> sessions) {
     final rows = <String, _AggRow>{};
@@ -1003,6 +977,10 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
           firstStart: s.startedAt,
           seconds: 0,
           sessions: 0);
+      // 首次使用时间取最早一次开始时间。
+      if (s.startedAt.compareTo(agg.firstStart) < 0) {
+        agg.firstStart = s.startedAt;
+      }
       agg.seconds += s.durationSecs.toInt();
       agg.sessions += 1;
       rows[s.appName] = agg;
@@ -1046,23 +1024,64 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
             const SizedBox(height: 8),
             _HourlyHeatmap(date: widget.date),
             const SizedBox(height: 8),
-            Text('使用记录',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Row(
+              children: [
+                const Text('使用记录',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(width: 4),
+                HelpIcon(
+                  message: '当天打开过的应用汇总。左侧 xx:xx 为该应用当日第一次使用时间，右侧为累计活跃时长（不含锁屏/空闲时间）。',
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             if (agg.isEmpty)
               Text('当天暂无记录',
                   style: TextStyle(fontSize: 12, color: scheme.outline))
-            else ...[
-              for (final a in agg.take(_showAll ? 20 : 6))
-                _AggRowTile(row: a),
-              if (agg.length > 6)
-                Center(
-                  child: TextButton(
-                    onPressed: () => setState(() => _showAll = !_showAll),
-                    child: Text(_showAll ? '收起' : '全部 ${agg.length} 应用'),
-                  ),
+            else
+              // 列表占满剩余高度：超过才隐藏，展开后内部滚动。
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const rowH = 24.0;
+                    // PageView can hand a page unbounded height on some
+                    // layout passes; never let Infinity reach toInt().
+                    final maxH = constraints.maxHeight.isFinite
+                        ? constraints.maxHeight
+                        : 0.0;
+                    final fit = (maxH / rowH)
+                        .floor()
+                        .clamp(1, agg.length);
+                    final collapsed = agg.length > fit;
+                    final hideSome = !_showAll && collapsed;
+                    final shown = hideSome ? agg.take(fit).toList() : agg;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: EdgeInsets.zero,
+                            children: [
+                              for (final a in shown) _AggRowTile(row: a),
+                            ],
+                          ),
+                        ),
+                        if (collapsed)
+                          Center(
+                            child: TextButton(
+                              onPressed: () =>
+                                  setState(() => _showAll = !_showAll),
+                              child: Text(_showAll
+                                  ? '收起'
+                                  : '全部 ${agg.length} 应用'),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-            ],
+              ),
           ],
         );
       },
@@ -1132,119 +1151,11 @@ class _AggRowTile extends StatelessWidget {
   }
 }
 
-/// Week/Month range: aggregated top apps.
-class _RangeSummary extends ConsumerWidget {
-  const _RangeSummary({required this.date, required this.range});
-
-  final DateTime date;
-  final SummaryRange range;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final (start, end) = _rangeBounds(range);
-    final asyncSplit = ref.watch(rangeSummaryProvider((start, end)));
-
-    return asyncSplit.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(8),
-        child: Center(
-            child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))),
-      ),
-      error: (e, _) =>
-          Text('加载失败: $e', style: const TextStyle(fontSize: 12)),
-      data: (sessions) {
-        final total =
-            sessions.fold<int>(0, (s, e) => s + e.durationSecs.toInt());
-        final h = total ~/ 3600;
-        final m = (total % 3600) ~/ 60;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                StatChip(label: '活跃 ${h}h${m}m', color: scheme.primary),
-                StatChip(label: '${sessions.length} 应用', color: scheme.tertiary),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Top 应用',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 4),
-            if (sessions.isEmpty)
-              Text('暂无记录',
-                  style: TextStyle(fontSize: 12, color: scheme.outline))
-            else
-              for (final s in sessions.take(8))
-                _SessionRowSimple(name: s.appName, seconds: s.durationSecs.toInt()),
-          ],
-        );
-      },
-    );
-  }
-
-  (String, String) _rangeBounds(SummaryRange range) {
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    final now = DateTime.now();
-    if (range == SummaryRange.week) {
-      final monday = now.subtract(Duration(days: now.weekday - 1));
-      return (fmt(monday), fmt(now));
-    }
-    return ('${now.year}-${now.month.toString().padLeft(2, '0')}-01', fmt(now));
-  }
-}
-
-class _SessionRowSimple extends StatelessWidget {
-  const _SessionRowSimple({required this.name, required this.seconds});
-
-  final String name;
-  final int seconds;
-
-  @override
-  Widget build(BuildContext context) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Container(
-              width: 8,
-              height: 8,
-              decoration:
-                  BoxDecoration(color: appColor(name), shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(name,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12)),
-          ),
-          Text(h > 0 ? '${h}h${m}m' : '${m}m',
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
 /// Diary editor (full-width, below calendar) — Material 3 style.
 class _HourlyHeatmap extends ConsumerWidget {
-  const _HourlyHeatmap({
-    required this.date,
-    this.highStart = 0,
-    this.highEnd = 24,
-  });
+  const _HourlyHeatmap({required this.date});
 
   final DateTime date;
-  final double highStart;
-  final double highEnd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1261,8 +1172,17 @@ class _HourlyHeatmap extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('当日活跃时段',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Row(
+              children: [
+                const Text('当日活跃时段',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(width: 4),
+                HelpIcon(
+                  message: '一天 24 小时的活跃分布，颜色越深表示该小时活跃时间越长；点击某个小时可跳转到时段分布页。',
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             SizedBox(
               height: 30,
@@ -1274,17 +1194,21 @@ class _HourlyHeatmap extends ConsumerWidget {
                         padding: const EdgeInsets.only(right: 1),
                         child: Tooltip(
                           message: '${i}时 · ${formatDuration(hours[i])}',
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: (i < highStart || i >= highEnd)
-                                  // Outside the selected hours → dimmed
-                                  ? scheme.surfaceContainerHighest
-                                      .withValues(alpha: 0.6)
-                                  : hours[i] == 0
-                                      ? scheme.surfaceContainerHighest
-                                      : scheme.primary.withValues(
+                          child: GestureDetector(
+                            // 联动：点击热力条→时段分布页选中该小时。
+                            onTap: hours[i] > 0
+                                ? () => ref
+                                      .read(hourlyFocusProvider.notifier)
+                                      .focus(date, i)
+                                : null,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: hours[i] == 0
+                                        ? scheme.surfaceContainerHighest
+: scheme.primary.withValues(
                                           alpha: 0.2 + 0.8 * (hours[i] / max)),
-                              borderRadius: BorderRadius.circular(2),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                         ),

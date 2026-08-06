@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
+import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
@@ -112,6 +113,7 @@ class SettingsScreen extends ConsumerWidget {
               divisions: 9,
               display: '${settings.pollIntervalMs} ${l.seconds}',
               description: '多久检测一次当前前台应用（越小越精确，越费电）',
+              help: '检测间隔：多久检测一次当前前台应用。越小越精确，也越耗电；修改后重启应用生效。',
               onChanged: (v) => _update(
                 ref,
                 settings.copyWith(pollIntervalMs: v),
@@ -125,6 +127,7 @@ class SettingsScreen extends ConsumerWidget {
               divisions: 59,
               display: '${settings.idleThresholdMinutes} ${l.minutes}',
               description: '键盘/鼠标停止操作多久后视为离开，暂停计时',
+              help: '空闲阈值：键盘/鼠标停止操作多久后视为离开并暂停计时。锁屏/屏幕保护/待机会立即暂停，不受此阈值影响。',
               onChanged: (v) => _update(
                 ref,
                 settings.copyWith(idleThresholdMinutes: v),
@@ -139,6 +142,8 @@ class SettingsScreen extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.outline),
               ),
             ),
+            const Divider(),
+            const _PauseRecordTile(),
             const Divider(),
 
             // ── 数据 ──
@@ -399,6 +404,7 @@ class _SliderTile<T> extends StatelessWidget {
     required this.display,
     required this.onChanged,
     this.description,
+    this.help,
   });
 
   final String label;
@@ -408,12 +414,21 @@ class _SliderTile<T> extends StatelessWidget {
   final int divisions;
   final String display;
   final String? description;
+  final String? help;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title: Text(label),
+      title: Row(
+        children: [
+          Flexible(child: Text(label)),
+          if (help != null) ...[
+            const SizedBox(width: 4),
+            HelpIcon(message: help!, size: 13),
+          ],
+        ],
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -435,6 +450,57 @@ class _SliderTile<T> extends StatelessWidget {
       trailing: SizedBox(
         width: 70,
         child: Text(display, textAlign: TextAlign.right),
+      ),
+    );
+  }
+}
+
+/// 暂停记录开关：直接调用 bridge 暂停/恢复后台监控（不写配置，立即生效）。
+class _PauseRecordTile extends ConsumerStatefulWidget {
+  const _PauseRecordTile();
+
+  @override
+  ConsumerState<_PauseRecordTile> createState() => _PauseRecordTileState();
+}
+
+class _PauseRecordTileState extends ConsumerState<_PauseRecordTile> {
+  bool _paused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _paused = ref.read(apiProvider).isTrackingPaused();
+    } catch (e) {
+      AppLogger.log('read pause state failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.pause_circle_outline),
+      title: Row(
+        children: [
+          const Flexible(child: Text('暂停记录')),
+          const SizedBox(width: 4),
+          HelpIcon(
+            message: '开启后暂停记录任何活跃时长（锁屏/待机本身也会自动暂停计时）。适合需要完全离线休息的场景。',
+            size: 13,
+          ),
+        ],
+      ),
+      subtitle: const Text('暂停后不再记录活跃时长，适合休息/离线场景'),
+      trailing: Switch(
+        value: _paused,
+        onChanged: (v) {
+          try {
+            ref.read(apiProvider).setTrackingPaused(paused: v);
+          } catch (e) {
+            AppLogger.log('setTrackingPaused failed: $e');
+          }
+          setState(() => _paused = v);
+        },
       ),
     );
   }

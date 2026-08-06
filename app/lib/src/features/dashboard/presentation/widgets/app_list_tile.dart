@@ -44,19 +44,11 @@ class _AppListTileState extends ConsumerState<AppListTile> {
     }
   }
 
-  String _rangeEnd(DateRange range) {
-    final now = DateTime.now();
+  String _rangeEnd(DateRangeSelection sel) {
+    final d = sel.effectiveDay;
     String fmt(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    switch (range) {
-      case DateRange.today:
-        return fmt(now);
-      case DateRange.yesterday:
-        return fmt(now.subtract(const Duration(days: 1)));
-      case DateRange.week:
-      case DateRange.month:
-        return fmt(now);
-    }
+    return fmt(d);
   }
 
   @override

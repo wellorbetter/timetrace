@@ -31,6 +31,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end});
 
+  /// Hourly active-seconds for one app on a date (24 buckets).
+  Int64List getAppHourly({required String appName, required String date});
+
   /// Extract an exe icon as raw RGBA pixels.
   IconDto? getAppIcon({required String exePath});
 
@@ -78,6 +81,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Image paths attached to a diary entry (朋友圈 album).
   List<String> getDiaryImagesForEntry({required PlatformInt64 entryId});
+
+  /// Apps active within a specific hour of a date (seconds per app).
+  List<AppUsageDto> getHourApps({required String date, required int hour});
 
   /// All startup entries.
   List<StartupDto> getStartupEntries();

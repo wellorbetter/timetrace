@@ -70,7 +70,8 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     final text = _ctrl.text;
     // Selection may be invalid (-1) when the field was never focused —
     // fall back to appending at the end instead of crashing.
-    final ok = sel.isValid &&
+    final ok =
+        sel.isValid &&
         sel.start >= 0 &&
         sel.start <= text.length &&
         sel.end >= 0 &&
@@ -79,11 +80,11 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     final start = ok ? sel.start : text.length;
     final end = ok ? sel.end : text.length;
     final selected = ok ? text.substring(start, end) : (placeholder ?? '');
-    final newText =
-        text.replaceRange(start, end, '$prefix$selected$suffix');
+    final newText = text.replaceRange(start, end, '$prefix$selected$suffix');
     _ctrl.text = newText;
     _ctrl.selection = TextSelection.collapsed(
-        offset: start + prefix.length + selected.length);
+      offset: start + prefix.length + selected.length,
+    );
     setState(() {});
     _scheduleSave();
   }
@@ -141,19 +142,19 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   /// Unboxed mode icons (编辑/分屏/预览) — the selected one is highlighted.
   List<Widget> _modeIcons(ColorScheme scheme) {
     Widget item(_EditMode m, IconData icon, String tip) => IconButton(
-          icon: Icon(icon, size: 16),
-          tooltip: tip,
-          visualDensity: VisualDensity.compact,
-          onPressed: () => setState(() => _mode = m),
-          style: IconButton.styleFrom(
-            backgroundColor: _mode == m
-                ? scheme.primaryContainer
-                : Colors.transparent,
-            foregroundColor: _mode == m
-                ? scheme.onPrimaryContainer
-                : scheme.onSurfaceVariant,
-          ),
-        );
+      icon: Icon(icon, size: 16),
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      onPressed: () => setState(() => _mode = m),
+      style: IconButton.styleFrom(
+        backgroundColor: _mode == m
+            ? scheme.primaryContainer
+            : Colors.transparent,
+        foregroundColor: _mode == m
+            ? scheme.onPrimaryContainer
+            : scheme.onSurfaceVariant,
+      ),
+    );
     return [
       item(_EditMode.edit, Icons.edit_outlined, '编辑'),
       item(_EditMode.split, Icons.vertical_split, '分屏'),
@@ -167,8 +168,11 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
 
     return Container(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
+        color: _dirty
+            ? scheme.primaryContainer.withValues(alpha: 0.4)
+            : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -193,22 +197,46 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                     runSpacing: 2,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      _toolbarBtn(Icons.format_bold, '加粗',
-                          () => _apply('**', '**', placeholder: '粗体')),
-                      _toolbarBtn(Icons.format_italic, '斜体',
-                          () => _apply('*', '*', placeholder: '斜体')),
-                      _toolbarBtn(Icons.format_strikethrough, '删除线',
-                          () => _apply('~~', '~~', placeholder: '删除')),
-                      _toolbarBtn(Icons.title, '标题',
-                          () => _apply('## ', '', placeholder: '标题')),
-                      _toolbarBtn(Icons.format_list_bulleted, '列表',
-                          () => _apply('\n- ', '', placeholder: '项目')),
-                      _toolbarBtn(Icons.format_quote, '引用',
-                          () => _apply('\n> ', '', placeholder: '引用')),
-                      _toolbarBtn(Icons.code, '代码',
-                          () => _apply('`', '`', placeholder: '代码')),
-                      _toolbarBtn(Icons.terminal, '代码块',
-                          () => _apply('\n```\n', '\n```')),
+                      _toolbarBtn(
+                        Icons.format_bold,
+                        '加粗',
+                        () => _apply('**', '**', placeholder: '粗体'),
+                      ),
+                      _toolbarBtn(
+                        Icons.format_italic,
+                        '斜体',
+                        () => _apply('*', '*', placeholder: '斜体'),
+                      ),
+                      _toolbarBtn(
+                        Icons.format_strikethrough,
+                        '删除线',
+                        () => _apply('~~', '~~', placeholder: '删除'),
+                      ),
+                      _toolbarBtn(
+                        Icons.title,
+                        '标题',
+                        () => _apply('## ', '', placeholder: '标题'),
+                      ),
+                      _toolbarBtn(
+                        Icons.format_list_bulleted,
+                        '列表',
+                        () => _apply('\n- ', '', placeholder: '项目'),
+                      ),
+                      _toolbarBtn(
+                        Icons.format_quote,
+                        '引用',
+                        () => _apply('\n> ', '', placeholder: '引用'),
+                      ),
+                      _toolbarBtn(
+                        Icons.code,
+                        '代码',
+                        () => _apply('`', '`', placeholder: '代码'),
+                      ),
+                      _toolbarBtn(
+                        Icons.terminal,
+                        '代码块',
+                        () => _apply('\n```\n', '\n```'),
+                      ),
                       const SizedBox(width: 4),
                       // Mode switch — no box; selected icon highlighted.
                       ..._modeIcons(scheme),
@@ -218,32 +246,49 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 // Right: draft status (bigger text) + 发布
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: _dirty
-                        ? scheme.surfaceContainerHighest
-                        : scheme.primaryContainer.withValues(alpha: 0.4),
+                        ? scheme.primaryContainer.withValues(alpha: 0.4)
+                        : scheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    _dirty ? '输入中' : (_saved ? '✓ 草稿已存' : ''),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _dirty
-                            ? scheme.outline
-                            : scheme.onPrimaryContainer),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_saved && !_dirty) ...[
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 12,
+                          color: scheme.outline,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        _dirty ? '输入中' : (_saved ? '草稿已存' : ''),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _dirty
+                              ? scheme.onPrimaryContainer
+                              : scheme.outline,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton.filledTonal(
                   onPressed: _ctrl.text.trim().isEmpty ? null : publish,
                   icon: const Icon(Icons.publish, size: 16),
-                  tooltip:
-                      _ctrl.text.trim().isEmpty ? '先写点什么再发布' : '发布',
+                  tooltip: _ctrl.text.trim().isEmpty ? '先写点什么再发布' : '发布',
                   visualDensity: VisualDensity.compact,
-                  constraints:
-                      const BoxConstraints(minWidth: 30, minHeight: 30),
+                  constraints: const BoxConstraints(
+                    minWidth: 30,
+                    minHeight: 30,
+                  ),
                   padding: EdgeInsets.zero,
                 ),
               ],
@@ -255,18 +300,18 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
             _EditMode.edit => _editor(scheme),
             _EditMode.preview => _previewPane(scheme),
             _EditMode.split => IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _editor(scheme)),
-                    Container(
-                      width: 1,
-                      color: scheme.outlineVariant.withValues(alpha: 0.6),
-                    ),
-                    Expanded(child: _previewPane(scheme)),
-                  ],
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _editor(scheme)),
+                  Container(
+                    width: 1,
+                    color: scheme.outlineVariant.withValues(alpha: 0.6),
+                  ),
+                  Expanded(child: _previewPane(scheme)),
+                ],
               ),
+            ),
           },
         ],
       ),
@@ -294,25 +339,30 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       padding: const EdgeInsets.all(10),
       constraints: const BoxConstraints(minHeight: 120),
       child: _ctrl.text.trim().isEmpty
-          ? Text(widget.placeholder,
-              style: TextStyle(fontSize: 13, color: scheme.outline))
+          ? Text(
+              widget.placeholder,
+              style: TextStyle(fontSize: 13, color: scheme.outline),
+            )
           : MarkdownBody(
               data: _ctrl.text,
               selectable: true,
               styleSheet: MarkdownStyleSheet(
                 p: const TextStyle(fontSize: 13, height: 1.6),
                 h1: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: scheme.onSurface),
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
                 h2: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: scheme.onSurface),
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
                 h3: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurface),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
                 code: TextStyle(fontSize: 11, color: scheme.primary),
                 blockquoteDecoration: BoxDecoration(
                   color: scheme.secondaryContainer.withValues(alpha: 0.4),

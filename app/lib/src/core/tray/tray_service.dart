@@ -11,6 +11,16 @@ class TrayService with TrayListener {
   final WidgetRef _ref;
   bool _paused = false;
 
+  // Tray context menu icons (16x16 base64 PNG).
+  static const String _kIconShow =
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZklEQVR4nO1SWwrAMAizsmPp6fVeHWU4SqtScJ/LX0PzIAjwo0UTEFFfOVXd/rdIKCKbKTOHRq94xnivnPGPAgAhwEizFpacgqakkybWArMGJ+nokV51b9RPRrwyw5PU8h2UL7GMGzCSkIWLkZkvAAAAAElFTkSuQmCC';
+  static const String _kIconPause =
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAALUlEQVR4nGNgGH7AxsbmPwgTK8eErgAbG58cE6UuZho1gGEYhAEGIDUlDjwAALBjFHdOOiO6AAAAAElFTkSuQmCC';
+  static const String _kIconResume =
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAT0lEQVR4nN2SOw4AIAhDteFYHL/30tWlfFxM7EZCH23CGP/J3VdnHwpSBSFLk4FQuRJBUAFEaVAFKJB1ASTnOdutsVWBwpwmYGCU6n7ie23ByBv+NEZV0QAAAABJRU5ErkJggg==';
+  static const String _kIconQuit =
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAVElEQVR4nGNgoCWwsbH5D8L41DBRagkjPtvRxY4cOcJIlAtscDgbmzgTqTajyzPh0ozuXFyGMGFzKja/4hJnwaaQkEFUjUYmqsbCESKcTIo6hhECANIvJ3wHSlFkAAAAAElFTkSuQmCC';
+
   Future<void> init() async {
     trayManager.addListener(this);
     await trayManager.setIcon(
@@ -27,19 +37,28 @@ class TrayService with TrayListener {
       Menu(
         items: [
           MenuItem(
+            key: 'status',
+            label: _paused ? '已暂停追踪' : '正在追踪使用时间',
+            disabled: true,
+          ),
+          MenuItem.separator(),
+          MenuItem(
             key: 'show',
             label: '显示窗口',
+            icon: _kIconShow,
             onClick: (_) => _showWindow(),
           ),
           MenuItem(
             key: 'pause',
             label: _paused ? '▶ 恢复追踪' : '⏸ 暂停追踪',
+            icon: _paused ? _kIconResume : _kIconPause,
             onClick: (_) => _togglePause(),
           ),
           MenuItem.separator(),
           MenuItem(
             key: 'quit',
             label: '退出',
+            icon: _kIconQuit,
             onClick: (_) => _quit(),
           ),
         ],

@@ -1,26 +1,66 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
+import 'package:window_manager/window_manager.dart';
 
 /// Supported date ranges.
-enum DateRange { today, yesterday, week, month }
+enum DateRange { today, yesterday, week, month, custom }
 
-/// Currently selected date range (Riverpod 3 — small Notifier).
-class DateRangeNotifier extends Notifier<DateRange> {
+/// Selected range plus an optional concrete day (used for [DateRange.custom]).
+@immutable
+class DateRangeSelection {
+  const DateRangeSelection(this.range, {this.day});
+
+  final DateRange range;
+
+  /// Concrete calendar day; non-null when [range] is [DateRange.custom].
+  final DateTime? day;
+
+  /// The single day all day-level views (hourly/summary/diary) should show.
+  DateTime get effectiveDay {
+    final now = DateTime.now();
+    switch (range) {
+      case DateRange.today:
+        return now;
+      case DateRange.yesterday:
+        return now.subtract(const Duration(days: 1));
+      case DateRange.custom:
+        return day ?? now;
+      case DateRange.week:
+      case DateRange.month:
+        return now;
+    }
+  }
+}
+
+/// Currently selected date range (Riverpod 3 - small Notifier).
+class DateRangeNotifier extends Notifier<DateRangeSelection> {
   @override
-  DateRange build() => DateRange.today;
+  DateRangeSelection build() => const DateRangeSelection(DateRange.today);
 
-  void select(DateRange range) => state = range;
+  /// Pick a range shortcut (today / yesterday / week / month).
+  void select(DateRange range) => state = DateRangeSelection(range);
+
+  /// Pick a concrete calendar day; drives every chart on the dashboard.
+  void selectDay(DateTime day) =>
+      state = DateRangeSelection(DateRange.custom, day: day);
 }
 
 final dashboardRangeProvider =
-    NotifierProvider<DateRangeNotifier, DateRange>(DateRangeNotifier.new);
+    NotifierProvider<DateRangeNotifier, DateRangeSelection>(
+      DateRangeNotifier.new,
+    );
+
 
 /// Dashboard state provider with auto-refresh.
 class DashboardNotifier extends AsyncNotifier<DashboardState> {
+  /// 按范围边界缓存最近 8 个范围，切回时秒开、不再重新加载。
+  static final Map<String, DashboardState> _cache = {};
+  static const int _cacheCap = 8;
   Timer? _timer;
 
   @override
@@ -28,12 +68,47 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     // Rebuild when the range changes.
     ref.watch(dashboardRangeProvider);
     _timer?.cancel();
-    // Refresh less aggressively; 3s is smooth enough for a local DB.
-    _timer = Timer.periodic(
-        const Duration(seconds: 2), (_) => ref.invalidateSelf());
+    // Refresh only while the window is visible; 10s is plenty for a local DB.
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
     ref.onDispose(() => _timer?.cancel());
-    return _load();
+    final bounds = _boundsKey(ref.read(dashboardRangeProvider));
+    final cached = _cache[bounds];
+    if (cached != null) {
+      // 先展示缓存，再后台刷新保证新鲜度。
+      Future.microtask(_refresh);
+      return cached;
+    }
+    final loaded = await _load();
+    _cache[bounds] = loaded;
+    _trimCache();
+    return loaded;
   }
+
+  /// 后台刷新当前范围：只更新 state 与缓存，不触发全屏 loading/重绘。
+  Future<void> _refresh() async {
+    try {
+      if (!(await windowManager.isVisible())) return;
+      final loaded = await _load();
+      final bounds = _boundsKey(ref.read(dashboardRangeProvider));
+      _cache[bounds] = loaded;
+      _trimCache();
+      state = AsyncData(loaded);
+    } catch (_) {
+      // 保持旧数据，静默失败。
+    }
+  }
+
+  String _boundsKey(DateRangeSelection sel) {
+    final (start, end) = _rangeBounds(sel);
+    return '$start|$end';
+  }
+
+  void _trimCache() {
+    while (_cache.length > _cacheCap) {
+      _cache.remove(_cache.keys.first);
+    }
+  }
+
 
   Future<DashboardState> _load() async {
     final api = ref.read(apiProvider);
@@ -53,31 +128,37 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     );
   }
 
-  (String, String) _rangeBounds(DateRange range) {
+    (String, String) _rangeBounds(DateRangeSelection sel) {
     final now = DateTime.now();
     String fmt(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final today = fmt(now);
-    switch (range) {
+    switch (sel.range) {
       case DateRange.today:
         return (today, today);
       case DateRange.yesterday:
         final y = now.subtract(const Duration(days: 1));
         final ys = fmt(y);
         return (ys, ys);
+      case DateRange.custom:
+        final ds = fmt(sel.day ?? now);
+        return (ds, ds);
       case DateRange.week:
         final monday = now.subtract(Duration(days: now.weekday - 1));
         return (fmt(monday), today);
       case DateRange.month:
-        return ('${now.year}-${now.month.toString().padLeft(2, '0')}-01', today);
+        return (
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-01',
+          today,
+        );
     }
   }
 }
 
 final dashboardProvider =
     AsyncNotifierProvider.autoDispose<DashboardNotifier, DashboardState>(
-        DashboardNotifier.new);
-
+      DashboardNotifier.new,
+    );
 
 /// Normalize a raw process name to a friendly display name, merging the
 /// many exe variants of the same app (msedge vs browser, LeagueClientUx
@@ -120,8 +201,13 @@ List<AppUsageItem> _mergeApps(List<AppUsageDto> rows) {
   final merged = <String, _MergedApp>{};
   for (final s in rows) {
     final name = normalizeAppName(s.appName);
-    final e = merged[name] ??
-        _MergedApp(active: 0, idle: 0, exePath: s.exePath.isEmpty ? null : s.exePath);
+    final e =
+        merged[name] ??
+        _MergedApp(
+          active: 0,
+          idle: 0,
+          exePath: s.exePath.isEmpty ? null : s.exePath,
+        );
     e.active += (s.activeSeconds as num).toInt();
     e.idle += (s.idleSeconds as num).toInt();
 
@@ -129,12 +215,14 @@ List<AppUsageItem> _mergeApps(List<AppUsageDto> rows) {
     merged[name] = e;
   }
   final list = merged.entries
-      .map((e) => AppUsageItem(
-            appName: e.key,
-            activeSeconds: e.value.active,
-            idleSeconds: e.value.idle,
-            exePath: e.value.exePath,
-          ))
+      .map(
+        (e) => AppUsageItem(
+          appName: e.key,
+          activeSeconds: e.value.active,
+          idleSeconds: e.value.idle,
+          exePath: e.value.exePath,
+        ),
+      )
       .toList();
   list.sort((a, b) => b.activeSeconds.compareTo(a.activeSeconds));
   return list;

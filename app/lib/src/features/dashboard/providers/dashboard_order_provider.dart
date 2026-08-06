@@ -7,10 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 const kViews = <String, String>{
   'bar': '柱状图',
   'pie': '饼图',
+  'hourly': '时段',
   'summary': '汇总',
   'apps': '应用列表',
 };
-const kDefaultOrder = ['bar', 'pie', 'summary', 'apps'];
+const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
 
 File _uiConfigFile() {
   final dir = Platform.environment['APPDATA'] ?? '.';
@@ -36,6 +37,9 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
       for (final v in kDefaultOrder) {
         if (!order.contains(v)) order.add(v);
       }
+      // 时段分布固定在最后（产品决策），旧配置也迁移到末尾。
+      order.remove('hourly');
+      order.add('hourly');
       return order;
     } catch (e) {
       return List.of(kDefaultOrder);
@@ -49,6 +53,11 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
     }
     final item = order.removeAt(from);
     order.insert(to, item);
+    // 时段固定最末位：任何拖拽后都重新放回末尾。
+    if (order.contains('hourly') && order.last != 'hourly') {
+      order.remove('hourly');
+      order.add('hourly');
+    }
     state = order;
     _persist(order);
   }
@@ -66,4 +75,5 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
 
 final dashboardOrderProvider =
     NotifierProvider<DashboardOrderNotifier, List<String>>(
-        DashboardOrderNotifier.new);
+      DashboardOrderNotifier.new,
+    );

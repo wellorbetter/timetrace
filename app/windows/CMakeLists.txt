@@ -1,5 +1,11 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+
+# This machine's cl.exe emits localized /showIncludes output (Chinese locale),
+# which corrupts CMake's RC dependency scanning (CMAKE_NINJA_CMCLDEPS_RC).
+# Compile the .rc resource directly with rc.exe instead.
+set(CMAKE_NINJA_CMCLDEPS_RC 0)
+
 project(timetrace_app LANGUAGES CXX)
 
 # ── Build the Rust bridge (timetrace_bridge.dll) ──
@@ -27,12 +33,15 @@ if(IS_MULTICONFIG)
   set(CMAKE_CONFIGURATION_TYPES "Debug;Profile;Release"
     CACHE STRING "" FORCE)
 else()
-  if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE
-      STRING "Flutter build mode" FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-      "Debug" "Profile" "Release")
-  endif()
+  # On MSVC, CMake pre-initializes CMAKE_BUILD_TYPE to "Debug"
+  # (Platform/Windows-MSVC.cmake), so the stock Flutter guard
+  # "if(NOT CMAKE_BUILD_TYPE ...)" never fires and a plain
+  # flutter build windows --release would silently build a Debug runner.
+  # Force Release for single-config (Ninja) generators.
+  set(CMAKE_BUILD_TYPE "Release" CACHE
+    STRING "Flutter build mode" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Profile" "Release")
 endif()
 # Define settings for the Profile build mode.
 set(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")

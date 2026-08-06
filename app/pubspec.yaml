@@ -65,6 +65,10 @@ dev_dependencies:
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
+dependency_overrides:
+  tray_manager:
+    path: third_party/tray_manager
+
 # The following section is specific to Flutter packages.
 flutter:
 
