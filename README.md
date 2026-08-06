@@ -1,88 +1,59 @@
 # TimeTrace
 
-> One codebase. Two outputs. Zero duplication.
->
-> `cargo build` → `tt.exe` (TUI) + `tt-gui.exe` (Desktop)
+> 本地优先的 Windows 使用统计 + 日记应用
+> Local-first Windows time tracking & journal app
 
-```
-┌─────────────────────────────────────────────────┐
-│              timetrace-core (lib)                │
-│  contracts/ · engine/ · storage/ · config/      │
-│  ┌───────────────────────────────────────────┐  │
-│  │  7 traits · 4 Win32 impls · SQLite store  │  │
-│  └───────────────┬───────────────────────────┘  │
-│                  │                               │
-│     ┌────────────┴────────────┐                 │
-│     ▼                         ▼                 │
-│  timetrace-tui (bin)    timetrace-gui (bin)      │
-│  ratatui + crossterm     egui + eframe           │
-│  → tt.exe                → tt-gui.exe            │
-│  Terminal dashboard      Native window           │
-└─────────────────────────────────────────────────┘
-```
+**Rust 核心 + Flutter UI · 100% 本地运行，无网络、无遥测**
+**Rust core + Flutter UI · 100% local, no network, no telemetry**
 
-## Quick Start
+使用统计 · 应用图标 · 数据仪表盘 · 日记
+Usage stats · App icons · Data dashboard · Journal
+
+---
+
+## 功能 / Features
+
+- **使用统计 / Usage stats** — 自动记录前台应用活跃时长；自动识别空闲、锁屏与睡眠，不计入活跃时间。
+- **应用图标 / App icons** — 实时识别前台应用与图标；系统托盘常驻，右键菜单快速控制。
+- **数据仪表盘 / Dashboard** — 柱状图、饼图、24h 时段分布、当日汇总、应用分布轮播，与日历联动。
+- **日记 / Journal** — 朋友圈式日记：Markdown 编辑、图片相册、草稿自动保存、按天分组折叠。
+- **设置 / Settings** — 空闲阈值、开机启动等可配置。
+
+## 技术栈 / Tech Stack
+
+| 模块 | 说明 |
+| --- | --- |
+| `crates/core` | Rust 核心：Win32 事件钩子监控、空闲/睡眠检测、SQLite 存储 |
+| `bridge` | flutter_rust_bridge 跨语言绑定 |
+| `app/` | Flutter UI：Riverpod 3 + Material 3，Windows 桌面 |
+
+## 截图 / Screenshots
+
+| 仪表盘 Dashboard | 日记 Journal |
+| --- | --- |
+| ![dashboard](docs/screenshots/dashboard.png) | ![journal](docs/screenshots/journal.png) |
+
+> 截图待补充。如何添加截图：见 [docs/screenshots/README.md](docs/screenshots/README.md)。
+
+## 构建 / Build
 
 ```bash
-git clone https://github.com/wellorbetter/timetrace.git
-cd timetrace
+# Rust 核心测试
+cargo test -p timetrace-core --lib
 
-# Build both
-cargo build --release
+# Flutter 静态分析（0 error）
+cd app && flutter analyze
 
-# Terminal version
-./target/release/tt
-
-# Desktop version
-./target/release/tt-gui
+# Windows Release 构建
+cd app && flutter build windows --release
 ```
 
-## Features
+## 开发过程 / How It Was Built
 
-| Feature | TUI (`tt`) | GUI (`tt-gui`) |
-|---------|------------|----------------|
-| App usage tracking | ✅ | ✅ |
-| Timeline + Top apps | ✅ | ✅ |
-| Process list + kill | ✅ | ✅ |
-| Startup manager | ✅ | ✅ |
-| Keyboard-first | ✅ | — |
-| System tray | 计划中 | ✅ |
-| Adaptive colors | Season/day-night | System theme |
-| Binary size | ~2 MB | ~4 MB |
-| RAM (idle) | ~5 MB | ~15 MB |
+全程 vibe coding：前期用 DeepSeek V4 Flash + Pi 快速搭出原型，后期切换到 Codex 持续做性能与交互优化。
+Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished with Codex for performance and UX.
 
-## Architecture
+## 隐私 / Privacy
 
-```
-crates/
-├── core/          ← SHARED (contracts + engine + storage)
-│   └── src/
-│       ├── contracts/    7 traits, zero deps
-│       ├── engine/       Win32 implementations
-│       └── storage/      SQLite via rusqlite
-│
-├── tui/           ← TERMINAL (ratatui)
-│   └── src/
-│       ├── main.rs       Entry point
-│       ├── app.rs        TUI app with 3 tabs
-│       └── theme.rs      Adaptive color system
-│
-└── gui/           ← DESKTOP (egui)
-    └── src/
-        └── main.rs       Entry point + GUI app
-```
-
-## Keyboard Shortcuts (TUI)
-
-| Key | Action |
-|-----|--------|
-| `1/2/3` | Switch tabs |
-| `Tab` | Next tab |
-| `q` | Quit |
-| `Esc` | Close dialog |
-| `k` | Kill process |
-| `Space` | Toggle startup entry |
-
-## License
-
-MIT
+所有数据只保存在本地 SQLite（`%APPDATA%\TimeTrace\time.db`），不上传任何内容。
+All data stays in local SQLite; nothing is uploaded.
