@@ -9,3 +9,6 @@
 /tools/
 /frb.yaml
 /codegen*.log
+# Local-only toolchain mirror (keep the repo mirror-free)
+/.cargo/
+/dist/
