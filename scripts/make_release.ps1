@@ -1,10 +1,11 @@
 # TimeTrace green-build packager (fixed: data/ must be included + verified)
+param([string]$Version = 'v1.0.0')
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runner = "$root\app\build\windows\x64\runner"
 $dist = "$root\dist"
-$name = "TimeTrace-$(Get-Date -Format 'yyyyMMdd')"
+$name = "TimeTrace-$Version-windows-x64"
 $out = "$dist\$name"
 
 if (-not (Test-Path "$runner\data\app.so")) { Write-Error "data/app.so missing - run assemble first"; exit 1 }
