@@ -96,14 +96,10 @@ pub trait DataStore: Send + Sync {
     fn get_usage_split(&self, start: NaiveDate, end: NaiveDate) -> Vec<AppUsageSplit>;
 
     /// Record a page visit (window title segment) within a session.
-    fn start_page_visit(&self, session_id: i64, app_name: &str, title: Option<&str>, date: NaiveDate) -> i64;
+    fn start_page_visit(&self, session_id: i64, app_name: &str, title: Option<&str>, started_at: DateTime<Utc>, date: NaiveDate) -> i64;
 
     /// Close a page visit, computing its duration.
     fn close_page_visit(&self, visit_id: i64, end_time: DateTime<Utc>);
-
-    /// Get hourly breakdown for a specific app on a specific date.
-    /// Returns 24 entries (one per hour), each with total seconds.
-    fn get_hourly_breakdown(&self, app_name: &str, date: NaiveDate) -> [i64; 24];
 
     /// Get per-window-title breakdown for an app on a date.
     /// Returns Vec of (window_title, total_seconds).

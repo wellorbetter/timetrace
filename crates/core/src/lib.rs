@@ -20,5 +20,6 @@ pub use engine::{
     run_monitor_loop, SessionAggregator, SysinfoProcessQuery,
     Win32IdleDetector, Win32WindowResolver, WindowsStartupScanner,
 };
+pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};
 pub use error::AppError;
 pub use storage::SqliteStore;

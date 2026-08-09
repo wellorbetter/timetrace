@@ -26,15 +26,6 @@ impl AppInfo {
         self
     }
 
-    /// Unknown process that couldn't be resolved.
-    pub fn unknown(pid: u32) -> Self {
-        Self {
-            exe_path: String::new(),
-            display_name: format!("Unknown (PID: {})", pid),
-            window_title: None,
-        }
-    }
-
     /// Idle pseudo-app.
     pub fn idle() -> Self {
         Self {
@@ -93,15 +84,6 @@ pub enum TrackedEvent {
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 
-    /// Periodic heartbeat for live UI updates (every ~60 seconds).
-    /// Sent even if the foreground app hasn't changed.
-    Heartbeat {
-        /// The app currently in foreground.
-        current_app: AppInfo,
-        /// How long the current session has been active.
-        session_duration: Duration,
-        timestamp: chrono::DateTime<chrono::Utc>,
-    },
 }
 
 /// Produces `TrackedEvent`s on its own thread/timer.
@@ -120,6 +102,7 @@ pub trait EventSource: Send {
 /// Use `pause()` / `resume()` for temporary suspension without full teardown.
 pub struct EventSourceHandle {
     stop_tx: std::sync::mpsc::Sender<()>,
+    hook_stop_tx: std::sync::mpsc::Sender<()>,
     pause_tx: std::sync::mpsc::Sender<bool>,
 }
 
@@ -127,13 +110,15 @@ impl EventSourceHandle {
     pub fn new(
         stop_tx: std::sync::mpsc::Sender<()>,
         pause_tx: std::sync::mpsc::Sender<bool>,
+        hook_stop_tx: std::sync::mpsc::Sender<()>,
     ) -> Self {
-        Self { stop_tx, pause_tx }
+        Self { stop_tx, hook_stop_tx, pause_tx }
     }
 
     /// Signal the event source to stop permanently.
     pub fn stop(self) {
         let _ = self.stop_tx.send(());
+        let _ = self.hook_stop_tx.send(());
     }
 
     /// Pause event production (tracking suspended).
@@ -144,6 +129,13 @@ impl EventSourceHandle {
     /// Resume event production.
     pub fn resume(&self) {
         let _ = self.pause_tx.send(false);
+    }
+}
+
+impl Drop for EventSourceHandle {
+    fn drop(&mut self) {
+        let _ = self.stop_tx.send(());
+        let _ = self.hook_stop_tx.send(());
     }
 }
 

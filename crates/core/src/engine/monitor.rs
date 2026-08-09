@@ -11,12 +11,12 @@ use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tracing::{debug, info};
+use tracing::info;
 
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetMessageW, MSG, TranslateMessage, EVENT_OBJECT_NAMECHANGE,
-    EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT,
+    DispatchMessageW, PeekMessageW, TranslateMessage, MSG, EVENT_OBJECT_NAMECHANGE,
+    EVENT_SYSTEM_FOREGROUND, PM_REMOVE, WINEVENT_OUTOFCONTEXT,
 };
 
 use crate::contracts::events::{AppInfo, EventSink, EventSourceHandle, TrackedEvent};
@@ -52,6 +52,7 @@ pub fn run_monitor_loop<W, I>(
     idle_detector: I,
     poll_interval: Duration,
     idle_threshold: Duration,
+    excluded_apps: Vec<String>,
     mut sink: Box<dyn EventSink>,
 ) -> EventSourceHandle
 where
@@ -59,6 +60,7 @@ where
     I: IdleDetector + 'static,
 {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let (hook_stop_tx, hook_stop_rx) = mpsc::channel::<()>();
     let (pause_tx, pause_rx) = mpsc::channel::<bool>();
     let (fg_tx, fg_rx) = mpsc::channel::<()>();
 
@@ -91,12 +93,15 @@ where
                 );
                 let mut msg = MSG::default();
                 loop {
-                    let r = GetMessageW(&mut msg, None, 0, 0);
-                    if r.0 == 0 || r.0 == -1 {
+                    if hook_stop_rx.try_recv().is_ok() {
                         break;
                     }
-                    TranslateMessage(&msg);
-                    DispatchMessageW(&msg);
+                    if PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                        let _ = TranslateMessage(&msg);
+                        DispatchMessageW(&msg);
+                    } else {
+                        thread::sleep(Duration::from_millis(50));
+                    }
                 }
             }
         });
@@ -156,7 +161,16 @@ where
                     });
                     current_app = None;
                 } else if !now_idle_input {
-                    let foreground = window_resolver.get_foreground_app();
+                    let raw_foreground = window_resolver.get_foreground_app();
+                    let excluded = raw_foreground
+                        .as_ref()
+                        .is_some_and(|app| is_excluded(app, &excluded_apps));
+                    if excluded && current_app.take().is_some() {
+                        sink.accept(TrackedEvent::GapDetected {
+                            timestamp: chrono::Utc::now(),
+                        });
+                    }
+                    let foreground = raw_foreground.filter(|app| !is_excluded(app, &excluded_apps));
                     let lock = foreground
                         .as_ref()
                         .map_or(false, is_lock_or_screensaver);
@@ -174,13 +188,17 @@ where
                         is_idle = false;
                         let ts = chrono::Utc::now();
                         let dur = idle_detector.idle_duration();
-                        let cur = foreground.unwrap_or_else(AppInfo::idle);
-                        sink.accept(TrackedEvent::IdleEnded {
-                            idle_duration: dur,
-                            current_app: cur.clone(),
-                            timestamp: ts,
-                        });
-                        current_app = Some(cur);
+                        if let Some(cur) = foreground {
+                            sink.accept(TrackedEvent::IdleEnded {
+                                idle_duration: dur,
+                                current_app: cur.clone(),
+                                timestamp: ts,
+                            });
+                            current_app = Some(cur);
+                        } else {
+                            sink.accept(TrackedEvent::GapDetected { timestamp: ts });
+                            current_app = None;
+                        }
                     } else if !is_idle {
                         if let Some(fg) = foreground {
                             // Track per-window-title: "Edge - Bilibili" vs "Edge - GitHub".
@@ -210,7 +228,8 @@ where
         }
     });
 
-
+    EventSourceHandle::new(stop_tx, pause_tx, hook_stop_tx)
+}
 
 /// Lock screen / screensaver / logon foreground processes: the user is
 /// away instantly (no input-threshold grace).
@@ -224,5 +243,36 @@ fn is_lock_or_screensaver(app: &AppInfo) -> bool {
         .to_lowercase();
     stem == "lockapp" || stem == "logonui" || stem.ends_with(".scr")
 }
-    EventSourceHandle::new(stop_tx, pause_tx)
+
+fn is_excluded(app: &AppInfo, excluded_apps: &[String]) -> bool {
+    let exe_name = app
+        .exe_path
+        .rsplit(['\\', '/'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let exe_stem = exe_name.strip_suffix(".exe").unwrap_or(&exe_name);
+    let display_name = app.display_name.to_ascii_lowercase();
+    excluded_apps.iter().any(|excluded| {
+        let value = excluded.trim().to_ascii_lowercase();
+        let value = value.strip_suffix(".exe").unwrap_or(&value);
+        value == exe_name || value == exe_stem || value == display_name
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_excluded;
+    use crate::contracts::events::AppInfo;
+
+    #[test]
+    fn excludes_by_exe_name_with_or_without_extension() {
+        let app = AppInfo::new(
+            r"C:\Apps\Example.exe".into(),
+            "Example".into(),
+        );
+        assert!(is_excluded(&app, &["example".into()]));
+        assert!(is_excluded(&app, &["EXAMPLE.EXE".into()]));
+        assert!(!is_excluded(&app, &["other.exe".into()]));
+    }
 }

@@ -115,6 +115,9 @@ pub struct DashboardDataDto {
 pub struct ConfigDto {
     pub poll_interval_ms: u64,
     pub idle_threshold_minutes: u64,
+    pub minimize_to_tray: bool,
+    pub start_minimized: bool,
+    pub auto_start_tracking: bool,
     pub excluded_apps: Vec<String>,
     pub db_path: String,
 }
@@ -141,20 +144,26 @@ impl TimeTraceApi {
             DataStore::upsert_startup_entries(&*db, &entries);
         }
 
-        // Start background monitor (thread persists after handle drops)
+        // Start background monitor.
         let config = AppConfig::load();
+        let initially_paused = !config.auto_start_tracking;
+        let excluded_apps = config.excluded_apps.clone();
         let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
         let handle = run_monitor_loop(
             Win32WindowResolver,
             Win32IdleDetector::new(),
             Duration::from_millis(config.poll_interval_ms),
             Duration::from_secs(config.idle_threshold_minutes * 60),
+            excluded_apps,
             sink,
         );
+        if initially_paused {
+            handle.pause();
+        }
         let api = TimeTraceApi {
             db,
             monitor: std::sync::Mutex::new(Some(handle)),
-            paused: std::sync::atomic::AtomicBool::new(false),
+            paused: std::sync::atomic::AtomicBool::new(initially_paused),
         };
         Ok(api)
     }
@@ -203,6 +212,12 @@ impl TimeTraceApi {
         }
     }
 
+    /// Reports whether a database read has entered its non-panicking fallback.
+    #[frb(sync)]
+    pub fn is_database_degraded(&self) -> bool {
+        self.db.is_degraded()
+    }
+
     /// Per-app active/idle split for a date range (dates as "YYYY-MM-DD").
     #[frb(sync)]
     pub fn get_usage_split(&self, start: String, end: String) -> Vec<AppUsageDto> {
@@ -248,6 +263,19 @@ impl TimeTraceApi {
         Ok(())
     }
 
+    /// Returns whether TimeTrace is configured to start for the current user.
+    #[frb(sync)]
+    pub fn is_self_start_enabled(&self) -> Result<bool> {
+        timetrace_core::is_self_start_enabled().map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Configures current-user startup without requiring administrator rights.
+    #[frb(sync)]
+    pub fn set_self_start_enabled(&self, enabled: bool, minimized: bool) -> Result<()> {
+        timetrace_core::set_self_start_enabled(enabled, minimized)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Overall recording statistics.
     #[frb(sync)]
     pub fn get_stats(&self, start: String, end: String) -> StatsDto {
@@ -289,6 +317,9 @@ impl TimeTraceApi {
         ConfigDto {
             poll_interval_ms: config.poll_interval_ms,
             idle_threshold_minutes: config.idle_threshold_minutes,
+            minimize_to_tray: config.minimize_to_tray,
+            start_minimized: config.start_minimized,
+            auto_start_tracking: config.auto_start_tracking,
             excluded_apps: config.excluded_apps,
             db_path: String::new(),
         }
@@ -300,8 +331,18 @@ impl TimeTraceApi {
         let mut app_config = AppConfig::load();
         app_config.poll_interval_ms = config.poll_interval_ms;
         app_config.idle_threshold_minutes = config.idle_threshold_minutes;
+        app_config.minimize_to_tray = config.minimize_to_tray;
+        app_config.start_minimized = config.start_minimized;
+        app_config.auto_start_tracking = config.auto_start_tracking;
         app_config.excluded_apps = config.excluded_apps;
-        app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))
+        app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        // Keep the startup command's optional --minimized flag aligned with the
+        // persisted preference when the user changes it after enabling startup.
+        if timetrace_core::is_self_start_enabled().unwrap_or(false) {
+            timetrace_core::set_self_start_enabled(true, app_config.start_minimized)
+                .map_err(|e| anyhow::anyhow!(e))?;
+        }
+        Ok(())
     }
 
     /// Active seconds for this week (Mon→today) and last week (full).
@@ -486,9 +527,17 @@ impl TimeTraceApi {
         let rows = DataStore::export_rows(&*self.db, s, e);
         let mut csv = String::from("app,date,active_secs,idle_secs\n");
         for (app, date, active, idle) in rows {
-            csv.push_str(&format!("{},{},{},{}\n", app, date, active, idle));
+            csv.push_str(&format!("{},{},{},{}\n", csv_field(&app), csv_field(&date), active, idle));
         }
         csv
+    }
+}
+
+fn csv_field(value: &str) -> String {
+    if value.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
     }
 }
 
@@ -547,7 +596,7 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
 }
 #[cfg(test)]
 mod tests {
-    use super::clean_exe_path;
+    use super::{clean_exe_path, csv_field};
 
     #[test]
     fn spaced_unquoted_path_kept_intact() {
@@ -566,5 +615,12 @@ mod tests {
         let p = clean_exe_path(r"D:\QQ\QQ.exe").unwrap();
         assert_eq!(p, r"D:\QQ\QQ.exe");
     }
-}
 
+    #[test]
+    fn csv_fields_escape_delimiters_quotes_and_newlines() {
+        assert_eq!(csv_field("plain"), "plain");
+        assert_eq!(csv_field("A, B"), "\"A, B\"");
+        assert_eq!(csv_field("A \"quoted\""), "\"A \"\"quoted\"\"\"");
+        assert_eq!(csv_field("A\nB"), "\"A\nB\"");
+    }
+}

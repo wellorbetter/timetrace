@@ -18,7 +18,10 @@ struct Cli { #[arg(long)] db: Option<String> }
 
 static LOG: once_cell::sync::Lazy<Mutex<Vec<String>>> = once_cell::sync::Lazy::new(|| Mutex::new(Vec::new()));
 fn log(msg: &str) {
-    let mut l = LOG.lock().unwrap();
+    let mut l = match LOG.lock() {
+        Ok(log) => log,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     l.push(format!("{} {}", chrono::Local::now().format("%H:%M:%S"), msg));
     if l.len() > 50 { l.remove(0); }
 }
@@ -82,7 +85,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sink: Box<dyn EventSink> = Box::new(DebugAggregator::new(SessionAggregator::new(db.clone())));
     let _handle = run_monitor_loop(Win32WindowResolver, Win32IdleDetector::new(),
         Duration::from_millis(config.poll_interval_ms),
-        Duration::from_secs(config.idle_threshold_minutes * 60), sink);
+        Duration::from_secs(config.idle_threshold_minutes * 60),
+        config.excluded_apps.clone(), sink);
 
     eframe::run_native("TimeTrace",
         eframe::NativeOptions { viewport: egui::ViewportBuilder::default()
@@ -92,7 +96,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut fonts = egui::FontDefinitions::default();
             if let Ok(bytes) = std::fs::read("C:\\Windows\\Fonts\\msyh.ttc") {
                 fonts.font_data.insert("YaHei".into(), egui::FontData::from_owned(bytes).into());
-                fonts.families.get_mut(&egui::FontFamily::Proportional).unwrap().insert(0, "YaHei".into());
+                if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                    family.insert(0, "YaHei".into());
+                }
             }
             cc.egui_ctx.set_fonts(fonts);
             // Material 3 light theme
@@ -202,7 +208,11 @@ impl eframe::App for GuiApp {
             egui::TopBottomPanel::bottom("log").min_height(120.0).resizable(true).show(ctx, |ui| {
                 ui.label("Log:");
                 egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
-                    for line in LOG.lock().unwrap().iter().rev().take(30) { ui.label(line.as_str()); }
+                    let log = match LOG.lock() {
+                        Ok(log) => log,
+                        Err(poisoned) => poisoned.into_inner(),
+                    };
+                    for line in log.iter().rev().take(30) { ui.label(line.as_str()); }
                 });
             });
         }
@@ -235,7 +245,7 @@ impl GuiApp {
                         }
                     }
                     if !found {
-                        split.push(AppUsageSplit { app_name, active_seconds: elapsed, idle_seconds: 0 });
+                        split.push(AppUsageSplit { app_name, exe_path: String::new(), active_seconds: elapsed, idle_seconds: 0 });
                     }
                 }
             }

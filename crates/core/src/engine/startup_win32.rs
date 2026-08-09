@@ -9,6 +9,44 @@ use tracing::warn;
 
 use crate::contracts::startup::{DisableResult, StartupEntryRecord, StartupScanner};
 
+const SELF_START_NAME: &str = "TimeTrace";
+const RUN_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+
+/// Returns whether TimeTrace has a current-user startup entry.
+pub fn is_self_start_enabled() -> Result<bool, String> {
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey_with_flags(RUN_KEY, winreg::enums::KEY_READ)
+        .map_err(|e| format!("Cannot open HKCU Run key: {e}"))?;
+    match key.get_value::<String, _>(SELF_START_NAME) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!("Cannot read TimeTrace startup entry: {error}")),
+    }
+}
+
+/// Enables or disables TimeTrace startup for the current Windows user.
+pub fn set_self_start_enabled(enabled: bool, minimized: bool) -> Result<(), String> {
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .create_subkey(RUN_KEY)
+        .map_err(|e| format!("Cannot open HKCU Run key: {e}"))?
+        .0;
+    if enabled {
+        let exe = std::env::current_exe().map_err(|e| format!("Cannot resolve executable: {e}"))?;
+        let mut command = format!("\"{}\" --startup", exe.display());
+        if minimized {
+            command.push_str(" --minimized");
+        }
+        key.set_value(SELF_START_NAME, &command)
+            .map_err(|e| format!("Cannot write TimeTrace startup entry: {e}"))
+    } else {
+        match key.delete_value(SELF_START_NAME) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("Cannot remove TimeTrace startup entry: {error}")),
+        }
+    }
+}
+
 // ── Internal source trait ──
 
 trait StartupSource: Send + Sync {

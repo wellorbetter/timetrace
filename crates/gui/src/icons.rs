@@ -20,7 +20,10 @@ impl IconCache {
     pub fn new() -> Self { Self { map: Mutex::new(HashMap::new()) } }
 
     pub fn get(&self, ctx: &egui::Context, exe_path: &str) -> Option<TextureHandle> {
-        let mut map = self.map.lock().unwrap();
+        let mut map = match self.map.lock() {
+            Ok(map) => map,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         if let Some(cached) = map.get(exe_path) { return cached.clone(); }
         let icon = extract_icon(exe_path).filter(|img| img.size[0] > 0 && img.size[1] > 0);
         let handle = icon.map(|img| ctx.load_texture(exe_path, img, TextureOptions::LINEAR));

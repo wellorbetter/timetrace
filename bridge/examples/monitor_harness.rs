@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use timetrace_core::*;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // File logging
     let dir = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join("TimeTrace");
     let _ = std::fs::create_dir_all(&dir);
@@ -30,7 +30,7 @@ fn main() {
     // Temp DB
     let db_path = std::env::temp_dir().join("timetrace_harness.db");
     let _ = std::fs::remove_file(&db_path);
-    let db = Arc::new(SqliteStore::open(db_path.clone()).expect("open db"));
+    let db = Arc::new(SqliteStore::open(db_path.clone())?);
 
     // Real monitor with 3-second idle threshold
     let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
@@ -39,6 +39,7 @@ fn main() {
         Win32IdleDetector::new(),
         Duration::from_millis(500),
         Duration::from_secs(3),
+        Vec::new(),
         sink,
     );
 
@@ -65,4 +66,5 @@ fn main() {
     } else {
         println!("❌ 未检测到挂机 —— 请确认测试期间保持了 5 秒以上不动");
     }
+    Ok(())
 }

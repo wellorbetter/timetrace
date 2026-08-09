@@ -4,6 +4,7 @@
 //! and operations return sensible defaults — the trait contract says infallible.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use chrono::{DateTime, NaiveDate, Timelike, Utc};
@@ -91,6 +92,7 @@ fn add_session_to_hours(hours: &mut [i64; 24], start: DateTime<Utc>, end: DateTi
 
 pub struct SqliteStore {
     conn: Mutex<Connection>,
+    degraded: AtomicBool,
 }
 
 impl SqliteStore {
@@ -118,11 +120,26 @@ impl SqliteStore {
 
         debug!("SQLite opened at {}", path.display());
 
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self { conn: Mutex::new(conn), degraded: AtomicBool::new(false) })
+    }
+
+    /// Whether any read operation has had to use its degraded fallback.
+    pub fn is_degraded(&self) -> bool {
+        self.degraded.load(Ordering::Relaxed)
+    }
+
+    fn mark_degraded(&self) {
+        self.degraded.store(true, Ordering::Relaxed);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn.lock().expect("SQLite connection mutex poisoned")
+        match self.conn.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                warn!("SQLite connection mutex poisoned; recovering connection guard");
+                poisoned.into_inner()
+            }
+        }
     }
 }
 
@@ -187,52 +204,64 @@ impl DataStore for SqliteStore {
 
     fn get_sessions_by_date(&self, date: NaiveDate) -> Vec<SessionRecord> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare(
+        let mut stmt = match conn.prepare(
                 "SELECT id, app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date
                  FROM usage_sessions WHERE date = ?1 ORDER BY started_at",
-            )
-            .unwrap();
-        stmt.query_map(params![date.to_string()], |row| Self::row_to_session(row))
-            .unwrap()
+            ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare sessions-by-date query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(params![date.to_string()], |row| Self::row_to_session(row)) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query sessions by date: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows
             .filter_map(|r| r.ok())
             .collect()
     }
 
     fn get_sessions_by_range(&self, start: NaiveDate, end: NaiveDate) -> Vec<SessionRecord> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare(
+        let mut stmt = match conn.prepare(
                 "SELECT id, app_path, app_name, window_title, started_at, ended_at, duration_secs, is_idle, date
                  FROM usage_sessions WHERE date >= ?1 AND date <= ?2 ORDER BY started_at",
-            )
-            .unwrap();
-        stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+            ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare sessions-by-range query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(params![start.to_string(), end.to_string()], |row| {
             Self::row_to_session(row)
-        })
-        .unwrap()
+        }) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query sessions by range: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows
         .filter_map(|r| r.ok())
         .collect()
     }
 
     fn get_daily_summary(&self, date: NaiveDate) -> Vec<AppUsageSummary> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare(
+        let mut stmt = match conn.prepare(
                 "SELECT app_name, COALESCE(SUM(duration_secs), 0) as total, COUNT(*) as sessions
                  FROM usage_sessions WHERE date = ?1 AND is_idle = 0 AND duration_secs IS NOT NULL
                  GROUP BY app_name ORDER BY total DESC",
-            )
-            .unwrap();
-        stmt.query_map(params![date.to_string()], |row| {
+            ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare daily summary query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(params![date.to_string()], |row| {
             Ok(AppUsageSummary {
                 app_name: row.get(0)?,
                 total_seconds: row.get(1)?,
                 session_count: row.get::<_, i64>(2)? as i64,
                 rank: 0,
             })
-        })
-        .unwrap()
+        }) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query daily summary: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows
         .filter_map(|r| r.ok())
         .enumerate()
         .map(|(i, mut s)| {
@@ -244,17 +273,18 @@ impl DataStore for SqliteStore {
 
     fn get_top_apps(&self, start: NaiveDate, end: NaiveDate, limit: usize) -> Vec<AppUsageSummary> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare(
+        let mut stmt = match conn.prepare(
                 "SELECT app_name, COALESCE(SUM(duration_secs), 0) as total, COUNT(*) as sessions
                  FROM usage_sessions
                  WHERE date >= ?1 AND date <= ?2 AND is_idle = 0 AND duration_secs > 0
                  GROUP BY app_name
                  ORDER BY total DESC
                  LIMIT ?3",
-            )
-            .unwrap();
-        stmt.query_map(
+            ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare top apps query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(
             params![start.to_string(), end.to_string(), limit as i64],
             |row| {
                 Ok(AppUsageSummary {
@@ -264,8 +294,11 @@ impl DataStore for SqliteStore {
                     rank: 0,
                 })
             },
-        )
-        .unwrap()
+        ) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query top apps: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows
         .filter_map(|r| r.ok())
         .enumerate()
         .map(|(i, mut s)| {
@@ -277,61 +310,50 @@ impl DataStore for SqliteStore {
 
     fn get_usage_split(&self, start: NaiveDate, end: NaiveDate) -> Vec<AppUsageSplit> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
+        let mut stmt = match conn.prepare(
             "SELECT app_name, MAX(app_path),
                     COALESCE(SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END), 0)
              FROM usage_sessions
              WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0 AND app_name != '__IDLE__'
              GROUP BY app_name ORDER BY 3 DESC"
-        ).unwrap();
-        stmt.query_map(params![start.to_string(), end.to_string()], |row| {
-            Ok(AppUsageSplit { app_name: row.get(0)?, exe_path: row.get(1)?, active_seconds: row.get(2)?, idle_seconds: row.get(3)? })
-        }).unwrap().filter_map(|r| r.ok()).collect()
-    }
-
-    fn get_hourly_breakdown(&self, app_name: &str, date: NaiveDate) -> [i64; 24] {
-        let conn = self.lock();
-        let mut hours = [0i64; 24];
-        if let Ok(mut stmt) = conn.prepare(
-            "SELECT started_at, duration_secs FROM usage_sessions
-             WHERE app_name = ?1 AND date = ?2 AND duration_secs IS NOT NULL",
         ) {
-            if let Ok(rows) = stmt.query_map(params![app_name, date.to_string()], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            }) {
-                for row in rows.flatten() {
-                    if let Ok(parsed) = DateTime::parse_from_rfc3339(&row.0) {
-                        let hour = parsed.hour() as usize;
-                        if hour < 24 {
-                            hours[hour] += row.1;
-                        }
-                    }
-                }
-            }
-        }
-        hours
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare usage split query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(params![start.to_string(), end.to_string()], |row| {
+            Ok(AppUsageSplit { app_name: row.get(0)?, exe_path: row.get(1)?, active_seconds: row.get(2)?, idle_seconds: row.get(3)? })
+        }) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query usage split: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows.filter_map(|r| r.ok()).collect()
     }
 
     fn get_window_titles(&self, app_name: &str, date: NaiveDate) -> Vec<(String, i64)> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
+        let mut stmt = match conn.prepare(
             "SELECT COALESCE(window_title, ''), COALESCE(SUM(duration_secs), 0)
              FROM page_visits
              WHERE app_name = ?1 AND date = ?2 AND duration_secs > 0
              GROUP BY window_title ORDER BY SUM(duration_secs) DESC"
-        ).unwrap();
-        stmt.query_map(params![app_name, date.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))
-            .unwrap().filter_map(|r| r.ok()).collect()
+        ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare window titles query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map(params![app_name, date.to_string()], |row| Ok((row.get(0)?, row.get(1)?))) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query window titles: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows.filter_map(|r| r.ok()).collect()
     }
 
-    fn start_page_visit(&self, session_id: i64, app_name: &str, title: Option<&str>, date: NaiveDate) -> i64 {
+    fn start_page_visit(&self, session_id: i64, app_name: &str, title: Option<&str>, started_at: DateTime<Utc>, date: NaiveDate) -> i64 {
         let conn = self.lock();
-        let now = Utc::now().to_rfc3339();
         match conn.execute(
             "INSERT INTO page_visits (session_id, app_name, window_title, started_at, ended_at, duration_secs, date)
              VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
-            params![session_id, app_name, title, now, date.to_string()],
+            params![session_id, app_name, title, started_at.to_rfc3339(), date.to_string()],
         ) {
             Ok(_) => conn.last_insert_rowid(),
             Err(e) => { warn!("page visit insert failed: {e}"); -1 }
@@ -383,13 +405,14 @@ impl DataStore for SqliteStore {
 
     fn get_all_startup_entries(&self) -> Vec<StartupEntryRecord> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare(
+        let mut stmt = match conn.prepare(
                 "SELECT id, name, command, source, enabled, backup_value, backup_path, first_seen, last_checked
                  FROM startup_entries ORDER BY source, name",
-            )
-            .unwrap();
-        stmt.query_map([], |row| {
+            ) {
+            Ok(stmt) => stmt,
+            Err(e) => { warn!("Failed to prepare startup entries query: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        let rows = match stmt.query_map([], |row| {
             Ok(StartupEntryRecord {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -401,10 +424,11 @@ impl DataStore for SqliteStore {
                 first_seen: parse_dt(row.get::<_, String>(7)?),
                 last_checked: parse_dt(row.get::<_, String>(8)?),
             })
-        })
-        .unwrap()
-        .filter_map(|r| r.ok())
-        .collect()
+        }) {
+            Ok(rows) => rows,
+            Err(e) => { warn!("Failed to query startup entries: {e}"); self.mark_degraded(); return Vec::new(); }
+        };
+        rows.filter_map(|r| r.ok()).collect()
     }
 
     fn set_startup_enabled(&self, id: i64, enabled: bool, backup: Option<&str>, backup_path: Option<&str>) {
@@ -878,7 +902,7 @@ fn parse_dt(s: String) -> DateTime<Utc> {
 // ── In-memory store for testing ──
 
 /// In-memory implementation of `DataStore` for unit tests and UI prototyping.
-#[cfg(any(test, feature = "testing"))]
+#[cfg(test)]
 pub struct MemoryStore {
     sessions: Mutex<Vec<SessionRecord>>,
     summaries: Mutex<Vec<(String, NaiveDate, i64, i64)>>, // app_name, date, seconds, count
@@ -887,7 +911,7 @@ pub struct MemoryStore {
     next_id: Mutex<i64>,
 }
 
-#[cfg(any(test, feature = "testing"))]
+#[cfg(test)]
 impl MemoryStore {
     pub fn new() -> Self {
         Self {
@@ -898,13 +922,20 @@ impl MemoryStore {
             next_id: Mutex::new(1),
         }
     }
+
+    fn lock<'a, T>(mutex: &'a Mutex<T>) -> std::sync::MutexGuard<'a, T> {
+        match mutex.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
 }
 
-#[cfg(any(test, feature = "testing"))]
+#[cfg(test)]
 impl DataStore for MemoryStore {
     fn insert_session(&self, session: &SessionRecord) -> i64 {
-        let mut sessions = self.sessions.lock().unwrap();
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut sessions = Self::lock(&self.sessions);
+        let mut next_id = Self::lock(&self.next_id);
         let id = *next_id;
         *next_id += 1;
         let mut s = session.clone();
@@ -914,7 +945,7 @@ impl DataStore for MemoryStore {
     }
 
     fn close_session(&self, id: i64, end_time: DateTime<Utc>) {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = Self::lock(&self.sessions);
         if let Some(s) = sessions.iter_mut().find(|s| s.id == id) {
             s.ended_at = Some(end_time);
             s.duration_secs = Some((end_time - s.started_at).num_seconds());
@@ -922,7 +953,7 @@ impl DataStore for MemoryStore {
     }
 
     fn get_active_session(&self) -> Option<SessionRecord> {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .rev()
             .find(|s| s.ended_at.is_none())
@@ -930,7 +961,7 @@ impl DataStore for MemoryStore {
     }
 
     fn get_sessions_by_date(&self, date: NaiveDate) -> Vec<SessionRecord> {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .filter(|s| s.date == date)
             .cloned()
@@ -938,7 +969,7 @@ impl DataStore for MemoryStore {
     }
 
     fn get_sessions_by_range(&self, start: NaiveDate, end: NaiveDate) -> Vec<SessionRecord> {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .filter(|s| s.date >= start && s.date <= end)
             .cloned()
@@ -957,16 +988,13 @@ impl DataStore for MemoryStore {
         vec![]
     }
 
-    fn start_page_visit(&self, _session_id: i64, _app_name: &str, _title: Option<&str>, _date: NaiveDate) -> i64 { -1 }
+    fn start_page_visit(&self, _session_id: i64, _app_name: &str, _title: Option<&str>, _started_at: DateTime<Utc>, _date: NaiveDate) -> i64 { -1 }
 
     fn close_page_visit(&self, _visit_id: i64, _end_time: DateTime<Utc>) {}
 
-    fn get_hourly_breakdown(&self, _app_name: &str, _date: NaiveDate) -> [i64; 24] {
-        [0; 24]
-    }
 
     fn get_window_titles(&self, app_name: &str, _date: NaiveDate) -> Vec<(String, i64)> {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .filter(|s| s.app_name == app_name && !s.is_idle)
             .filter_map(|s| s.duration_secs.map(|d| (s.window_title.clone().unwrap_or_default(), d)))
@@ -977,18 +1005,18 @@ impl DataStore for MemoryStore {
     }
 
     fn upsert_startup_entries(&self, entries: &[StartupEntryRecord]) {
-        let mut startups = self.startups.lock().unwrap();
+        let mut startups = Self::lock(&self.startups);
         for e in entries {
             startups.push(e.clone());
         }
     }
 
     fn get_all_startup_entries(&self) -> Vec<StartupEntryRecord> {
-        self.startups.lock().unwrap().clone()
+        Self::lock(&self.startups).clone()
     }
 
     fn set_startup_enabled(&self, id: i64, enabled: bool, backup: Option<&str>, backup_path: Option<&str>) {
-        let mut startups = self.startups.lock().unwrap();
+        let mut startups = Self::lock(&self.startups);
         if let Some(e) = startups.iter_mut().find(|e| e.id == id) {
             e.enabled = enabled;
             if let Some(v) = backup { e.backup_value = Some(v.to_string()); }
@@ -997,11 +1025,11 @@ impl DataStore for MemoryStore {
     }
 
     fn get_app_meta(&self, exe_path: &str) -> Option<AppMetaRecord> {
-        self.metas.lock().unwrap().iter().find(|m| m.app_path == exe_path).cloned()
+        Self::lock(&self.metas).iter().find(|m| m.app_path == exe_path).cloned()
     }
 
     fn set_app_meta(&self, meta: &AppMetaRecord) {
-        let mut metas = self.metas.lock().unwrap();
+        let mut metas = Self::lock(&self.metas);
         if let Some(existing) = metas.iter_mut().find(|m| m.app_path == meta.app_path) {
             *existing = meta.clone();
         } else {
@@ -1010,14 +1038,14 @@ impl DataStore for MemoryStore {
     }
 
     fn recording_started_at(&self) -> Option<DateTime<Utc>> {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .min_by_key(|s| s.started_at)
             .map(|s| s.started_at)
     }
 
     fn total_tracked_seconds(&self) -> i64 {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .filter(|s| !s.is_idle)
             .filter_map(|s| s.duration_secs)
@@ -1025,7 +1053,7 @@ impl DataStore for MemoryStore {
     }
 
     fn total_tracked_in_range(&self, start: NaiveDate, end: NaiveDate) -> i64 {
-        self.sessions.lock().unwrap()
+        Self::lock(&self.sessions)
             .iter()
             .filter(|s| !s.is_idle && s.date >= start && s.date <= end)
             .filter_map(|s| s.duration_secs)
@@ -1033,13 +1061,13 @@ impl DataStore for MemoryStore {
     }
 
     fn cleanup_old_sessions(&self, before: NaiveDate) {
-        self.sessions.lock().unwrap().retain(|s| s.date >= before);
+        Self::lock(&self.sessions).retain(|s| s.date >= before);
     }
 
     fn vacuum(&self) {}
 
     fn clear_all_data(&self) {
-        self.sessions.lock().unwrap().clear();
+        Self::lock(&self.sessions).clear();
     }
 
     fn export_rows(&self, _start: NaiveDate, _end: NaiveDate) -> Vec<(String, String, i64, i64)> {
@@ -1236,8 +1264,8 @@ mod sqlite_tests {
         let today = now.date_naive();
         let sid = store.insert_session(&sess("edge", now - Duration::minutes(20), 1200, false));
 
-        let v1 = store.start_page_visit(sid, "edge", Some("bilibili - Edge"), today);
-        let _v2 = store.start_page_visit(sid, "edge", Some("github - Edge"), today);
+        let v1 = store.start_page_visit(sid, "edge", Some("bilibili - Edge"), Utc::now(), today);
+        let _v2 = store.start_page_visit(sid, "edge", Some("github - Edge"), Utc::now(), today);
         store.close_page_visit(v1, now + Duration::minutes(5));
         store.close_page_visit(_v2, now + Duration::minutes(10));
 

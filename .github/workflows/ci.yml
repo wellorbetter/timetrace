@@ -11,7 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -p timetrace-core --lib
+      - run: cargo test --workspace
+      - run: cargo build --workspace
 
   flutter-windows:
     runs-on: windows-latest
@@ -22,4 +23,5 @@ jobs:
         with:
           channel: stable
       - run: cd app && flutter analyze --no-fatal-infos
+      - run: cd app && flutter test
       - run: cd app && flutter build windows --release

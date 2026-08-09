@@ -68,6 +68,7 @@ impl SessionAggregator {
             sid,
             &normalize_app_name(&app.display_name),
             app.window_title.as_deref(),
+            started_at,
             Local::now().date_naive(),
         );
         self.current_page_id = Some(pid);
@@ -111,7 +112,6 @@ impl EventSink for SessionAggregator {
                 self.close_session(timestamp);
             }
 
-            TrackedEvent::Heartbeat { .. } => {}
         }
     }
 }

@@ -10,7 +10,7 @@ fn main() {
     ];
     for p in paths {
         match extract_icon_rgba(p) {
-            Some((w, h, data)) => println!("OK  {} -> {}x{} ({} bytes)", p.rsplit('\\').next().unwrap(), w, h, data.len()),
+            Some((w, h, data)) => println!("OK  {} -> {}x{} ({} bytes)", p.rsplit('\\').next().unwrap_or(p), w, h, data.len()),
             None => println!("NULL {}", p),
         }
     }

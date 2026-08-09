@@ -10,7 +10,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowThreadProcessId,
 };
 
-use crate::engine::app_identity::{app_name_from_title, display_name_for};
+use crate::engine::app_identity::display_name_for;
 use crate::contracts::window::WindowResolver;
 use crate::contracts::events::AppInfo;
 

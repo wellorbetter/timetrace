@@ -20,7 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
     let _handle = run_monitor_loop(Win32WindowResolver, Win32IdleDetector::new(),
-        Duration::from_millis(config.poll_interval_ms), Duration::from_secs(config.idle_threshold_minutes * 60), sink);
+        Duration::from_millis(config.poll_interval_ms),
+        Duration::from_secs(config.idle_threshold_minutes * 60),
+        config.excluded_apps.clone(), sink);
 
     let mut terminal = ratatui::init();
     let mut app = App::new(db.clone());

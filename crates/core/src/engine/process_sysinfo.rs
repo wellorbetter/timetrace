@@ -12,6 +12,13 @@ impl SysinfoProcessQuery {
     pub fn new() -> Self {
         Self { system: Mutex::new(System::new()) }
     }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, System> {
+        match self.system.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
 }
 
 impl ProcessQuery for SysinfoProcessQuery {
@@ -22,7 +29,7 @@ impl ProcessQuery for SysinfoProcessQuery {
     }
 
     fn list_processes(&self) -> Vec<ProcessInfo> {
-        let sys = self.system.lock().unwrap();
+        let sys = self.lock();
         sys.processes().iter().map(|(pid, p)| {
             let cpu = p.cpu_usage();
             let mem_mb = p.memory() as f64 / (1024.0 * 1024.0);
@@ -38,14 +45,14 @@ impl ProcessQuery for SysinfoProcessQuery {
     }
 
     fn terminate_process(&self, pid: u32) -> Result<(), String> {
-        let sys = self.system.lock().unwrap();
+        let sys = self.lock();
         if let Some(p) = sys.process(Pid::from_u32(pid)) {
             if p.kill() { Ok(()) } else { Err(format!("Failed to kill {pid}")) }
         } else { Err(format!("Process {pid} not found")) }
     }
 
     fn get_process(&self, pid: u32) -> Option<ProcessInfo> {
-        let sys = self.system.lock().unwrap();
+        let sys = self.lock();
         sys.process(Pid::from_u32(pid)).map(|p| ProcessInfo {
             pid, name: p.name().to_string_lossy().into_owned(),
             exe_path: p.exe().map(|e| e.to_string_lossy().into_owned()),
