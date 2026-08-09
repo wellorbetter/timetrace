@@ -39,6 +39,12 @@
 | ![当日汇总](docs/screenshots/dashboard-summary.png) | ![应用分布](docs/screenshots/dashboard-apps.png) |
 | ![时段分布](docs/screenshots/dashboard-hourly.png) | |
 
+支持本地背景图片、透明度调节，以及带背景效果的仪表盘和设置页：
+
+![使用统计与背景效果](docs/screenshots/background-dashboard.png)
+
+![设置页与背景透明度](docs/screenshots/background-settings.png)
+
 ## 技术栈
 
 | 模块 | 说明 |
@@ -85,14 +91,6 @@ cd app && flutter test
 ## 隐私
 
 所有数据只保存在本地 SQLite（`%APPDATA%\TimeTrace\time.db`），不上传任何内容。
-
-## 背景与设置界面
-
-支持本地背景图片、透明度调节，以及带背景效果的仪表盘和设置页：
-
-![使用统计与背景效果](docs/screenshots/background-dashboard.png)
-
-![设置页与背景透明度](docs/screenshots/background-settings.png)
 
 ## License
 

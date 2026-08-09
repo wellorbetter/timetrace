@@ -39,6 +39,12 @@
 | ![Daily summary](docs/screenshots/dashboard-summary.png) | ![App distribution](docs/screenshots/dashboard-apps.png) |
 | ![Hourly distribution](docs/screenshots/dashboard-hourly.png) | |
 
+TimeTrace supports a local background image, adjustable opacity, and the same background treatment across the dashboard and settings page:
+
+![Dashboard with background](docs/screenshots/background-dashboard.png)
+
+![Settings with background opacity](docs/screenshots/background-settings.png)
+
 ## Tech Stack
 
 | Module | Description |
@@ -85,14 +91,6 @@ Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished wit
 ## Privacy
 
 All data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`); nothing is uploaded.
-
-## Background and settings
-
-TimeTrace supports a local background image, adjustable opacity, and the same background treatment across the dashboard and settings page:
-
-![Dashboard with background](docs/screenshots/background-dashboard.png)
-
-![Settings with background opacity](docs/screenshots/background-settings.png)
 
 ## License
 
