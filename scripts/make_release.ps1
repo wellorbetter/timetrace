@@ -1,5 +1,5 @@
 # TimeTrace green-build packager (fixed: data/ must be included + verified)
-param([string]$Version = 'v1.0.0')
+param([string]$Version = 'v1.0.1')
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path

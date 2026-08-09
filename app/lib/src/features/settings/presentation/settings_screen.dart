@@ -245,7 +245,7 @@ class SettingsScreen extends ConsumerWidget {
             _SectionHeader(title: l.about, icon: Icons.info_outline),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('TimeTrace v1.0.0 · Rust + Flutter · MIT'),
+              child: Text('TimeTrace v1.0.1 · Rust + Flutter · MIT'),
             ),
             ],
           ),
