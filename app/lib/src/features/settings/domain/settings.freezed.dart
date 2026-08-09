@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppSettings {
 
- int get pollIntervalMs; int get idleThresholdMinutes; List<String> get excludedApps; String get dbPath;
+ int get pollIntervalMs; int get idleThresholdMinutes; bool get minimizeToTray; bool get startMinimized; bool get autoStartTracking; List<String> get excludedApps; String get dbPath;
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $AppSettingsCopyWith<AppSettings> get copyWith => _$AppSettingsCopyWithImpl<AppS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.pollIntervalMs, pollIntervalMs) || other.pollIntervalMs == pollIntervalMs)&&(identical(other.idleThresholdMinutes, idleThresholdMinutes) || other.idleThresholdMinutes == idleThresholdMinutes)&&const DeepCollectionEquality().equals(other.excludedApps, excludedApps)&&(identical(other.dbPath, dbPath) || other.dbPath == dbPath));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.pollIntervalMs, pollIntervalMs) || other.pollIntervalMs == pollIntervalMs)&&(identical(other.idleThresholdMinutes, idleThresholdMinutes) || other.idleThresholdMinutes == idleThresholdMinutes)&&(identical(other.minimizeToTray, minimizeToTray) || other.minimizeToTray == minimizeToTray)&&(identical(other.startMinimized, startMinimized) || other.startMinimized == startMinimized)&&(identical(other.autoStartTracking, autoStartTracking) || other.autoStartTracking == autoStartTracking)&&const DeepCollectionEquality().equals(other.excludedApps, excludedApps)&&(identical(other.dbPath, dbPath) || other.dbPath == dbPath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,pollIntervalMs,idleThresholdMinutes,const DeepCollectionEquality().hash(excludedApps),dbPath);
+int get hashCode => Object.hash(runtimeType,pollIntervalMs,idleThresholdMinutes,minimizeToTray,startMinimized,autoStartTracking,const DeepCollectionEquality().hash(excludedApps),dbPath);
 
 @override
 String toString() {
-  return 'AppSettings(pollIntervalMs: $pollIntervalMs, idleThresholdMinutes: $idleThresholdMinutes, excludedApps: $excludedApps, dbPath: $dbPath)';
+  return 'AppSettings(pollIntervalMs: $pollIntervalMs, idleThresholdMinutes: $idleThresholdMinutes, minimizeToTray: $minimizeToTray, startMinimized: $startMinimized, autoStartTracking: $autoStartTracking, excludedApps: $excludedApps, dbPath: $dbPath)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $AppSettingsCopyWith<$Res>  {
   factory $AppSettingsCopyWith(AppSettings value, $Res Function(AppSettings) _then) = _$AppSettingsCopyWithImpl;
 @useResult
 $Res call({
- int pollIntervalMs, int idleThresholdMinutes, List<String> excludedApps, String dbPath
+ int pollIntervalMs, int idleThresholdMinutes, bool minimizeToTray, bool startMinimized, bool autoStartTracking, List<String> excludedApps, String dbPath
 });
 
 
@@ -62,11 +62,14 @@ class _$AppSettingsCopyWithImpl<$Res>
 
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? pollIntervalMs = null,Object? idleThresholdMinutes = null,Object? excludedApps = null,Object? dbPath = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? pollIntervalMs = null,Object? idleThresholdMinutes = null,Object? minimizeToTray = null,Object? startMinimized = null,Object? autoStartTracking = null,Object? excludedApps = null,Object? dbPath = null,}) {
   return _then(_self.copyWith(
 pollIntervalMs: null == pollIntervalMs ? _self.pollIntervalMs : pollIntervalMs // ignore: cast_nullable_to_non_nullable
 as int,idleThresholdMinutes: null == idleThresholdMinutes ? _self.idleThresholdMinutes : idleThresholdMinutes // ignore: cast_nullable_to_non_nullable
-as int,excludedApps: null == excludedApps ? _self.excludedApps : excludedApps // ignore: cast_nullable_to_non_nullable
+as int,minimizeToTray: null == minimizeToTray ? _self.minimizeToTray : minimizeToTray // ignore: cast_nullable_to_non_nullable
+as bool,startMinimized: null == startMinimized ? _self.startMinimized : startMinimized // ignore: cast_nullable_to_non_nullable
+as bool,autoStartTracking: null == autoStartTracking ? _self.autoStartTracking : autoStartTracking // ignore: cast_nullable_to_non_nullable
+as bool,excludedApps: null == excludedApps ? _self.excludedApps : excludedApps // ignore: cast_nullable_to_non_nullable
 as List<String>,dbPath: null == dbPath ? _self.dbPath : dbPath // ignore: cast_nullable_to_non_nullable
 as String,
   ));
@@ -153,10 +156,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int pollIntervalMs,  int idleThresholdMinutes,  List<String> excludedApps,  String dbPath)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int pollIntervalMs,  int idleThresholdMinutes,  bool minimizeToTray,  bool startMinimized,  bool autoStartTracking,  List<String> excludedApps,  String dbPath)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppSettings() when $default != null:
-return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedApps,_that.dbPath);case _:
+return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.minimizeToTray,_that.startMinimized,_that.autoStartTracking,_that.excludedApps,_that.dbPath);case _:
   return orElse();
 
 }
@@ -174,10 +177,10 @@ return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedAp
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int pollIntervalMs,  int idleThresholdMinutes,  List<String> excludedApps,  String dbPath)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int pollIntervalMs,  int idleThresholdMinutes,  bool minimizeToTray,  bool startMinimized,  bool autoStartTracking,  List<String> excludedApps,  String dbPath)  $default,) {final _that = this;
 switch (_that) {
 case _AppSettings():
-return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedApps,_that.dbPath);case _:
+return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.minimizeToTray,_that.startMinimized,_that.autoStartTracking,_that.excludedApps,_that.dbPath);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -194,10 +197,10 @@ return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedAp
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int pollIntervalMs,  int idleThresholdMinutes,  List<String> excludedApps,  String dbPath)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int pollIntervalMs,  int idleThresholdMinutes,  bool minimizeToTray,  bool startMinimized,  bool autoStartTracking,  List<String> excludedApps,  String dbPath)?  $default,) {final _that = this;
 switch (_that) {
 case _AppSettings() when $default != null:
-return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedApps,_that.dbPath);case _:
+return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.minimizeToTray,_that.startMinimized,_that.autoStartTracking,_that.excludedApps,_that.dbPath);case _:
   return null;
 
 }
@@ -209,11 +212,14 @@ return $default(_that.pollIntervalMs,_that.idleThresholdMinutes,_that.excludedAp
 
 
 class _AppSettings extends AppSettings {
-  const _AppSettings({required this.pollIntervalMs, required this.idleThresholdMinutes, required final  List<String> excludedApps, required this.dbPath}): _excludedApps = excludedApps,super._();
+  const _AppSettings({required this.pollIntervalMs, required this.idleThresholdMinutes, required this.minimizeToTray, required this.startMinimized, required this.autoStartTracking, required final  List<String> excludedApps, required this.dbPath}): _excludedApps = excludedApps,super._();
   
 
 @override final  int pollIntervalMs;
 @override final  int idleThresholdMinutes;
+@override final  bool minimizeToTray;
+@override final  bool startMinimized;
+@override final  bool autoStartTracking;
  final  List<String> _excludedApps;
 @override List<String> get excludedApps {
   if (_excludedApps is EqualUnmodifiableListView) return _excludedApps;
@@ -233,16 +239,16 @@ _$AppSettingsCopyWith<_AppSettings> get copyWith => __$AppSettingsCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.pollIntervalMs, pollIntervalMs) || other.pollIntervalMs == pollIntervalMs)&&(identical(other.idleThresholdMinutes, idleThresholdMinutes) || other.idleThresholdMinutes == idleThresholdMinutes)&&const DeepCollectionEquality().equals(other._excludedApps, _excludedApps)&&(identical(other.dbPath, dbPath) || other.dbPath == dbPath));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.pollIntervalMs, pollIntervalMs) || other.pollIntervalMs == pollIntervalMs)&&(identical(other.idleThresholdMinutes, idleThresholdMinutes) || other.idleThresholdMinutes == idleThresholdMinutes)&&(identical(other.minimizeToTray, minimizeToTray) || other.minimizeToTray == minimizeToTray)&&(identical(other.startMinimized, startMinimized) || other.startMinimized == startMinimized)&&(identical(other.autoStartTracking, autoStartTracking) || other.autoStartTracking == autoStartTracking)&&const DeepCollectionEquality().equals(other._excludedApps, _excludedApps)&&(identical(other.dbPath, dbPath) || other.dbPath == dbPath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,pollIntervalMs,idleThresholdMinutes,const DeepCollectionEquality().hash(_excludedApps),dbPath);
+int get hashCode => Object.hash(runtimeType,pollIntervalMs,idleThresholdMinutes,minimizeToTray,startMinimized,autoStartTracking,const DeepCollectionEquality().hash(_excludedApps),dbPath);
 
 @override
 String toString() {
-  return 'AppSettings(pollIntervalMs: $pollIntervalMs, idleThresholdMinutes: $idleThresholdMinutes, excludedApps: $excludedApps, dbPath: $dbPath)';
+  return 'AppSettings(pollIntervalMs: $pollIntervalMs, idleThresholdMinutes: $idleThresholdMinutes, minimizeToTray: $minimizeToTray, startMinimized: $startMinimized, autoStartTracking: $autoStartTracking, excludedApps: $excludedApps, dbPath: $dbPath)';
 }
 
 
@@ -253,7 +259,7 @@ abstract mixin class _$AppSettingsCopyWith<$Res> implements $AppSettingsCopyWith
   factory _$AppSettingsCopyWith(_AppSettings value, $Res Function(_AppSettings) _then) = __$AppSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- int pollIntervalMs, int idleThresholdMinutes, List<String> excludedApps, String dbPath
+ int pollIntervalMs, int idleThresholdMinutes, bool minimizeToTray, bool startMinimized, bool autoStartTracking, List<String> excludedApps, String dbPath
 });
 
 
@@ -270,11 +276,14 @@ class __$AppSettingsCopyWithImpl<$Res>
 
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? pollIntervalMs = null,Object? idleThresholdMinutes = null,Object? excludedApps = null,Object? dbPath = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? pollIntervalMs = null,Object? idleThresholdMinutes = null,Object? minimizeToTray = null,Object? startMinimized = null,Object? autoStartTracking = null,Object? excludedApps = null,Object? dbPath = null,}) {
   return _then(_AppSettings(
 pollIntervalMs: null == pollIntervalMs ? _self.pollIntervalMs : pollIntervalMs // ignore: cast_nullable_to_non_nullable
 as int,idleThresholdMinutes: null == idleThresholdMinutes ? _self.idleThresholdMinutes : idleThresholdMinutes // ignore: cast_nullable_to_non_nullable
-as int,excludedApps: null == excludedApps ? _self._excludedApps : excludedApps // ignore: cast_nullable_to_non_nullable
+as int,minimizeToTray: null == minimizeToTray ? _self.minimizeToTray : minimizeToTray // ignore: cast_nullable_to_non_nullable
+as bool,startMinimized: null == startMinimized ? _self.startMinimized : startMinimized // ignore: cast_nullable_to_non_nullable
+as bool,autoStartTracking: null == autoStartTracking ? _self.autoStartTracking : autoStartTracking // ignore: cast_nullable_to_non_nullable
+as bool,excludedApps: null == excludedApps ? _self._excludedApps : excludedApps // ignore: cast_nullable_to_non_nullable
 as List<String>,dbPath: null == dbPath ? _self.dbPath : dbPath // ignore: cast_nullable_to_non_nullable
 as String,
   ));

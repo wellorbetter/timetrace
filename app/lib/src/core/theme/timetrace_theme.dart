@@ -21,7 +21,7 @@ class TimetraceTheme {
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: scheme.surface,
+      scaffoldBackgroundColor: Colors.transparent,
     );
     // Apply chosen font + CJK fallback chain.
     final textTheme = base.textTheme.apply(
@@ -35,7 +35,10 @@ class TimetraceTheme {
     );
     return base.copyWith(
       textTheme: textTheme,
-      appBarTheme: AppBarTheme(backgroundColor: scheme.surface, elevation: 0),
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface.withValues(alpha: 0.78),
+        elevation: 0,
+      ),
       cardTheme: CardThemeData(
         elevation: 1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

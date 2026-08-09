@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// A selectable font (system fonts available on Windows).
 class AppFont {
@@ -30,9 +31,15 @@ class AppFont {
 /// Selected font preference.
 class FontNotifier extends Notifier<AppFont> {
   @override
-  AppFont build() => AppFont.defaultFont;
+  AppFont build() {
+    final value = UiPreferencesStore.read()['fontName'];
+    return AppFont.byName(value as String?) ?? AppFont.defaultFont;
+  }
 
-  void select(AppFont font) => state = font;
+  void select(AppFont font) {
+    state = font;
+    UiPreferencesStore.update({'fontName': font.name});
+  }
 }
 
 final fontProvider = NotifierProvider<FontNotifier, AppFont>(FontNotifier.new);

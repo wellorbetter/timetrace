@@ -116,6 +116,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final (start, end) = _rangeBounds(range);
     // Single FFI call for the whole dashboard.
     final data = api.getDashboardData(start: start, end: end);
+    final databaseDegraded = api.isDatabaseDegraded();
     final (thisWeek, lastWeek) = api.getWeekTotals();
     return DashboardState(
       apps: _mergeApps(data.apps),
@@ -124,6 +125,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       lifetimeSeconds: data.totalSeconds.toInt(),
       thisWeekSeconds: thisWeek.toInt(),
       lastWeekSeconds: lastWeek.toInt(),
+      databaseDegraded: databaseDegraded,
       since: data.since,
     );
   }
@@ -160,47 +162,12 @@ final dashboardProvider =
       DashboardNotifier.new,
     );
 
-/// Normalize a raw process name to a friendly display name, merging the
-/// many exe variants of the same app (msedge vs browser, LeagueClientUx
-/// vs League of Legends) so statistics show ONE row.
-String normalizeAppName(String raw) {
-  final lower = raw.toLowerCase();
-  if (lower.contains('msedge') || lower.contains('webview2')) {
-    return 'Edge';
-  }
-  // qbblinktrial/browser is WeGame's bundled browser trial — NOT Edge.
-  if (lower == 'browser' || lower.contains('qbblink')) {
-    return 'WeGame浏览器';
-  }
-  if (lower.contains('leagueclient') ||
-      lower.contains('league of legends') ||
-      lower.contains('lol')) {
-    return '英雄联盟';
-  }
-  if (lower.contains('startmenu') ||
-      lower.contains('shellhost') ||
-      lower.contains('searchhost') ||
-      lower.contains('lockapp') ||
-      lower.contains('applicationframehost') ||
-      lower.contains('shellexperiencehost') ||
-      lower.contains('runtimebroker') ||
-      lower.contains('textinputhost') ||
-      lower.contains('dwm')) {
-    return '系统';
-  }
-  if (lower == 'code' || lower == 'code.exe') return 'VS Code';
-  if (lower.contains('explorer')) return '资源管理器';
-  if (lower.contains('windows terminal') || lower.contains('terminal')) {
-    return '终端';
-  }
-  return raw;
-}
-
-/// Merge DTO rows by normalized name (sum durations, keep first exe path).
+/// Rust normalizes app names before persistence; this layer only merges rows
+/// defensively for legacy databases and keeps the first icon path.
 List<AppUsageItem> _mergeApps(List<AppUsageDto> rows) {
   final merged = <String, _MergedApp>{};
   for (final s in rows) {
-    final name = normalizeAppName(s.appName);
+    final name = s.appName;
     final e =
         merged[name] ??
         _MergedApp(

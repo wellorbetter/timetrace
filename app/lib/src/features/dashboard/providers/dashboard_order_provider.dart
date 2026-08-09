@@ -1,7 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// Carousel view keys — user-reorderable.
 const kViews = <String, String>{
@@ -13,11 +11,6 @@ const kViews = <String, String>{
 };
 const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
 
-File _uiConfigFile() {
-  final dir = Platform.environment['APPDATA'] ?? '.';
-  return File('$dir\\TimeTrace\\ui_config.json');
-}
-
 /// Persisted dashboard carousel order (local JSON, UI-only — no Rust change).
 class DashboardOrderNotifier extends Notifier<List<String>> {
   @override
@@ -25,10 +18,8 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
 
   List<String> _load() {
     try {
-      final f = _uiConfigFile();
-      if (!f.existsSync()) return List.of(kDefaultOrder);
-      final raw = jsonDecode(f.readAsStringSync());
-      if (raw is! Map || raw['order'] is! List) return List.of(kDefaultOrder);
+      final raw = UiPreferencesStore.read();
+      if (raw['order'] is! List) return List.of(kDefaultOrder);
       final order = (raw['order'] as List)
           .whereType<String>()
           .where(kViews.containsKey)
@@ -64,9 +55,7 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
 
   void _persist(List<String> order) {
     try {
-      final f = _uiConfigFile();
-      f.parent.createSync(recursive: true);
-      f.writeAsStringSync(jsonEncode({'order': order}));
+      UiPreferencesStore.update({'order': order});
     } catch (e) {
       // Non-fatal: order just won't persist.
     }

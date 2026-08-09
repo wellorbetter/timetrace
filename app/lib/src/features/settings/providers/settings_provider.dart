@@ -14,6 +14,9 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     return AppSettings(
       pollIntervalMs: c.pollIntervalMs.toInt(),
       idleThresholdMinutes: c.idleThresholdMinutes.toInt(),
+      minimizeToTray: c.minimizeToTray,
+      startMinimized: c.startMinimized,
+      autoStartTracking: c.autoStartTracking,
       excludedApps: c.excludedApps,
       dbPath: c.dbPath,
     );
@@ -31,6 +34,9 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
       config: ConfigDto(
         pollIntervalMs: BigInt.from(s.pollIntervalMs),
         idleThresholdMinutes: BigInt.from(s.idleThresholdMinutes),
+        minimizeToTray: s.minimizeToTray,
+        startMinimized: s.startMinimized,
+        autoStartTracking: s.autoStartTracking,
         excludedApps: s.excludedApps,
         dbPath: s.dbPath,
       ),

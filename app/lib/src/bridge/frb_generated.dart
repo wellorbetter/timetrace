@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1153584071;
+  int get rustContentHash => -1560329493;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -199,6 +199,10 @@ abstract class RustLibApi extends BaseApi {
     required String date,
   });
 
+  bool crateApiTimeTraceApiIsDatabaseDegraded({required TimeTraceApi that});
+
+  bool crateApiTimeTraceApiIsSelfStartEnabled({required TimeTraceApi that});
+
   bool crateApiTimeTraceApiIsTrackingPaused({required TimeTraceApi that});
 
   PlatformInt64 crateApiTimeTraceApiPublishDiary({
@@ -238,6 +242,12 @@ abstract class RustLibApi extends BaseApi {
     required TimeTraceApi that,
     required String path,
     required PlatformInt64 entryId,
+  });
+
+  void crateApiTimeTraceApiSetSelfStartEnabled({
+    required TimeTraceApi that,
+    required bool enabled,
+    required bool minimized,
   });
 
   void crateApiTimeTraceApiSetTrackingPaused({
@@ -1076,7 +1086,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiTimeTraceApiIsTrackingPaused({required TimeTraceApi that}) {
+  bool crateApiTimeTraceApiIsDatabaseDegraded({required TimeTraceApi that}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -1086,6 +1096,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiIsDatabaseDegradedConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiIsDatabaseDegradedConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_is_database_degraded",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiTimeTraceApiIsSelfStartEnabled({required TimeTraceApi that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiTimeTraceApiIsSelfStartEnabledConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiIsSelfStartEnabledConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_is_self_start_enabled",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiTimeTraceApiIsTrackingPaused({required TimeTraceApi that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1120,7 +1188,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1153,7 +1221,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(path, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1186,7 +1254,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(command, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -1221,7 +1289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1254,7 +1322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1289,7 +1357,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1324,7 +1392,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(path, serializer);
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1344,6 +1412,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiTimeTraceApiSetSelfStartEnabled({
+    required TimeTraceApi that,
+    required bool enabled,
+    required bool minimized,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_bool(enabled, serializer);
+          sse_encode_bool(minimized, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiTimeTraceApiSetSelfStartEnabledConstMeta,
+        argValues: [that, enabled, minimized],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiSetSelfStartEnabledConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_set_self_start_enabled",
+        argNames: ["that", "enabled", "minimized"],
+      );
+
+  @override
   void crateApiTimeTraceApiSetTrackingPaused({
     required TimeTraceApi that,
     required bool paused,
@@ -1357,7 +1460,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(paused, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1392,7 +1495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1427,7 +1530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1535,13 +1638,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConfigDto dco_decode_config_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return ConfigDto(
       pollIntervalMs: dco_decode_u_64(arr[0]),
       idleThresholdMinutes: dco_decode_u_64(arr[1]),
-      excludedApps: dco_decode_list_String(arr[2]),
-      dbPath: dco_decode_String(arr[3]),
+      minimizeToTray: dco_decode_bool(arr[2]),
+      startMinimized: dco_decode_bool(arr[3]),
+      autoStartTracking: dco_decode_bool(arr[4]),
+      excludedApps: dco_decode_list_String(arr[5]),
+      dbPath: dco_decode_String(arr[6]),
     );
   }
 
@@ -1904,11 +2010,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_pollIntervalMs = sse_decode_u_64(deserializer);
     var var_idleThresholdMinutes = sse_decode_u_64(deserializer);
+    var var_minimizeToTray = sse_decode_bool(deserializer);
+    var var_startMinimized = sse_decode_bool(deserializer);
+    var var_autoStartTracking = sse_decode_bool(deserializer);
     var var_excludedApps = sse_decode_list_String(deserializer);
     var var_dbPath = sse_decode_String(deserializer);
     return ConfigDto(
       pollIntervalMs: var_pollIntervalMs,
       idleThresholdMinutes: var_idleThresholdMinutes,
+      minimizeToTray: var_minimizeToTray,
+      startMinimized: var_startMinimized,
+      autoStartTracking: var_autoStartTracking,
       excludedApps: var_excludedApps,
       dbPath: var_dbPath,
     );
@@ -2356,6 +2468,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.pollIntervalMs, serializer);
     sse_encode_u_64(self.idleThresholdMinutes, serializer);
+    sse_encode_bool(self.minimizeToTray, serializer);
+    sse_encode_bool(self.startMinimized, serializer);
+    sse_encode_bool(self.autoStartTracking, serializer);
     sse_encode_list_String(self.excludedApps, serializer);
     sse_encode_String(self.dbPath, serializer);
   }
@@ -2838,6 +2953,14 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     date: date,
   );
 
+  /// Reports whether a database read has entered its non-panicking fallback.
+  bool isDatabaseDegraded() =>
+      RustLib.instance.api.crateApiTimeTraceApiIsDatabaseDegraded(that: this);
+
+  /// Returns whether TimeTrace is configured to start for the current user.
+  bool isSelfStartEnabled() =>
+      RustLib.instance.api.crateApiTimeTraceApiIsSelfStartEnabled(that: this);
+
   /// Whether tracking is currently paused.
   bool isTrackingPaused() =>
       RustLib.instance.api.crateApiTimeTraceApiIsTrackingPaused(that: this);
@@ -2888,6 +3011,14 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     path: path,
     entryId: entryId,
   );
+
+  /// Configures current-user startup without requiring administrator rights.
+  void setSelfStartEnabled({required bool enabled, required bool minimized}) =>
+      RustLib.instance.api.crateApiTimeTraceApiSetSelfStartEnabled(
+        that: this,
+        enabled: enabled,
+        minimized: minimized,
+      );
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused}) => RustLib.instance.api

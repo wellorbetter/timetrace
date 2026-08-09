@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DashboardState {
 
- List<AppUsageItem> get apps; int get totalActiveSeconds; int get totalIdleSeconds; int get lifetimeSeconds; int get thisWeekSeconds; int get lastWeekSeconds; String? get since;
+ List<AppUsageItem> get apps; int get totalActiveSeconds; int get totalIdleSeconds; int get lifetimeSeconds; int get thisWeekSeconds; int get lastWeekSeconds; bool get databaseDegraded; String? get since;
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $DashboardStateCopyWith<DashboardState> get copyWith => _$DashboardStateCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardState&&const DeepCollectionEquality().equals(other.apps, apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.since, since) || other.since == since));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardState&&const DeepCollectionEquality().equals(other.apps, apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded)&&(identical(other.since, since) || other.since == since));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,since);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,databaseDegraded,since);
 
 @override
 String toString() {
-  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, since: $since)';
+  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, databaseDegraded: $databaseDegraded, since: $since)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $DashboardStateCopyWith<$Res>  {
   factory $DashboardStateCopyWith(DashboardState value, $Res Function(DashboardState) _then) = _$DashboardStateCopyWithImpl;
 @useResult
 $Res call({
- List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, String? since
+ List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, bool databaseDegraded, String? since
 });
 
 
@@ -62,7 +62,7 @@ class _$DashboardStateCopyWithImpl<$Res>
 
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? since = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? databaseDegraded = null,Object? since = freezed,}) {
   return _then(_self.copyWith(
 apps: null == apps ? _self.apps : apps // ignore: cast_nullable_to_non_nullable
 as List<AppUsageItem>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
@@ -70,7 +70,8 @@ as int,totalIdleSeconds: null == totalIdleSeconds ? _self.totalIdleSeconds : tot
 as int,lifetimeSeconds: null == lifetimeSeconds ? _self.lifetimeSeconds : lifetimeSeconds // ignore: cast_nullable_to_non_nullable
 as int,thisWeekSeconds: null == thisWeekSeconds ? _self.thisWeekSeconds : thisWeekSeconds // ignore: cast_nullable_to_non_nullable
 as int,lastWeekSeconds: null == lastWeekSeconds ? _self.lastWeekSeconds : lastWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
+as int,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
+as bool,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -156,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  String? since)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DashboardState() when $default != null:
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.since);case _:
+return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
   return orElse();
 
 }
@@ -177,10 +178,10 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  String? since)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)  $default,) {final _that = this;
 switch (_that) {
 case _DashboardState():
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.since);case _:
+return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +198,10 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  String? since)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)?  $default,) {final _that = this;
 switch (_that) {
 case _DashboardState() when $default != null:
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.since);case _:
+return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
   return null;
 
 }
@@ -212,7 +213,7 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 
 
 class _DashboardState extends DashboardState {
-  const _DashboardState({required final  List<AppUsageItem> apps, required this.totalActiveSeconds, required this.totalIdleSeconds, required this.lifetimeSeconds, this.thisWeekSeconds = 0, this.lastWeekSeconds = 0, this.since}): _apps = apps,super._();
+  const _DashboardState({required final  List<AppUsageItem> apps, required this.totalActiveSeconds, required this.totalIdleSeconds, required this.lifetimeSeconds, this.thisWeekSeconds = 0, this.lastWeekSeconds = 0, this.databaseDegraded = false, this.since}): _apps = apps,super._();
   
 
  final  List<AppUsageItem> _apps;
@@ -227,6 +228,7 @@ class _DashboardState extends DashboardState {
 @override final  int lifetimeSeconds;
 @override@JsonKey() final  int thisWeekSeconds;
 @override@JsonKey() final  int lastWeekSeconds;
+@override@JsonKey() final  bool databaseDegraded;
 @override final  String? since;
 
 /// Create a copy of DashboardState
@@ -239,16 +241,16 @@ _$DashboardStateCopyWith<_DashboardState> get copyWith => __$DashboardStateCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardState&&const DeepCollectionEquality().equals(other._apps, _apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.since, since) || other.since == since));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardState&&const DeepCollectionEquality().equals(other._apps, _apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded)&&(identical(other.since, since) || other.since == since));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,since);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,databaseDegraded,since);
 
 @override
 String toString() {
-  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, since: $since)';
+  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, databaseDegraded: $databaseDegraded, since: $since)';
 }
 
 
@@ -259,7 +261,7 @@ abstract mixin class _$DashboardStateCopyWith<$Res> implements $DashboardStateCo
   factory _$DashboardStateCopyWith(_DashboardState value, $Res Function(_DashboardState) _then) = __$DashboardStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, String? since
+ List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, bool databaseDegraded, String? since
 });
 
 
@@ -276,7 +278,7 @@ class __$DashboardStateCopyWithImpl<$Res>
 
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? since = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? databaseDegraded = null,Object? since = freezed,}) {
   return _then(_DashboardState(
 apps: null == apps ? _self._apps : apps // ignore: cast_nullable_to_non_nullable
 as List<AppUsageItem>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
@@ -284,7 +286,8 @@ as int,totalIdleSeconds: null == totalIdleSeconds ? _self.totalIdleSeconds : tot
 as int,lifetimeSeconds: null == lifetimeSeconds ? _self.lifetimeSeconds : lifetimeSeconds // ignore: cast_nullable_to_non_nullable
 as int,thisWeekSeconds: null == thisWeekSeconds ? _self.thisWeekSeconds : thisWeekSeconds // ignore: cast_nullable_to_non_nullable
 as int,lastWeekSeconds: null == lastWeekSeconds ? _self.lastWeekSeconds : lastWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
+as int,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
+as bool,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `parse_date`, `setup_logging`
+// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `parse_date`, `setup_logging`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
@@ -103,6 +103,12 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String date,
   });
 
+  /// Reports whether a database read has entered its non-panicking fallback.
+  bool isDatabaseDegraded();
+
+  /// Returns whether TimeTrace is configured to start for the current user.
+  bool isSelfStartEnabled();
+
   /// Whether tracking is currently paused.
   bool isTrackingPaused();
 
@@ -130,6 +136,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String path,
     required PlatformInt64 entryId,
   });
+
+  /// Configures current-user startup without requiring administrator rights.
+  void setSelfStartEnabled({required bool enabled, required bool minimized});
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
@@ -176,12 +185,18 @@ class AppUsageDto {
 class ConfigDto {
   final BigInt pollIntervalMs;
   final BigInt idleThresholdMinutes;
+  final bool minimizeToTray;
+  final bool startMinimized;
+  final bool autoStartTracking;
   final List<String> excludedApps;
   final String dbPath;
 
   const ConfigDto({
     required this.pollIntervalMs,
     required this.idleThresholdMinutes,
+    required this.minimizeToTray,
+    required this.startMinimized,
+    required this.autoStartTracking,
     required this.excludedApps,
     required this.dbPath,
   });
@@ -190,6 +205,9 @@ class ConfigDto {
   int get hashCode =>
       pollIntervalMs.hashCode ^
       idleThresholdMinutes.hashCode ^
+      minimizeToTray.hashCode ^
+      startMinimized.hashCode ^
+      autoStartTracking.hashCode ^
       excludedApps.hashCode ^
       dbPath.hashCode;
 
@@ -200,6 +218,9 @@ class ConfigDto {
           runtimeType == other.runtimeType &&
           pollIntervalMs == other.pollIntervalMs &&
           idleThresholdMinutes == other.idleThresholdMinutes &&
+          minimizeToTray == other.minimizeToTray &&
+          startMinimized == other.startMinimized &&
+          autoStartTracking == other.autoStartTracking &&
           excludedApps == other.excludedApps &&
           dbPath == other.dbPath;
 }

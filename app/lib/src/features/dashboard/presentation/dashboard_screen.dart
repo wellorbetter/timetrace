@@ -41,7 +41,22 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
         error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (state) => _DashboardBody(state: state),
+        data: (state) => Column(
+          children: [
+            if (state.databaseDegraded)
+              MaterialBanner(
+                leading: const Icon(Icons.warning_amber_outlined),
+                content: const Text('数据库查询异常，当前数据可能不完整；详细信息已记录到日志。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => ref.invalidate(dashboardProvider),
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            Expanded(child: _DashboardBody(state: state)),
+          ],
+        ),
       ),
     );
   }

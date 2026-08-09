@@ -13,6 +13,7 @@ abstract class DashboardState with _$DashboardState {
     required int lifetimeSeconds,
     @Default(0) int thisWeekSeconds,
     @Default(0) int lastWeekSeconds,
+    @Default(false) bool databaseDegraded,
     String? since,
   }) = _DashboardState;
 

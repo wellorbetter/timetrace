@@ -1,6 +1,29 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
 
+# Select the newest installed Windows SDK that actually contains the UM
+# import libraries. Some machines retain a partially installed SDK directory
+# which CMake otherwise selects and then fails with missing kernel32.lib.
+if(CMAKE_HOST_WIN32)
+  file(GLOB _tt_kernel32_libs
+    "C:/Program Files (x86)/Windows Kits/10/Lib/*/um/x64/kernel32.lib")
+  if(_tt_kernel32_libs)
+    list(SORT _tt_kernel32_libs COMPARE NATURAL ORDER DESCENDING)
+    list(GET _tt_kernel32_libs 0 _tt_kernel32)
+    get_filename_component(_tt_sdk_x64 "${_tt_kernel32}" DIRECTORY)
+    get_filename_component(_tt_sdk_um "${_tt_sdk_x64}" DIRECTORY)
+    get_filename_component(_tt_sdk_version "${_tt_sdk_um}" DIRECTORY)
+    get_filename_component(_tt_sdk_version "${_tt_sdk_version}" NAME)
+    set(CMAKE_SYSTEM_VERSION "${_tt_sdk_version}" CACHE STRING
+      "Windows SDK selected by available kernel32.lib" FORCE)
+    message(STATUS "TimeTrace Windows SDK: ${CMAKE_SYSTEM_VERSION}")
+  endif()
+endif()
+
+# Avoid a fragile executable link probe on developer machines with endpoint
+# protection; the real targets still perform their normal linker checks.
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
 # This machine's cl.exe emits localized /showIncludes output (Chinese locale),
 # which corrupts CMake's RC dependency scanning (CMAKE_NINJA_CMCLDEPS_RC).
 # Compile the .rc resource directly with rc.exe instead.
@@ -60,8 +83,11 @@ add_definitions(-DUNICODE -D_UNICODE)
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
   # /wd4100 without quotes — Ninja passes flags verbatim
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd4100)
-  target_compile_options(${TARGET} PRIVATE /EHsc)
+  if(MSVC)
+    target_compile_options(${TARGET} PRIVATE /W4 /WX /wd4100 /EHsc)
+  else()
+    target_compile_options(${TARGET} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+  endif()
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()

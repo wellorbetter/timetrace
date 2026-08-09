@@ -6,7 +6,6 @@ import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
-import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
 
 /// 时段分布 — 24h 活跃柱状图 + 选中小时的 App 占比明细。
@@ -145,7 +144,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
     });
   }
 
-  /// 该小时 App 数据，按归一化应用名合并，缓存。
+  /// 该小时 App 数据，按 Rust 提供的规范化名称合并，缓存。
   List<AppUsageDto> _appsOf(int hour) {
     final cached = _hourApps[hour];
     if (cached != null) return cached;
@@ -161,7 +160,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
     final totals = <String, int>{};
     String exe = '';
     for (final a in raw) {
-      final name = normalizeAppName(a.appName);
+      final name = a.appName;
       totals[name] = (totals[name] ?? 0) + a.activeSeconds.toInt();
       if (exe.isEmpty && a.exePath.isNotEmpty) exe = a.exePath;
     }

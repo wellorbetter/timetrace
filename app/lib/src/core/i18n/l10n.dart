@@ -1,12 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 enum AppLocale { zh, en }
 
 class LocaleNotifier extends Notifier<AppLocale> {
   @override
-  AppLocale build() => AppLocale.zh;
+  AppLocale build() {
+    final value = UiPreferencesStore.read()['locale'];
+    return value == 'en' ? AppLocale.en : AppLocale.zh;
+  }
 
-  void set(AppLocale locale) => state = locale;
+  void set(AppLocale locale) {
+    state = locale;
+    UiPreferencesStore.update({'locale': locale == AppLocale.en ? 'en' : 'zh'});
+  }
 }
 
 final localeProvider = NotifierProvider<LocaleNotifier, AppLocale>(LocaleNotifier.new);

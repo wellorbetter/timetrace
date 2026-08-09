@@ -6,6 +6,7 @@ import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
@@ -28,9 +29,13 @@ class SettingsScreen extends ConsumerWidget {
       body: asyncSettings.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (settings) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+        data: (settings) => ListTileTheme(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          minVerticalPadding: 2,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+            children: [
             // ── 主题 ──
             _SectionHeader(title: l.theme, icon: Icons.palette_outlined),
             ListTile(
@@ -111,7 +116,7 @@ class SettingsScreen extends ConsumerWidget {
               min: 500,
               max: 5000,
               divisions: 9,
-              display: '${settings.pollIntervalMs} ${l.seconds}',
+              display: '${(settings.pollIntervalMs / 1000).toStringAsFixed(1)} ${l.seconds}',
               description: '多久检测一次当前前台应用（越小越精确，越费电）',
               help: '检测间隔：多久检测一次当前前台应用。越小越精确，也越耗电；修改后重启应用生效。',
               onChanged: (v) => _update(
@@ -141,6 +146,52 @@ class SettingsScreen extends ConsumerWidget {
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.outline),
               ),
+            ),
+            SwitchListTile(
+              title: const Row(children: [
+                Text('关闭窗口时最小化到托盘'),
+                SizedBox(width: 6),
+                HelpIcon(message: '关闭窗口后隐藏到系统托盘，后台继续记录。'),
+              ]),
+              value: settings.minimizeToTray,
+              onChanged: (value) => _update(
+                ref,
+                settings.copyWith(minimizeToTray: value),
+              ),
+            ),
+            SwitchListTile(
+              title: const Row(children: [
+                Text('启动时最小化'),
+                SizedBox(width: 6),
+                HelpIcon(message: '应用启动后隐藏主窗口，只保留托盘图标。'),
+              ]),
+              value: settings.startMinimized,
+              onChanged: (value) => _updateAndSave(
+                ref,
+                settings.copyWith(startMinimized: value),
+              ),
+            ),
+            SwitchListTile(
+              title: const Row(children: [
+                Text('启动后自动开始追踪'),
+                SizedBox(width: 6),
+                HelpIcon(message: '关闭后再次启动应用时，是否立即记录活动。'),
+              ]),
+              value: settings.autoStartTracking,
+              onChanged: (value) => _update(
+                ref,
+                settings.copyWith(autoStartTracking: value),
+              ),
+            ),
+            _SelfStartupTile(startMinimized: settings.startMinimized),
+            ListTile(
+              leading: const Icon(Icons.block_outlined),
+              title: const Text('排除应用'),
+              subtitle: Text(settings.excludedApps.isEmpty
+                  ? '未配置'
+                  : settings.excludedApps.join('、')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _editExcludedApps(context, ref, settings),
             ),
             const Divider(),
             const _PauseRecordTile(),
@@ -194,16 +245,73 @@ class SettingsScreen extends ConsumerWidget {
             _SectionHeader(title: l.about, icon: Icons.info_outline),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('TimeTrace v0.2.0 · Rust + Flutter · MIT'),
+              child: Text('TimeTrace v1.0.0 · Rust + Flutter · MIT'),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Future<void> _editExcludedApps(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final controller = TextEditingController(
+      text: settings.excludedApps.join('\n'),
+    );
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => _ExcludedAppsDialog(initial: settings.excludedApps),
+      /* AlertDialog(
+        title: const Text('排除应用'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: '每行填写一个应用名或 exe 路径',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final apps = controller.text
+                  .split(RegExp(r'[\r\n,，]+'))
+                  .map((value) => value.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toSet()
+                  .toList();
+              Navigator.pop(context, apps);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),*/
+    );
+    controller.dispose();
+    if (result != null) {
+      final notifier = ref.read(settingsProvider.notifier);
+      notifier.preview(settings.copyWith(excludedApps: result));
+      await notifier.save();
+    }
+  }
+
   void _update(WidgetRef ref, AppSettings next) {
     ref.read(settingsProvider.notifier).preview(next);
+  }
+
+  Future<void> _updateAndSave(WidgetRef ref, AppSettings next) async {
+    final notifier = ref.read(settingsProvider.notifier);
+    notifier.preview(next);
+    await notifier.save();
   }
 
   /// Font picker with live previews.
@@ -252,60 +360,88 @@ class SettingsScreen extends ConsumerWidget {
       Color(0xFF1A1A2E),
     ];
     return [
-      // Preset color swatches
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            for (final c in colors)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: InkWell(
-                  onTap: () =>
-                      ref.read(backgroundProvider.notifier).setColor(c),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: c ?? Theme.of(context).colorScheme.surface,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: pref.color == c
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outlineVariant,
-                        width: pref.color == c ? 3 : 1,
+      Card(
+        color: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  for (final c in colors)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => ref.read(backgroundProvider.notifier).setColor(c),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: c ?? Theme.of(context).colorScheme.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: pref.color == c
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outlineVariant,
+                              width: pref.color == c ? 2.5 : 1,
+                            ),
+                          ),
+                          child: c == null
+                              ? Icon(Icons.close, size: 15,
+                                  color: Theme.of(context).colorScheme.outline)
+                              : null,
+                        ),
                       ),
                     ),
-                    child: c == null
-                        ? Icon(Icons.close,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.outline)
-                        : null,
+                  const Spacer(),
+                  IconButton(
+                    tooltip: l.backgroundImage,
+                    icon: const Icon(Icons.image_outlined),
+                    onPressed: () => ref.read(backgroundProvider.notifier).pickImage(),
                   ),
-                ),
+                  if (pref.isImage || pref.color != null)
+                    IconButton(
+                      tooltip: l.clear,
+                      icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.error),
+                      onPressed: () => ref.read(backgroundProvider.notifier).clear(),
+                    ),
+                ],
               ),
-          ],
+              if (pref.isImage || pref.color != null)
+                Row(
+                  children: [
+                    const Icon(Icons.opacity_outlined, size: 16),
+                    Expanded(
+                      child: Slider(
+                        value: pref.opacity,
+                        min: 0.15,
+                        max: 1,
+                        divisions: 17,
+                        label: '${(pref.opacity * 100).round()}%',
+                        onChanged: (v) => ref.read(backgroundProvider.notifier).setOpacity(v),
+                      ),
+                    ),
+                    SizedBox(width: 38, child: Text('${(pref.opacity * 100).round()}%')),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
-      ListTile(
-        leading: const Icon(Icons.image_outlined),
-        title: Text(l.backgroundImage),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => ref.read(backgroundProvider.notifier).pickImage(),
-      ),
-      if (pref.isImage || pref.color != null)
-        ListTile(
-          leading: const Icon(Icons.restart_alt),
-          title: Text(l.clear,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          onTap: () => ref.read(backgroundProvider.notifier).clear(),
-        ),
     ];
   }
 
   String _dbPath(AppSettings s) {
     if (s.dbPath.isNotEmpty) return s.dbPath;
-    return 'AppData/Local/TimeTrace/time.db';
+    final appData = Platform.environment['APPDATA'];
+    return appData == null ? 'AppData/Roaming/TimeTrace/time.db' : '$appData\\TimeTrace\\time.db';
   }
 
   void _confirmClear(BuildContext context, WidgetRef ref, L10n l) {
@@ -366,6 +502,62 @@ class SettingsScreen extends ConsumerWidget {
             .showSnackBar(SnackBar(content: Text('${l.exportData} ${l.cancel}')));
       }
     }
+  }
+}
+
+class _SelfStartupTile extends ConsumerStatefulWidget {
+  const _SelfStartupTile({required this.startMinimized});
+
+  final bool startMinimized;
+
+  @override
+  ConsumerState<_SelfStartupTile> createState() => _SelfStartupTileState();
+}
+
+class _SelfStartupTileState extends ConsumerState<_SelfStartupTile> {
+  bool? _enabled;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    try {
+      setState(() => _enabled = ref.read(apiProvider).isSelfStartEnabled());
+    } catch (e) {
+      AppLogger.log('read self startup failed: $e');
+    }
+  }
+
+  void _toggle(bool enabled) {
+    setState(() => _busy = true);
+    try {
+      ref.read(apiProvider).setSelfStartEnabled(
+            enabled: enabled,
+            minimized: widget.startMinimized,
+          );
+      setState(() => _enabled = enabled);
+    } catch (e) {
+      AppLogger.log('set self startup failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      title: const Row(children: [
+        Text('开机启动'),
+        SizedBox(width: 6),
+        HelpIcon(message: '写入当前用户的启动项，不需要管理员权限。'),
+      ]),
+      value: _enabled ?? false,
+      onChanged: _busy || _enabled == null ? null : _toggle,
+    );
   }
 }
 
@@ -438,13 +630,10 @@ class _SliderTile<T> extends StatelessWidget {
             max: max,
             divisions: divisions,
             label: display,
-            onChanged: (v) => onChanged(v as T),
+            onChanged: (v) => onChanged(
+              value is int ? v.round() as T : v as T,
+            ),
           ),
-          if (description != null)
-            Text(description!,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(context).colorScheme.outline)),
         ],
       ),
       trailing: SizedBox(
@@ -514,6 +703,8 @@ List<Widget> _dashboardOrderPicker(WidgetRef ref) {
   return [
     for (var i = 0; i < order.length; i++)
       Card(
+        color: Colors.transparent,
+        elevation: 0,
         margin: const EdgeInsets.only(bottom: 6),
         child: ListTile(
           dense: true,
@@ -550,4 +741,153 @@ List<Widget> _dashboardOrderPicker(WidgetRef ref) {
         ),
       ),
   ];
+}
+
+class _ExcludedAppsDialog extends StatefulWidget {
+  const _ExcludedAppsDialog({required this.initial});
+
+  final List<String> initial;
+
+  @override
+  State<_ExcludedAppsDialog> createState() => _ExcludedAppsDialogState();
+}
+
+class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
+  final _filter = TextEditingController();
+  late final Set<String> _selected = widget.initial.toSet();
+  List<_ProcessEntry> _processes = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProcesses();
+  }
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProcesses() async {
+    try {
+      final result = await Process.run('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        r'Get-Process | Where-Object { $_.Path } | Select-Object ProcessName,Path | ConvertTo-Csv -NoTypeInformation',
+      ]);
+      final entries = <String, _ProcessEntry>{};
+      for (final line in result.stdout.toString().split(RegExp(r'\r?\n')).skip(1)) {
+        final match = RegExp(r'^"([^"]+)","(.*)"$').firstMatch(line.trim());
+        if (match != null) {
+          final name = '${match.group(1)}.exe';
+          entries[name.toLowerCase()] = _ProcessEntry(name, match.group(2)!);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _processes = entries.values.toList()..sort((a, b) => a.name.compareTo(b.name));
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addManually() async {
+    final controller = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('手动添加'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如：Code.exe'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('添加')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final name = value?.trim();
+    if (name != null && name.isNotEmpty) setState(() => _selected.add(name));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _filter.text.toLowerCase();
+    final visible = _processes.where((p) => p.name.toLowerCase().contains(query)).toList();
+    return AlertDialog(
+      title: const Text('排除应用'),
+      content: SizedBox(
+        width: 430,
+        height: 430,
+        child: Column(
+          children: [
+            TextField(
+              controller: _filter,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: '搜索正在运行的应用',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : visible.isEmpty
+                      ? const Center(child: Text('没有找到正在运行的应用'))
+                      : ListView.builder(
+                          itemCount: visible.length,
+                          itemBuilder: (_, index) {
+                            final process = visible[index];
+                            final name = process.name;
+                            return CheckboxListTile(
+                              dense: true,
+                              value: _selected.contains(name),
+                              secondary: AppIcon(exePath: process.path, size: 28),
+                              title: Text(name),
+                              onChanged: (checked) => setState(() {
+                                if (checked == true) {
+                                  _selected.add(name);
+                                } else {
+                                  _selected.remove(name);
+                                }
+                              }),
+                            );
+                          },
+                        ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _addManually,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('手动添加其他程序'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(onPressed: () => Navigator.pop(context, _selected.toList()), child: const Text('保存')),
+      ],
+    );
+  }
+}
+
+class _ProcessEntry {
+  const _ProcessEntry(this.name, this.path);
+
+  final String name;
+  final String path;
 }

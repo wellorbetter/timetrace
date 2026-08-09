@@ -9,6 +9,7 @@ import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
+import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 
 class TimetraceApp extends ConsumerStatefulWidget {
   const TimetraceApp({super.key});
@@ -33,11 +34,20 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
 
     final tray = TrayService(ref);
     await tray.init();
+    final config = ref.read(apiProvider).getConfig();
+    if (config.startMinimized || Platform.executableArguments.contains('--minimized')) {
+      await windowManager.hide();
+    }
   }
 
   @override
   void onWindowClose() async {
-    await windowManager.hide();
+    final config = ref.read(apiProvider).getConfig();
+    if (config.minimizeToTray) {
+      await windowManager.hide();
+    } else {
+      ref.read(trayExitProvider.notifier).requestExit();
+    }
   }
 
   @override
@@ -58,27 +68,24 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
       darkTheme: TimetraceTheme.dark(fontFamily: font.family),
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: router,
-      // Custom background (color or image) applied below the router.
       builder: (context, child) {
-        if (!background.isImage && background.color == null) return child!;
-        Widget decorated = child!;
-        if (background.isImage && background.imagePath != null) {
-          decorated = Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: FileImage(File(background.imagePath!)),
-                fit: BoxFit.cover,
+        final scheme = Theme.of(context).colorScheme;
+        final hasCustom = background.isImage || background.color != null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (background.isImage && background.imagePath != null)
+              Image.file(File(background.imagePath!), fit: BoxFit.cover),
+            if (background.color != null)
+              ColoredBox(color: background.color!),
+            ColoredBox(
+              color: scheme.surface.withValues(
+                alpha: hasCustom ? 1 - background.opacity : 1,
               ),
             ),
-            child: decorated,
-          );
-        } else if (background.color != null) {
-          decorated = ColoredBox(
-            color: background.color!,
-            child: decorated,
-          );
-        }
-        return decorated;
+            child!,
+          ],
+        );
       },
     );
   }
