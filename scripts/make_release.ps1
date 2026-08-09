@@ -19,8 +19,36 @@ Get-ChildItem $runner -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
 Copy-Item "$runner\data" "$out\data" -Recurse
 Copy-Item "$runner\data\flutter_assets" "$out\data\flutter_assets" -Recurse
 
+# Bundle the MSVC runtime so a clean Windows machine does not need a separate
+# Visual C++ Redistributable installation. Prefer the active toolchain, then
+# locate the installed VS Build Tools through vswhere.
+$crtRoot = $env:VCToolsRedistDir
+if (-not $crtRoot) {
+  $vswhere = @(
+    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+    "$env:ProgramFiles\Microsoft Visual Studio\Installer\vswhere.exe"
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($vswhere) {
+    $installationPath = & $vswhere -latest -products * -property installationPath
+    if ($installationPath) { $crtRoot = Join-Path $installationPath 'VC\Redist\MSVC' }
+  }
+}
+if (-not $crtRoot -or -not (Test-Path $crtRoot)) {
+  Write-Error 'MSVC runtime directory not found; install VS Build Tools or set VCToolsRedistDir'
+}
+$crtFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
+$crtDir = Get-ChildItem $crtRoot -Directory -Recurse |
+  Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC[^\\]+\.CRT$' } |
+  Sort-Object FullName -Descending | Select-Object -First 1
+if (-not $crtDir) { Write-Error "x64 MSVC CRT directory not found under $crtRoot" }
+foreach ($crtFile in $crtFiles) {
+  $source = Join-Path $crtDir.FullName $crtFile
+  if (-not (Test-Path $source)) { Write-Error "MSVC runtime missing: $source" }
+  Copy-Item $source $out
+}
+
 # sanity check before zipping
-foreach ($need in @('timetrace_app.exe','flutter_windows.dll','data\app.so','data\icudtl.dat','data\flutter_assets\AssetManifest.bin')) {
+foreach ($need in @('timetrace_app.exe','flutter_windows.dll','vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll','data\app.so','data\icudtl.dat','data\flutter_assets\AssetManifest.bin')) {
   if (-not (Test-Path "$out\$need")) { Write-Error "staging missing: $need" }
 }
 Write-Output "staging OK ($((Get-ChildItem $out -Recurse | Measure-Object Length -Sum).Sum/1MB) MB)"
