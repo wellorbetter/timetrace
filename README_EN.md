@@ -28,7 +28,8 @@
 - **App icons** — resolves the foreground app and its icon in real time; lives in the system tray with a quick right-click menu
 - **Dashboard** — bar chart / donut chart / 24h hourly distribution / daily summary / app distribution carousel, synced with the calendar
 - **Journal** — social-feed style diary: Markdown editing, image albums, auto-saved drafts, grouped & collapsible by day
-- **Settings** — idle threshold, auto-start and more
+- **Settings** — monitoring parameters, excluded apps, startup/minimize behavior, and persistent theme/font/background/dashboard preferences
+- **Background & app picker** — local background images with opacity control, running-process selection, and executable icons
 
 ## Screenshots
 
@@ -58,8 +59,8 @@
 ### Commands
 
 ```bash
-# 1) Rust core tests
-cargo test -p timetrace-core --lib
+# 1) Rust workspace tests
+cargo test --workspace
 
 # 2) Flutter static analysis
 cd app && flutter analyze --no-fatal-infos
@@ -67,6 +68,9 @@ cd app && flutter analyze --no-fatal-infos
 # 3) Windows Release build (compiles & copies timetrace_bridge.dll automatically)
 cd app && flutter build windows --release
 # Output: app/build/windows/x64/runner/Release/
+
+# 4) Flutter tests
+cd app && flutter test
 ```
 
 ## Download

@@ -1,9 +1,12 @@
 # Verify: run from a clean extracted dir, confirm VC DLLs load from app dir
-$zip = 'I:\Github\pr\timetrace\dist\TimeTrace-20260806.zip'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$zip = Get-ChildItem (Join-Path $root 'dist') -Filter 'TimeTrace-*.zip' |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1 -ExpandProperty FullName
 $dir = "$env:TEMP\tt-verify"
 if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
 Expand-Archive $zip $dir
-$exe = "$dir\TimeTrace-20260806\timetrace_app.exe"
+$exe = Join-Path $dir ([IO.Path]::GetFileNameWithoutExtension($zip) + '\timetrace_app.exe')
 if (-not (Test-Path $exe)) { Write-Error "exe missing"; exit 1 }
 Write-Output "extracted OK"
 

@@ -28,7 +28,8 @@
 - **应用图标** — 实时识别前台应用与图标；系统托盘常驻，右键菜单快速控制
 - **数据仪表盘** — 柱状图 / 饼图 / 24h 时段分布 / 当日汇总 / 应用分布轮播，与日历联动
 - **日记** — 朋友圈式日记：Markdown 编辑、图片相册、草稿自动保存、按天分组折叠
-- **设置** — 空闲阈值、开机启动等可配置
+- **设置** — 监控参数、排除应用、开机启动、启动最小化、主题/字体/背景与仪表盘顺序均可配置并持久化
+- **背景与应用选择** — 支持本地背景图、透明度调节、运行中进程筛选和应用图标展示
 
 ## 截图
 
@@ -58,8 +59,8 @@
 ### 命令
 
 ```bash
-# 1) Rust 核心测试
-cargo test -p timetrace-core --lib
+# 1) Rust workspace 测试
+cargo test --workspace
 
 # 2) Flutter 静态分析
 cd app && flutter analyze --no-fatal-infos
@@ -67,6 +68,9 @@ cd app && flutter analyze --no-fatal-infos
 # 3) Windows Release 构建（自动编译并拷贝 timetrace_bridge.dll）
 cd app && flutter build windows --release
 # 产物：app/build/windows/x64/runner/Release/
+
+# 4) Flutter 测试
+cd app && flutter test
 ```
 
 ## 下载

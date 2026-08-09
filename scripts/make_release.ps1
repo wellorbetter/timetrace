@@ -1,7 +1,7 @@
 # TimeTrace green-build packager (fixed: data/ must be included + verified)
 $ErrorActionPreference = 'Stop'
 
-$root = 'I:\Github\pr\timetrace'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runner = "$root\app\build\windows\x64\runner"
 $dist = "$root\dist"
 $name = "TimeTrace-$(Get-Date -Format 'yyyyMMdd')"
@@ -13,16 +13,8 @@ if (-not (Test-Path "$runner\data\flutter_assets\AssetManifest.bin")) { Write-Er
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 
-$files = @(
-  'timetrace_app.exe','timetrace_bridge.dll','flutter_windows.dll',
-  'tray_manager_plugin.dll','window_manager_plugin.dll','screen_retriever_windows_plugin.dll',
-  'vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll'
-)
-foreach ($f in $files) {
-  $src = Join-Path $runner $f
-  if (-not (Test-Path $src)) { Write-Error "missing $f" }
-  Copy-Item $src $out
-}
+Get-ChildItem $runner -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
+  Copy-Item -Destination $out
 Copy-Item "$runner\data" "$out\data" -Recurse
 Copy-Item "$runner\data\flutter_assets" "$out\data\flutter_assets" -Recurse
 

@@ -3,7 +3,7 @@
 # 环境: GITEE_TOKEN（Gitee 私人令牌）
 param([string]$Tag = 'v1.0.0', [string]$Notes = 'TimeTrace release', [string]$Zip = '')
 
-$root = 'I:\Github\pr\timetrace'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $Zip) { $Zip = "$root\dist\TimeTrace-$Tag-windows-x64.zip" }
 if (-not (Test-Path $Zip)) { Write-Error "zip 不存在: $Zip"; exit 1 }
 $Token = $env:GITEE_TOKEN
