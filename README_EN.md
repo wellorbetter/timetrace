@@ -86,6 +86,14 @@ Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished wit
 
 All data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`); nothing is uploaded.
 
+## Background and settings
+
+TimeTrace supports a local background image, adjustable opacity, and the same background treatment across the dashboard and settings page:
+
+![Dashboard with background](docs/screenshots/background-dashboard.png)
+
+![Settings with background opacity](docs/screenshots/background-settings.png)
+
 ## License
 
 [MIT](LICENSE)
