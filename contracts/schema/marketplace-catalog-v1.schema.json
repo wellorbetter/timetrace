@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellorbetterai.com/contracts/marketplace-catalog-v1.schema.json",
+  "title": "TimeTrace Marketplace Catalog v1",
+  "$comment": "Signed bytes use the Marketplace v1 canonical JSON profile: all object members are schema-declared ASCII keys, signature is omitted, keys sort lexicographically, strings are UTF-8 JSON strings, and numbers are bounded integers. This intentionally is not a generic RFC 8785 implementation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "catalog_revision", "generated_at", "items", "signature"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "catalog_revision": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "generated_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+    "next_cursor": { "type": ["string", "null"], "maxLength": 512 },
+    "items": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/release" } },
+    "signature": { "$ref": "#/$defs/signature" }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$" },
+    "semver": { "type": "string", "maxLength": 128, "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "signature": {
+      "type": "object", "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value"],
+      "properties": {
+        "algorithm": { "const": "ed25519" },
+        "key_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "value": { "type": "string", "minLength": 86, "maxLength": 88, "pattern": "^[A-Za-z0-9_-]+$" }
+      }
+    },
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["publisher_id", "plugin_id"],
+      "properties": { "publisher_id": { "$ref": "#/$defs/id" }, "plugin_id": { "$ref": "#/$defs/id" } }
+    },
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "required": ["release_id", "identity", "version", "channel", "state", "display_name", "package_digest", "package_bytes", "host_api", "platforms", "permissions", "published_at"],
+      "properties": {
+        "release_id": { "type": "string", "format": "uuid" },
+        "identity": { "$ref": "#/$defs/identity" },
+        "version": { "$ref": "#/$defs/semver" },
+        "channel": { "enum": ["stable", "beta"] },
+        "state": { "enum": ["published", "suspended", "revoked"] },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "description": { "type": ["string", "null"], "maxLength": 4096 },
+        "badges": { "type": "array", "uniqueItems": true, "maxItems": 4, "items": { "enum": ["official", "verified_publisher", "beta", "suspended", "revoked"] } },
+        "package_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "package_bytes": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "host_api": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "platforms": { "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": { "enum": ["windows_x64", "mac_os_arm64", "mac_os_x64", "linux_x64"] } },
+        "permissions": { "type": "array", "maxItems": 64, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "published_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

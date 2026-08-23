@@ -1,0 +1,810 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PluginManifest",
+  "description": "The single authoritative description of a TimeTrace plugin.",
+  "type": "object",
+  "properties": {
+    "contributions": {
+      "description": "Declarative contributions exposed by the plugin.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContributionDescriptor"
+      },
+      "maxItems": 256
+    },
+    "description": {
+      "description": "Optional non-sensitive plugin description.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "display_name": {
+      "description": "User-visible plugin name.",
+      "type": "string"
+    },
+    "host_api": {
+      "description": "Compatible host API version range.",
+      "$ref": "#/$defs/HostApiRange"
+    },
+    "id": {
+      "description": "Stable plugin identifier, unique within the host catalog.",
+      "$ref": "#/$defs/PluginId"
+    },
+    "platforms": {
+      "description": "Explicitly supported host platforms.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Platform"
+      },
+      "maxItems": 4,
+      "minItems": 1
+    },
+    "publisher": {
+      "description": "Stable publisher namespace.",
+      "$ref": "#/$defs/PublisherId"
+    },
+    "requested_capabilities": {
+      "description": "Capabilities requested for later explicit authorization.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CapabilityRequest"
+      },
+      "maxItems": 64
+    },
+    "schema_version": {
+      "description": "Version of the manifest schema, independent from plugin and host API versions.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "version": {
+      "description": "Plugin package version.",
+      "$ref": "#/$defs/SemVer"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "publisher",
+    "display_name",
+    "version",
+    "host_api",
+    "platforms"
+  ],
+  "$defs": {
+    "CapabilityConstraints": {
+      "description": "Parameter constraints attached to a capability request or grant.\n\nA missing numeric limit means the corresponding canonical hard maximum.\nEmpty allowlist collections uniformly mean \"allow none\". Host code\nnormalizes numeric limits before comparing or enforcing grants.",
+      "type": "object",
+      "properties": {
+        "allowed_domains": {
+          "description": "Exact endpoint domains authorized for external calls; empty denies all.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "allowed_granularities": {
+          "description": "Aggregate granularities the plugin may request; empty denies all.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageGranularity"
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "max_bytes": {
+          "description": "Maximum serialized response bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "maximum": 1048576,
+          "minimum": 1
+        },
+        "max_range_days": {
+          "description": "Maximum inclusive query range in calendar days.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 90,
+          "minimum": 1
+        },
+        "max_rows": {
+          "description": "Maximum result rows.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "CapabilityId": {
+      "description": "A stable capability identifier.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$"
+    },
+    "CapabilityRequest": {
+      "description": "A capability declaration in a plugin manifest.",
+      "type": "object",
+      "properties": {
+        "constraints": {
+          "description": "Least-privilege parameter constraints requested by the plugin.",
+          "$ref": "#/$defs/CapabilityConstraints",
+          "default": {}
+        },
+        "id": {
+          "description": "Requested capability identifier.",
+          "$ref": "#/$defs/CapabilityId"
+        },
+        "rationale": {
+          "description": "Optional non-sensitive explanation shown in permission UI.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ]
+    },
+    "CardDescriptor": {
+      "description": "A dashboard card contribution.",
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "refresh": {
+          "description": "Host-controlled refresh behavior.",
+          "$ref": "#/$defs/RefreshPolicy"
+        },
+        "renderer": {
+          "description": "Renderer used for the card body.",
+          "$ref": "#/$defs/RendererRef"
+        },
+        "size": {
+          "description": "Host-recognized layout size.",
+          "$ref": "#/$defs/DashboardSize"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "renderer",
+        "size",
+        "refresh"
+      ]
+    },
+    "CarouselDescriptor": {
+      "description": "A dashboard carousel contribution.",
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "refresh": {
+          "description": "Host-controlled refresh behavior.",
+          "$ref": "#/$defs/RefreshPolicy"
+        },
+        "renderer": {
+          "description": "Renderer used for the carousel item.",
+          "$ref": "#/$defs/RendererRef"
+        },
+        "size": {
+          "description": "Host-recognized layout size.",
+          "$ref": "#/$defs/DashboardSize"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "renderer",
+        "size",
+        "refresh"
+      ]
+    },
+    "CommandDescriptor": {
+      "description": "A command contribution executed through the host command bus.",
+      "type": "object",
+      "properties": {
+        "input_schema_version": {
+          "description": "Version of the command input payload schema.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "timeout_ms": {
+          "description": "Hard command deadline in milliseconds.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "input_schema_version",
+        "timeout_ms"
+      ]
+    },
+    "ContributionDescriptor": {
+      "description": "All contribution kinds supported by the P0 host.\n\nEvery nested contribution object rejects unknown fields. An untrusted RPC\ntransport must still enforce a bounded frame size before serde begins,\nbecause schema validation cannot prevent allocation of an oversized frame.",
+      "oneOf": [
+        {
+          "description": "Navigation destination contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/NavigationDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "navigation"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        },
+        {
+          "description": "Page route contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/PageDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "page"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        },
+        {
+          "description": "Dashboard carousel contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/CarouselDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "dashboard_carousel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        },
+        {
+          "description": "Dashboard card contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/CardDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "dashboard_card"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        },
+        {
+          "description": "Settings section contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/SettingsSectionDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "settings"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        },
+        {
+          "description": "Host command contribution.",
+          "type": "object",
+          "properties": {
+            "descriptor": {
+              "$ref": "#/$defs/CommandDescriptor"
+            },
+            "kind": {
+              "type": "string",
+              "const": "command"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "descriptor"
+          ]
+        }
+      ]
+    },
+    "ContributionId": {
+      "description": "A stable namespaced contribution identifier.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$"
+    },
+    "ContributionMetadata": {
+      "description": "Metadata and authorization shared by every contribution kind.",
+      "type": "object",
+      "properties": {
+        "display": {
+          "description": "User-visible metadata.",
+          "$ref": "#/$defs/DisplayMetadata"
+        },
+        "id": {
+          "description": "Globally stable, plugin-namespaced contribution identifier.",
+          "$ref": "#/$defs/ContributionId"
+        },
+        "order": {
+          "description": "Stable projection order; ties are resolved by identifier.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "required_capabilities": {
+          "description": "Capabilities rechecked each time this contribution is invoked.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityId"
+          },
+          "maxItems": 32
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "display",
+        "order"
+      ]
+    },
+    "DashboardSize": {
+      "description": "Host-recognized dashboard layout sizes.",
+      "oneOf": [
+        {
+          "description": "A compact one-column card.",
+          "type": "string",
+          "const": "small"
+        },
+        {
+          "description": "A standard medium card.",
+          "type": "string",
+          "const": "medium"
+        },
+        {
+          "description": "A large card spanning the primary grid width.",
+          "type": "string",
+          "const": "large"
+        },
+        {
+          "description": "A wide carousel item.",
+          "type": "string",
+          "const": "wide"
+        }
+      ]
+    },
+    "DisplayMetadata": {
+      "description": "Human-readable metadata shared by contribution descriptors.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Optional short, non-sensitive description.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Optional host-recognized icon token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "Localized or user-facing contribution title.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "title"
+      ]
+    },
+    "HostApiRange": {
+      "description": "A semantic-version requirement for the TimeTrace host API.",
+      "type": "string"
+    },
+    "NavigationDescriptor": {
+      "description": "A navigation destination pointing to a page contribution.",
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "page_id": {
+          "description": "Page contribution opened by the destination.",
+          "$ref": "#/$defs/ContributionId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "page_id"
+      ]
+    },
+    "PageDescriptor": {
+      "description": "A host-namespaced page route contribution.",
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "renderer": {
+          "description": "Renderer used for the page body.",
+          "$ref": "#/$defs/RendererRef"
+        },
+        "view_id": {
+          "description": "Stable view segment used under `/extensions/{pluginId}/`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "view_id",
+        "renderer"
+      ]
+    },
+    "Platform": {
+      "description": "Host platforms a bundled plugin may explicitly support.",
+      "oneOf": [
+        {
+          "description": "Windows 10/11 on x86-64.",
+          "type": "string",
+          "const": "windows_x64"
+        },
+        {
+          "description": "macOS on Apple Silicon.",
+          "type": "string",
+          "const": "mac_os_arm64"
+        },
+        {
+          "description": "macOS on x86-64.",
+          "type": "string",
+          "const": "mac_os_x64"
+        },
+        {
+          "description": "Linux on x86-64.",
+          "type": "string",
+          "const": "linux_x64"
+        }
+      ]
+    },
+    "PluginId": {
+      "description": "A stable plugin identifier.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$"
+    },
+    "PublisherId": {
+      "description": "A stable plugin publisher identifier.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$"
+    },
+    "RefreshPolicy": {
+      "description": "Host-controlled refresh policies for dashboard contributions.",
+      "oneOf": [
+        {
+          "description": "Refresh only after an explicit host or user action.",
+          "type": "string",
+          "const": "on_demand"
+        },
+        {
+          "description": "Refresh after the relevant immutable data revision changes.",
+          "type": "string",
+          "const": "data_revision"
+        }
+      ]
+    },
+    "RendererContractId": {
+      "description": "A stable renderer contract identifier.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[-._:][a-z0-9]+)*$"
+    },
+    "RendererRef": {
+      "description": "A host-owned renderer selected by contract, never by plugin identifier.",
+      "oneOf": [
+        {
+          "description": "A first-party renderer compiled into the host.",
+          "type": "object",
+          "properties": {
+            "contract_id": {
+              "description": "Renderer contract identifier.",
+              "$ref": "#/$defs/RendererContractId"
+            },
+            "mode": {
+              "type": "string",
+              "const": "bundled_typed"
+            },
+            "schema_version": {
+              "description": "Renderer payload schema version.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "contract_id",
+            "schema_version"
+          ]
+        },
+        {
+          "description": "Version one of the safe declarative node renderer.",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "declarative_v1"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ]
+        }
+      ]
+    },
+    "ScalarValue": {
+      "description": "A transport-safe scalar value used by settings and safe diagnostics.",
+      "oneOf": [
+        {
+          "description": "A Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "A signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "An unsigned integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unsigned"
+            },
+            "value": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "A bounded UTF-8 string value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "SemVer": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "SettingFieldDescriptor": {
+      "description": "A single schema-driven setting field.",
+      "type": "object",
+      "properties": {
+        "default_value": {
+          "description": "Optional non-secret default value.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScalarValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "key": {
+          "description": "Plugin-local lowercase field key.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Expected value kind.",
+          "$ref": "#/$defs/SettingValueKind"
+        },
+        "label": {
+          "description": "User-visible label.",
+          "type": "string"
+        },
+        "required": {
+          "description": "Whether a configured value is required.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "label",
+        "kind",
+        "required"
+      ]
+    },
+    "SettingValueKind": {
+      "description": "Supported schema-driven setting value kinds.",
+      "oneOf": [
+        {
+          "description": "Boolean toggle.",
+          "type": "string",
+          "const": "boolean"
+        },
+        {
+          "description": "Signed integer input.",
+          "type": "string",
+          "const": "integer"
+        },
+        {
+          "description": "Bounded single-line string input.",
+          "type": "string",
+          "const": "string"
+        },
+        {
+          "description": "Host-owned opaque secret-reference picker.",
+          "type": "string",
+          "const": "secret_reference"
+        }
+      ]
+    },
+    "SettingsSectionDescriptor": {
+      "description": "A schema-driven settings section contribution.",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "description": "Ordered fields rendered and persisted by the host.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingFieldDescriptor"
+          },
+          "maxItems": 128
+        },
+        "metadata": {
+          "description": "Shared contribution metadata.",
+          "$ref": "#/$defs/ContributionMetadata"
+        },
+        "schema_version": {
+          "description": "Settings schema version owned by this plugin.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "schema_version",
+        "fields"
+      ]
+    },
+    "UsageGranularity": {
+      "description": "Supported aggregate-data granularities.",
+      "oneOf": [
+        {
+          "description": "One bucket per calendar day.",
+          "type": "string",
+          "const": "day"
+        },
+        {
+          "description": "One bucket per normalized application.",
+          "type": "string",
+          "const": "application"
+        },
+        {
+          "description": "One bucket per hour of day.",
+          "type": "string",
+          "const": "hour"
+        }
+      ]
+    }
+  }
+}

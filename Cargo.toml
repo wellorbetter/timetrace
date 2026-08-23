@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "crates/core",
+    "crates/plugin-api",
+    "crates/plugin-host",
     "crates/tui",
     "crates/gui",
     "bridge",
@@ -40,6 +42,11 @@ egui_plot = "0.31"
 egui_extras = { version = "0.31", features = ["datepicker"] }
 tray-icon = "0.19"
 winreg = "0.54"
+semver = { version = "1", features = ["serde"] }
+schemars = { version = "1", features = ["chrono04", "semver1"] }
+getrandom = "0.3"
+sha2 = "0.10"
+zeroize = "1.9"
 
 [profile.release]
 opt-level = "z"

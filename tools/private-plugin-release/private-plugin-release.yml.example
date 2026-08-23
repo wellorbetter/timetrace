@@ -1,0 +1,48 @@
+name: Package private plugin
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact semver, e.g. 1.2.3"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-submit:
+    runs-on: ubuntu-latest
+    environment: marketplace-production # protect this environment with required reviewers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r .github/requirements-release.txt
+      - name: Materialize signing key only in the runner
+        env: { TTX_SIGNING_PRIVATE_KEY_B64: "${{ secrets.TTX_SIGNING_PRIVATE_KEY_B64 }}" }
+        run: |
+          umask 077
+          printf '%s' "$TTX_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$RUNNER_TEMP/ttx-signing-key.pem"
+      - name: Build and verify TTX
+        env: { VERSION: "${{ inputs.version || github.ref_name }}" }
+        run: |
+          python tools/build_ttx.py build --manifest manifest.json --payload-dir resources --signing-key "$RUNNER_TEMP/ttx-signing-key.pem" --key-id "$TTX_PUBLISHER_KEY_ID" --out "dist/${VERSION#v}.ttx" --attestation dist/release-attestation.json
+          python tools/build_ttx.py public-key --signing-key "$RUNNER_TEMP/ttx-signing-key.pem" --out "$RUNNER_TEMP/ttx-public-key.pem"
+          python tools/build_ttx.py verify --archive "dist/${VERSION#v}.ttx" --public-key "$RUNNER_TEMP/ttx-public-key.pem" --key-id "$TTX_PUBLISHER_KEY_ID"
+        env:
+          TTX_PUBLISHER_KEY_ID: "${{ vars.TTX_PUBLISHER_KEY_ID }}"
+      - uses: actions/upload-artifact@v4
+        with: { name: ttx-release, path: "dist/", if-no-files-found: error }
+      - name: Submit for Marketplace administrator review
+        env:
+          MARKETPLACE_BASE_URL: "${{ vars.MARKETPLACE_BASE_URL }}"
+          MARKETPLACE_PUBLISHER_TOKEN: "${{ secrets.MARKETPLACE_PUBLISHER_TOKEN }}"
+          TTX_PUBLISHER_ID: "${{ vars.TTX_PUBLISHER_ID }}"
+          TTX_PLUGIN_ID: "${{ vars.TTX_PLUGIN_ID }}"
+          TTX_PUBLISHER_KEY_ID: "${{ vars.TTX_PUBLISHER_KEY_ID }}"
+          VERSION: "${{ inputs.version || github.ref_name }}"
+        run: python tools/publish_ttx.py --base-url "$MARKETPLACE_BASE_URL" --publisher "$TTX_PUBLISHER_ID" --plugin "$TTX_PLUGIN_ID" --version "${VERSION#v}" --archive "dist/${VERSION#v}.ttx"

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellorbetterai.com/contracts/ttx-declarative-v1.schema.json",
+  "title": "TimeTrace Marketplace Declarative Resource v1",
+  "$comment": "Signed resource schema. The archive path is derived from contribution_id: resources/declarative-v1/<contribution_id>.json. No URL, markup, command, action, style, query, renderer, or payload reference is allowed.",
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "contribution_id": { "$ref": "plugin-manifest.schema.json#/$defs/ContributionId" },
+    "root": { "$ref": "#/$defs/node" }
+  },
+  "required": ["schema_version", "contribution_id", "root"],
+  "$defs": {
+    "safe_text": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "node": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "text" }, "text": { "$ref": "#/$defs/safe_text" } }, "required": ["kind", "text"] },
+        { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "metric" }, "label": { "$ref": "#/$defs/safe_text" }, "value": { "$ref": "#/$defs/safe_text" } }, "required": ["kind", "label", "value"] },
+        { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "stack" }, "children": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/node" } } }, "required": ["kind", "children"] },
+        { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "list" }, "items": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/safe_text" } } }, "required": ["kind", "items"] }
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "timetrace-plugin-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Validated catalog and least-privilege authorization for TimeTrace plugins"
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
+getrandom.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+timetrace-plugin-api = { path = "../plugin-api" }
+zip = { version = "2.2.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"

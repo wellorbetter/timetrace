@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellorbetterai.com/contracts/ttx-manifest-v1.schema.json",
+  "title": "TimeTrace TTX Manifest v1",
+  "$comment": "TTX manifest v1 is exactly the canonical TimeTrace PluginManifest v1 object plus the fail-closed Marketplace capability and non-executable activation subsets. Wire bytes must additionally satisfy the Marketplace v1 canonical JSON profile; JSON Schema cannot express byte ordering or whitespace.",
+  "allOf": [
+    { "$ref": "plugin-manifest.schema.json" },
+    {
+      "properties": {
+        "contributions": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/MarketplaceContribution" }
+        },
+        "requested_capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "ttx-marketplace-capability-v1.schema.json" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "MarketplaceMetadata": {
+      "allOf": [
+        { "$ref": "plugin-manifest.schema.json#/$defs/ContributionMetadata" },
+        { "properties": { "required_capabilities": { "type": "array", "maxItems": 0 } } }
+      ]
+    },
+    "DeclarativeRenderer": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "mode": { "const": "declarative_v1" } },
+      "required": ["mode"]
+    },
+    "MarketplaceContribution": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "navigation" },
+            "descriptor": { "type": "object", "additionalProperties": false,
+              "properties": { "metadata": { "$ref": "#/$defs/MarketplaceMetadata" }, "page_id": { "$ref": "plugin-manifest.schema.json#/$defs/ContributionId" } },
+              "required": ["metadata", "page_id"] }
+          }, "required": ["kind", "descriptor"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "page" },
+            "descriptor": { "type": "object", "additionalProperties": false,
+              "properties": { "metadata": { "$ref": "#/$defs/MarketplaceMetadata" }, "renderer": { "$ref": "#/$defs/DeclarativeRenderer" }, "view_id": { "type": "string" } },
+              "required": ["metadata", "renderer", "view_id"] }
+          }, "required": ["kind", "descriptor"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "dashboard_card" },
+            "descriptor": { "type": "object", "additionalProperties": false,
+              "properties": { "metadata": { "$ref": "#/$defs/MarketplaceMetadata" }, "renderer": { "$ref": "#/$defs/DeclarativeRenderer" }, "size": { "enum": ["small", "medium", "large"] }, "refresh": { "enum": ["on_demand", "data_revision"] } },
+              "required": ["metadata", "renderer", "size", "refresh"] }
+          }, "required": ["kind", "descriptor"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "settings" },
+            "descriptor": { "type": "object", "additionalProperties": false,
+              "properties": {
+                "metadata": { "$ref": "#/$defs/MarketplaceMetadata" }, "schema_version": { "const": 1 },
+                "fields": { "type": "array", "minItems": 1, "maxItems": 128,
+                  "items": { "type": "object", "additionalProperties": false,
+                    "properties": { "key": { "type": "string" }, "label": { "type": "string" }, "kind": { "enum": ["boolean", "integer", "string"] }, "required": { "type": "boolean" }, "default_value": { "$ref": "plugin-manifest.schema.json#/$defs/ScalarValue" } },
+                    "required": ["key", "label", "kind", "required"] } }
+              }, "required": ["metadata", "schema_version", "fields"] }
+          }, "required": ["kind", "descriptor"]
+        }
+      ]
+    }
+  }
+}

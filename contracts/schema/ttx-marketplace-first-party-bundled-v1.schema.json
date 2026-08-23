@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellorbetterai.com/contracts/ttx-marketplace-first-party-bundled-v1.schema.json",
+  "title": "TimeTrace Marketplace First-Party Bundled v1 Manifest",
+  "$comment": "A separate, exact profile. It does not relax ttx-manifest-v1/P1. Archive membership, canonical bytes, signatures and the compile-time host binding remain mandatory runtime checks.",
+  "allOf": [
+    { "$ref": "plugin-manifest.schema.json" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "publisher": { "const": "wellorbetter" },
+        "id": { "const": "private-flight" },
+        "display_name": { "const": "起飞记录" },
+        "host_api": { "type": "string", "maxLength": 128 },
+        "platforms": { "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": { "$ref": "plugin-manifest.schema.json#/$defs/Platform" } },
+        "version": { "$ref": "plugin-manifest.schema.json#/$defs/SemVer" },
+        "requested_capabilities": { "type": "array", "maxItems": 0 },
+        "contributions": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "page" },
+                "descriptor": {
+                  "type": "object", "additionalProperties": false,
+                  "properties": {
+                    "metadata": { "$ref": "#/$defs/PageMetadata" },
+                    "view_id": { "const": "private-flight" },
+                    "renderer": {
+                      "type": "object", "additionalProperties": false,
+                      "properties": { "mode": { "const": "bundled_typed" }, "contract_id": { "const": "private-flight-v1" }, "schema_version": { "const": 1 } },
+                      "required": ["mode", "contract_id", "schema_version"]
+                    }
+                  },
+                  "required": ["metadata", "view_id", "renderer"]
+                }
+              }, "required": ["kind", "descriptor"]
+            },
+            {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "navigation" },
+                "descriptor": {
+                  "type": "object", "additionalProperties": false,
+                  "properties": { "metadata": { "$ref": "#/$defs/NavigationMetadata" }, "page_id": { "const": "private-flight.page" } },
+                  "required": ["metadata", "page_id"]
+                }
+              }, "required": ["kind", "descriptor"]
+            }
+          ],
+          "items": false
+        }
+      },
+      "required": ["schema_version", "publisher", "id", "display_name", "version", "host_api", "platforms", "contributions"]
+    }
+  ],
+  "$defs": {
+    "PageMetadata": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "id": { "const": "private-flight.page" }, "display": { "type": "object", "additionalProperties": false, "properties": { "title": { "const": "起飞记录" } }, "required": ["title"] }, "order": { "const": 0 } },
+      "required": ["id", "display", "order"]
+    },
+    "NavigationMetadata": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "id": { "const": "private-flight.navigation" }, "display": { "type": "object", "additionalProperties": false, "properties": { "title": { "const": "起飞记录" } }, "required": ["title"] }, "order": { "const": 0 } },
+      "required": ["id", "display", "order"]
+    }
+  }
+}

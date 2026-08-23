@@ -8,7 +8,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'frb_generated.dart';
+import 'marketplace.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
+import 'plugins/service.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -47,6 +49,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AiRecapStatusDto dco_decode_ai_recap_status_dto(dynamic raw);
+
+  @protected
   AppUsageDto dco_decode_app_usage_dto(dynamic raw);
 
   @protected
@@ -56,10 +61,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConfigDto dco_decode_box_autoadd_config_dto(dynamic raw);
 
   @protected
+  FlightCompletionMaterialDto
+  dco_decode_box_autoadd_flight_completion_material_dto(dynamic raw);
+
+  @protected
+  FlightSessionDto dco_decode_box_autoadd_flight_session_dto(dynamic raw);
+
+  @protected
+  HostDeclarativeV1DocumentDto
+  dco_decode_box_autoadd_host_declarative_v_1_document_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
   IconDto dco_decode_box_autoadd_icon_dto(dynamic raw);
+
+  @protected
+  MarketplaceCatalogQueryDto
+  dco_decode_box_autoadd_marketplace_catalog_query_dto(dynamic raw);
+
+  @protected
+  MarketplaceErrorDto dco_decode_box_autoadd_marketplace_error_dto(dynamic raw);
+
+  @protected
+  MarketplaceInstallRequestDto
+  dco_decode_box_autoadd_marketplace_install_request_dto(dynamic raw);
+
+  @protected
+  MarketplacePluginRefDto dco_decode_box_autoadd_marketplace_plugin_ref_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MaterialDto dco_decode_box_autoadd_material_dto(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   ConfigDto dco_decode_config_dto(dynamic raw);
@@ -75,6 +113,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DiaryEntryDto dco_decode_diary_entry_dto(dynamic raw);
+
+  @protected
+  FlightCompletionMaterialDto dco_decode_flight_completion_material_dto(
+    dynamic raw,
+  );
+
+  @protected
+  FlightMaterialDto dco_decode_flight_material_dto(dynamic raw);
+
+  @protected
+  FlightSessionDto dco_decode_flight_session_dto(dynamic raw);
+
+  @protected
+  HostContributionSnapshotDto dco_decode_host_contribution_snapshot_dto(
+    dynamic raw,
+  );
+
+  @protected
+  HostDeclarativeV1DocumentDto dco_decode_host_declarative_v_1_document_dto(
+    dynamic raw,
+  );
+
+  @protected
+  HostDeclarativeV1NodeDto dco_decode_host_declarative_v_1_node_dto(
+    dynamic raw,
+  );
+
+  @protected
+  HostPluginUiStateDto dco_decode_host_plugin_ui_state_dto(dynamic raw);
+
+  @protected
+  HostProjectedContributionDto dco_decode_host_projected_contribution_dto(
+    dynamic raw,
+  );
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -93,6 +168,46 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<DiaryEntryDto> dco_decode_list_diary_entry_dto(dynamic raw);
+
+  @protected
+  List<FlightMaterialDto> dco_decode_list_flight_material_dto(dynamic raw);
+
+  @protected
+  List<FlightSessionDto> dco_decode_list_flight_session_dto(dynamic raw);
+
+  @protected
+  List<HostDeclarativeV1NodeDto> dco_decode_list_host_declarative_v_1_node_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<HostPluginUiStateDto> dco_decode_list_host_plugin_ui_state_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<HostProjectedContributionDto>
+  dco_decode_list_host_projected_contribution_dto(dynamic raw);
+
+  @protected
+  List<MarketplaceBadgeDto> dco_decode_list_marketplace_badge_dto(dynamic raw);
+
+  @protected
+  List<MarketplaceCapabilityDto> dco_decode_list_marketplace_capability_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<MarketplaceCatalogItemDto> dco_decode_list_marketplace_catalog_item_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<MarketplacePermissionReviewDto>
+  dco_decode_list_marketplace_permission_review_dto(dynamic raw);
+
+  @protected
+  List<MaterialDto> dco_decode_list_material_dto(dynamic raw);
 
   @protected
   List<PageDto> dco_decode_list_page_dto(dynamic raw);
@@ -114,13 +229,112 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StartupDto> dco_decode_list_startup_dto(dynamic raw);
 
   @protected
+  MarketplaceBadgeDto dco_decode_marketplace_badge_dto(dynamic raw);
+
+  @protected
+  MarketplaceCapabilityDto dco_decode_marketplace_capability_dto(dynamic raw);
+
+  @protected
+  MarketplaceCatalogItemDto dco_decode_marketplace_catalog_item_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceCatalogPageDto dco_decode_marketplace_catalog_page_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceCatalogQueryDto dco_decode_marketplace_catalog_query_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceChannelDto dco_decode_marketplace_channel_dto(dynamic raw);
+
+  @protected
+  MarketplaceDispositionDto dco_decode_marketplace_disposition_dto(dynamic raw);
+
+  @protected
+  MarketplaceErrorCodeDto dco_decode_marketplace_error_code_dto(dynamic raw);
+
+  @protected
+  MarketplaceErrorDto dco_decode_marketplace_error_dto(dynamic raw);
+
+  @protected
+  MarketplaceInstallPlanDto dco_decode_marketplace_install_plan_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceInstallRequestDto dco_decode_marketplace_install_request_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceOperationPhaseDto dco_decode_marketplace_operation_phase_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplaceOperationStateDto dco_decode_marketplace_operation_state_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplacePermissionReviewDto dco_decode_marketplace_permission_review_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplacePluginDetailDto dco_decode_marketplace_plugin_detail_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MarketplacePluginRefDto dco_decode_marketplace_plugin_ref_dto(dynamic raw);
+
+  @protected
+  MarketplaceReleaseRefDto dco_decode_marketplace_release_ref_dto(dynamic raw);
+
+  @protected
+  MarketplaceReleaseStateDto dco_decode_marketplace_release_state_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MaterialDto dco_decode_material_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  FlightCompletionMaterialDto?
+  dco_decode_opt_box_autoadd_flight_completion_material_dto(dynamic raw);
+
+  @protected
+  FlightSessionDto? dco_decode_opt_box_autoadd_flight_session_dto(dynamic raw);
+
+  @protected
+  HostDeclarativeV1DocumentDto?
+  dco_decode_opt_box_autoadd_host_declarative_v_1_document_dto(dynamic raw);
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
   IconDto? dco_decode_opt_box_autoadd_icon_dto(dynamic raw);
+
+  @protected
+  MarketplaceErrorDto? dco_decode_opt_box_autoadd_marketplace_error_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MaterialDto? dco_decode_opt_box_autoadd_material_dto(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   PageDto dco_decode_page_dto(dynamic raw);
@@ -181,6 +395,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AiRecapStatusDto sse_decode_ai_recap_status_dto(SseDeserializer deserializer);
+
+  @protected
   AppUsageDto sse_decode_app_usage_dto(SseDeserializer deserializer);
 
   @protected
@@ -190,10 +407,55 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConfigDto sse_decode_box_autoadd_config_dto(SseDeserializer deserializer);
 
   @protected
+  FlightCompletionMaterialDto
+  sse_decode_box_autoadd_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlightSessionDto sse_decode_box_autoadd_flight_session_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostDeclarativeV1DocumentDto
+  sse_decode_box_autoadd_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   IconDto sse_decode_box_autoadd_icon_dto(SseDeserializer deserializer);
+
+  @protected
+  MarketplaceCatalogQueryDto
+  sse_decode_box_autoadd_marketplace_catalog_query_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceErrorDto sse_decode_box_autoadd_marketplace_error_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceInstallRequestDto
+  sse_decode_box_autoadd_marketplace_install_request_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplacePluginRefDto sse_decode_box_autoadd_marketplace_plugin_ref_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MaterialDto sse_decode_box_autoadd_material_dto(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   ConfigDto sse_decode_config_dto(SseDeserializer deserializer);
@@ -209,6 +471,47 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DiaryEntryDto sse_decode_diary_entry_dto(SseDeserializer deserializer);
+
+  @protected
+  FlightCompletionMaterialDto sse_decode_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlightMaterialDto sse_decode_flight_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlightSessionDto sse_decode_flight_session_dto(SseDeserializer deserializer);
+
+  @protected
+  HostContributionSnapshotDto sse_decode_host_contribution_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostDeclarativeV1DocumentDto sse_decode_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostDeclarativeV1NodeDto sse_decode_host_declarative_v_1_node_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostPluginUiStateDto sse_decode_host_plugin_ui_state_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostProjectedContributionDto sse_decode_host_projected_contribution_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -231,6 +534,54 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<DiaryEntryDto> sse_decode_list_diary_entry_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<FlightMaterialDto> sse_decode_list_flight_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<FlightSessionDto> sse_decode_list_flight_session_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HostDeclarativeV1NodeDto> sse_decode_list_host_declarative_v_1_node_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HostPluginUiStateDto> sse_decode_list_host_plugin_ui_state_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HostProjectedContributionDto>
+  sse_decode_list_host_projected_contribution_dto(SseDeserializer deserializer);
+
+  @protected
+  List<MarketplaceBadgeDto> sse_decode_list_marketplace_badge_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MarketplaceCapabilityDto> sse_decode_list_marketplace_capability_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MarketplaceCatalogItemDto> sse_decode_list_marketplace_catalog_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MarketplacePermissionReviewDto>
+  sse_decode_list_marketplace_permission_review_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MaterialDto> sse_decode_list_material_dto(SseDeserializer deserializer);
 
   @protected
   List<PageDto> sse_decode_list_page_dto(SseDeserializer deserializer);
@@ -256,13 +607,136 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StartupDto> sse_decode_list_startup_dto(SseDeserializer deserializer);
 
   @protected
+  MarketplaceBadgeDto sse_decode_marketplace_badge_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceCapabilityDto sse_decode_marketplace_capability_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceCatalogItemDto sse_decode_marketplace_catalog_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceCatalogPageDto sse_decode_marketplace_catalog_page_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceCatalogQueryDto sse_decode_marketplace_catalog_query_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceChannelDto sse_decode_marketplace_channel_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceDispositionDto sse_decode_marketplace_disposition_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceErrorCodeDto sse_decode_marketplace_error_code_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceErrorDto sse_decode_marketplace_error_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceInstallPlanDto sse_decode_marketplace_install_plan_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceInstallRequestDto sse_decode_marketplace_install_request_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceOperationPhaseDto sse_decode_marketplace_operation_phase_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceOperationStateDto sse_decode_marketplace_operation_state_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplacePermissionReviewDto sse_decode_marketplace_permission_review_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplacePluginDetailDto sse_decode_marketplace_plugin_detail_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplacePluginRefDto sse_decode_marketplace_plugin_ref_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceReleaseRefDto sse_decode_marketplace_release_ref_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MarketplaceReleaseStateDto sse_decode_marketplace_release_state_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MaterialDto sse_decode_material_dto(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  FlightCompletionMaterialDto?
+  sse_decode_opt_box_autoadd_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlightSessionDto? sse_decode_opt_box_autoadd_flight_session_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HostDeclarativeV1DocumentDto?
+  sse_decode_opt_box_autoadd_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   IconDto? sse_decode_opt_box_autoadd_icon_dto(SseDeserializer deserializer);
+
+  @protected
+  MarketplaceErrorDto? sse_decode_opt_box_autoadd_marketplace_error_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MaterialDto? sse_decode_opt_box_autoadd_material_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   PageDto sse_decode_page_dto(SseDeserializer deserializer);
@@ -305,9 +779,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -338,6 +809,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ai_recap_status_dto(
+    AiRecapStatusDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_app_usage_dto(AppUsageDto self, SseSerializer serializer);
 
   @protected
@@ -350,6 +827,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_flight_completion_material_dto(
+    FlightCompletionMaterialDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_flight_session_dto(
+    FlightSessionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -357,6 +852,39 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_icon_dto(IconDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_catalog_query_dto(
+    MarketplaceCatalogQueryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_error_dto(
+    MarketplaceErrorDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_install_request_dto(
+    MarketplaceInstallRequestDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_plugin_ref_dto(
+    MarketplacePluginRefDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_material_dto(
+    MaterialDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_config_dto(ConfigDto self, SseSerializer serializer);
@@ -375,6 +903,57 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_diary_entry_dto(DiaryEntryDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_flight_completion_material_dto(
+    FlightCompletionMaterialDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flight_material_dto(
+    FlightMaterialDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flight_session_dto(
+    FlightSessionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_host_contribution_snapshot_dto(
+    HostContributionSnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_host_declarative_v_1_node_dto(
+    HostDeclarativeV1NodeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_host_plugin_ui_state_dto(
+    HostPluginUiStateDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_host_projected_contribution_dto(
+    HostProjectedContributionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
@@ -400,6 +979,66 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_diary_entry_dto(
     List<DiaryEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_flight_material_dto(
+    List<FlightMaterialDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_flight_session_dto(
+    List<FlightSessionDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_host_declarative_v_1_node_dto(
+    List<HostDeclarativeV1NodeDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_host_plugin_ui_state_dto(
+    List<HostPluginUiStateDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_host_projected_contribution_dto(
+    List<HostProjectedContributionDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_marketplace_badge_dto(
+    List<MarketplaceBadgeDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_marketplace_capability_dto(
+    List<MarketplaceCapabilityDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_marketplace_catalog_item_dto(
+    List<MarketplaceCatalogItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_marketplace_permission_review_dto(
+    List<MarketplacePermissionReviewDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_material_dto(
+    List<MaterialDto> self,
     SseSerializer serializer,
   );
 
@@ -437,7 +1076,136 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_marketplace_badge_dto(
+    MarketplaceBadgeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_capability_dto(
+    MarketplaceCapabilityDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_catalog_item_dto(
+    MarketplaceCatalogItemDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_catalog_page_dto(
+    MarketplaceCatalogPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_catalog_query_dto(
+    MarketplaceCatalogQueryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_channel_dto(
+    MarketplaceChannelDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_disposition_dto(
+    MarketplaceDispositionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_error_code_dto(
+    MarketplaceErrorCodeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_error_dto(
+    MarketplaceErrorDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_install_plan_dto(
+    MarketplaceInstallPlanDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_install_request_dto(
+    MarketplaceInstallRequestDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_operation_phase_dto(
+    MarketplaceOperationPhaseDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_operation_state_dto(
+    MarketplaceOperationStateDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_permission_review_dto(
+    MarketplacePermissionReviewDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_plugin_detail_dto(
+    MarketplacePluginDetailDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_plugin_ref_dto(
+    MarketplacePluginRefDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_release_ref_dto(
+    MarketplaceReleaseRefDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_marketplace_release_state_dto(
+    MarketplaceReleaseStateDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_material_dto(MaterialDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_flight_completion_material_dto(
+    FlightCompletionMaterialDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_flight_session_dto(
+    FlightSessionDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(
@@ -450,6 +1218,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     IconDto? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_marketplace_error_dto(
+    MarketplaceErrorDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_material_dto(
+    MaterialDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_page_dto(PageDto self, SseSerializer serializer);
@@ -492,9 +1275,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

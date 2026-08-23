@@ -1,0 +1,1 @@
+[{"constraints":{"allowed_granularities":["application","day"],"max_bytes":65536,"max_range_days":30,"max_rows":1000},"id":"usage.aggregate.read","rationale":"Aggregate insights"},{"constraints":{"allowed_domains":["api.openai.com"]},"id":"ai.cloud","rationale":"Cloud recap"},{"id":"ai.local","rationale":"Local recap"}]

@@ -1,0 +1,29 @@
+{
+  "signature": {
+    "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "key_id": "marketplace-root-v1",
+    "algorithm": "ed25519"
+  },
+  "items": [
+    {
+      "version": "1.2.3",
+      "identity": { "plugin_id": "unicode-demo", "publisher_id": "wellorbetter" },
+      "display_name": "Résumé 时间线 🧭",
+      "description": "Unicode: Café 时间线 🧭 「安全」",
+      "package_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "release_id": "123e4567-e89b-12d3-a456-426614174000",
+      "package_bytes": 1024,
+      "platforms": ["windows_x64"],
+      "permissions": ["usage.aggregate.read"],
+      "state": "published",
+      "channel": "stable",
+      "host_api": ">=1.0.0, <2.0.0",
+      "badges": ["official"],
+      "published_at": "2026-08-23T00:00:00.987Z"
+    }
+  ],
+  "generated_at": "2026-08-23T00:00:00.120Z",
+  "next_cursor": null,
+  "catalog_revision": "catalog-revision-emoji-😀",
+  "schema_version": 1
+}

@@ -1,0 +1,1 @@
+{"contribution_id":"sample-insights.overview","root":{"children":[{"kind":"text","text":"Your productivity overview"},{"kind":"metric","label":"Focus time","value":"2h 15m"},{"items":["One safe host-rendered item","No remote code"],"kind":"list"}],"kind":"stack"},"schema_version":1}

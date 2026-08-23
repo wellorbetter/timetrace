@@ -9,7 +9,9 @@ import 'dart:convert';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'marketplace.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'plugins/service.dart';
 
 /// Main entrypoint of the Rust API
 class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
@@ -64,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1560329493;
+  int get rustContentHash => 1407118153;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -88,6 +90,10 @@ abstract class RustLibApi extends BaseApi {
     required String path,
   });
 
+  Future<AiRecapStatusDto> crateApiTimeTraceApiAiRecapStatus({
+    required TimeTraceApi that,
+  });
+
   void crateApiTimeTraceApiClearData({required TimeTraceApi that});
 
   TimeTraceApi crateApiTimeTraceApiCreate({required String dbPath});
@@ -97,10 +103,65 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 id,
   });
 
+  void crateApiTimeTraceApiEmitUiDiagnostic({
+    required TimeTraceApi that,
+    required String level,
+    required String eventCode,
+    String? errorCode,
+    BigInt? durationMs,
+  });
+
   String crateApiTimeTraceApiExportCsv({
     required TimeTraceApi that,
     required String start,
     required String end,
+  });
+
+  Future<void> crateApiTimeTraceApiFlightAddMaterial({
+    required TimeTraceApi that,
+    required PlatformInt64 flightId,
+    required PlatformInt64 materialId,
+  });
+
+  Future<PlatformInt64> crateApiTimeTraceApiFlightComplete({
+    required TimeTraceApi that,
+    PlatformInt64? satisfaction,
+    required String note,
+  });
+
+  Future<PlatformInt64> crateApiTimeTraceApiFlightCompleteWithMaterial({
+    required TimeTraceApi that,
+    PlatformInt64? satisfaction,
+    required String note,
+    FlightCompletionMaterialDto? material,
+  });
+
+  Future<PlatformInt64> crateApiTimeTraceApiFlightDiscard({
+    required TimeTraceApi that,
+  });
+
+  Future<FlightSessionDto?> crateApiTimeTraceApiFlightGetCurrent({
+    required TimeTraceApi that,
+  });
+
+  Future<List<FlightMaterialDto>> crateApiTimeTraceApiFlightGetMaterials({
+    required TimeTraceApi that,
+    required PlatformInt64 flightId,
+  });
+
+  Future<List<FlightSessionDto>> crateApiTimeTraceApiFlightRange({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  });
+
+  Future<List<FlightSessionDto>> crateApiTimeTraceApiFlightRecent({
+    required TimeTraceApi that,
+    required PlatformInt64 limit,
+  });
+
+  Future<PlatformInt64> crateApiTimeTraceApiFlightStart({
+    required TimeTraceApi that,
   });
 
   Int64List crateApiTimeTraceApiGetAppHourly({
@@ -205,6 +266,45 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiTimeTraceApiIsTrackingPaused({required TimeTraceApi that});
 
+  Future<MarketplacePluginDetailDto> crateApiTimeTraceApiMarketplaceDetail({
+    required TimeTraceApi that,
+    required MarketplacePluginRefDto reference,
+  });
+
+  Future<MarketplaceOperationStateDto> crateApiTimeTraceApiMarketplaceInstall({
+    required TimeTraceApi that,
+    required MarketplaceInstallRequestDto request,
+  });
+
+  Future<MarketplaceCatalogPageDto> crateApiTimeTraceApiMarketplaceList({
+    required TimeTraceApi that,
+    required MarketplaceCatalogQueryDto query,
+  });
+
+  Future<MaterialDto?> crateApiTimeTraceApiMaterialGet({
+    required TimeTraceApi that,
+    required PlatformInt64 id,
+  });
+
+  Future<List<MaterialDto>> crateApiTimeTraceApiMaterialList({
+    required TimeTraceApi that,
+  });
+
+  Future<PlatformInt64> crateApiTimeTraceApiMaterialUpsert({
+    required TimeTraceApi that,
+    required String title,
+    required String kind,
+    String? sourceUrl,
+    String? domain,
+    String? localAssetPath,
+    required String tags,
+    PlatformInt64? rating,
+  });
+
+  Future<HostContributionSnapshotDto> crateApiTimeTraceApiPluginSnapshot({
+    required TimeTraceApi that,
+  });
+
   PlatformInt64 crateApiTimeTraceApiPublishDiary({
     required TimeTraceApi that,
     required String date,
@@ -244,6 +344,12 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 entryId,
   });
 
+  Future<HostContributionSnapshotDto> crateApiTimeTraceApiSetPluginEnabled({
+    required TimeTraceApi that,
+    required String pluginId,
+    required bool enabled,
+  });
+
   void crateApiTimeTraceApiSetSelfStartEnabled({
     required TimeTraceApi that,
     required bool enabled,
@@ -255,11 +361,15 @@ abstract class RustLibApi extends BaseApi {
     required bool paused,
   });
 
+  Future<void> crateApiTimeTraceApiShutdownAll({required TimeTraceApi that});
+
   void crateApiTimeTraceApiToggleStartup({
     required TimeTraceApi that,
     required PlatformInt64 id,
     required bool enable,
   });
+
+  int crateApiTimeTraceApiUiDiagnosticLevelMask({required TimeTraceApi that});
 
   void crateApiTimeTraceApiUpdateDiaryEntry({
     required TimeTraceApi that,
@@ -355,6 +465,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<AiRecapStatusDto> crateApiTimeTraceApiAiRecapStatus({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ai_recap_status_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiAiRecapStatusConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiAiRecapStatusConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_ai_recap_status",
+        argNames: ["that"],
+      );
+
+  @override
   void crateApiTimeTraceApiClearData({required TimeTraceApi that}) {
     return handler.executeSync(
       SyncTask(
@@ -364,7 +510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -390,7 +536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(dbPath, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -423,7 +569,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_i_64(id, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -443,6 +589,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiTimeTraceApiEmitUiDiagnostic({
+    required TimeTraceApi that,
+    required String level,
+    required String eventCode,
+    String? errorCode,
+    BigInt? durationMs,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(level, serializer);
+          sse_encode_String(eventCode, serializer);
+          sse_encode_opt_String(errorCode, serializer);
+          sse_encode_opt_box_autoadd_u_64(durationMs, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiEmitUiDiagnosticConstMeta,
+        argValues: [that, level, eventCode, errorCode, durationMs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiEmitUiDiagnosticConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_emit_ui_diagnostic",
+        argNames: ["that", "level", "eventCode", "errorCode", "durationMs"],
+      );
+
+  @override
   String crateApiTimeTraceApiExportCsv({
     required TimeTraceApi that,
     required String start,
@@ -458,7 +643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -478,6 +663,355 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiTimeTraceApiFlightAddMaterial({
+    required TimeTraceApi that,
+    required PlatformInt64 flightId,
+    required PlatformInt64 materialId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_i_64(flightId, serializer);
+          sse_encode_i_64(materialId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightAddMaterialConstMeta,
+        argValues: [that, flightId, materialId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightAddMaterialConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_add_material",
+        argNames: ["that", "flightId", "materialId"],
+      );
+
+  @override
+  Future<PlatformInt64> crateApiTimeTraceApiFlightComplete({
+    required TimeTraceApi that,
+    PlatformInt64? satisfaction,
+    required String note,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_opt_box_autoadd_i_64(satisfaction, serializer);
+          sse_encode_String(note, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightCompleteConstMeta,
+        argValues: [that, satisfaction, note],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightCompleteConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_complete",
+        argNames: ["that", "satisfaction", "note"],
+      );
+
+  @override
+  Future<PlatformInt64> crateApiTimeTraceApiFlightCompleteWithMaterial({
+    required TimeTraceApi that,
+    PlatformInt64? satisfaction,
+    required String note,
+    FlightCompletionMaterialDto? material,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_opt_box_autoadd_i_64(satisfaction, serializer);
+          sse_encode_String(note, serializer);
+          sse_encode_opt_box_autoadd_flight_completion_material_dto(
+            material,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightCompleteWithMaterialConstMeta,
+        argValues: [that, satisfaction, note, material],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightCompleteWithMaterialConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_complete_with_material",
+        argNames: ["that", "satisfaction", "note", "material"],
+      );
+
+  @override
+  Future<PlatformInt64> crateApiTimeTraceApiFlightDiscard({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightDiscardConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightDiscardConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_discard",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<FlightSessionDto?> crateApiTimeTraceApiFlightGetCurrent({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_flight_session_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightGetCurrentConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightGetCurrentConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_get_current",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<List<FlightMaterialDto>> crateApiTimeTraceApiFlightGetMaterials({
+    required TimeTraceApi that,
+    required PlatformInt64 flightId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_i_64(flightId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_flight_material_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightGetMaterialsConstMeta,
+        argValues: [that, flightId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightGetMaterialsConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_get_materials",
+        argNames: ["that", "flightId"],
+      );
+
+  @override
+  Future<List<FlightSessionDto>> crateApiTimeTraceApiFlightRange({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(start, serializer);
+          sse_encode_String(end, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_flight_session_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightRangeConstMeta,
+        argValues: [that, start, end],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightRangeConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_range",
+        argNames: ["that", "start", "end"],
+      );
+
+  @override
+  Future<List<FlightSessionDto>> crateApiTimeTraceApiFlightRecent({
+    required TimeTraceApi that,
+    required PlatformInt64 limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_i_64(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_flight_session_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightRecentConstMeta,
+        argValues: [that, limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightRecentConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_recent",
+        argNames: ["that", "limit"],
+      );
+
+  @override
+  Future<PlatformInt64> crateApiTimeTraceApiFlightStart({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiFlightStartConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiFlightStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_flight_start",
+        argNames: ["that"],
+      );
+
+  @override
   Int64List crateApiTimeTraceApiGetAppHourly({
     required TimeTraceApi that,
     required String appName,
@@ -493,7 +1027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(appName, serializer);
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_i_64_strict,
@@ -526,7 +1060,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(exePath, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_icon_dto,
@@ -555,7 +1089,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_config_dto,
@@ -590,7 +1124,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_dashboard_data_dto,
@@ -623,7 +1157,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_day_detail_dto,
@@ -656,7 +1190,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_i_64_strict,
@@ -689,7 +1223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -724,7 +1258,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_record_string_string,
@@ -759,7 +1293,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_diary_entry_dto,
@@ -794,7 +1328,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_record_string_string,
@@ -830,7 +1364,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -864,7 +1398,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -899,7 +1433,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_u_32(hour, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_app_usage_dto,
@@ -930,7 +1464,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_startup_dto,
@@ -965,7 +1499,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_stats_dto,
@@ -1000,7 +1534,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_app_usage_dto,
@@ -1031,7 +1565,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_record_i_64_i_64,
@@ -1066,7 +1600,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(appName, serializer);
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_page_dto,
@@ -1095,7 +1629,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1124,7 +1658,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1153,7 +1687,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1173,6 +1707,307 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MarketplacePluginDetailDto> crateApiTimeTraceApiMarketplaceDetail({
+    required TimeTraceApi that,
+    required MarketplacePluginRefDto reference,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_marketplace_plugin_ref_dto(
+            reference,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 39,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_marketplace_plugin_detail_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiMarketplaceDetailConstMeta,
+        argValues: [that, reference],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMarketplaceDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_marketplace_detail",
+        argNames: ["that", "reference"],
+      );
+
+  @override
+  Future<MarketplaceOperationStateDto> crateApiTimeTraceApiMarketplaceInstall({
+    required TimeTraceApi that,
+    required MarketplaceInstallRequestDto request,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_marketplace_install_request_dto(
+            request,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_marketplace_operation_state_dto,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiMarketplaceInstallConstMeta,
+        argValues: [that, request],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMarketplaceInstallConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_marketplace_install",
+        argNames: ["that", "request"],
+      );
+
+  @override
+  Future<MarketplaceCatalogPageDto> crateApiTimeTraceApiMarketplaceList({
+    required TimeTraceApi that,
+    required MarketplaceCatalogQueryDto query,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_marketplace_catalog_query_dto(
+            query,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_marketplace_catalog_page_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiMarketplaceListConstMeta,
+        argValues: [that, query],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMarketplaceListConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_marketplace_list",
+        argNames: ["that", "query"],
+      );
+
+  @override
+  Future<MaterialDto?> crateApiTimeTraceApiMaterialGet({
+    required TimeTraceApi that,
+    required PlatformInt64 id,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 42,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_material_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiMaterialGetConstMeta,
+        argValues: [that, id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMaterialGetConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_material_get",
+        argNames: ["that", "id"],
+      );
+
+  @override
+  Future<List<MaterialDto>> crateApiTimeTraceApiMaterialList({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 43,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_material_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiMaterialListConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMaterialListConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_material_list",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<PlatformInt64> crateApiTimeTraceApiMaterialUpsert({
+    required TimeTraceApi that,
+    required String title,
+    required String kind,
+    String? sourceUrl,
+    String? domain,
+    String? localAssetPath,
+    required String tags,
+    PlatformInt64? rating,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(title, serializer);
+          sse_encode_String(kind, serializer);
+          sse_encode_opt_String(sourceUrl, serializer);
+          sse_encode_opt_String(domain, serializer);
+          sse_encode_opt_String(localAssetPath, serializer);
+          sse_encode_String(tags, serializer);
+          sse_encode_opt_box_autoadd_i_64(rating, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiMaterialUpsertConstMeta,
+        argValues: [
+          that,
+          title,
+          kind,
+          sourceUrl,
+          domain,
+          localAssetPath,
+          tags,
+          rating,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiMaterialUpsertConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_material_upsert",
+        argNames: [
+          "that",
+          "title",
+          "kind",
+          "sourceUrl",
+          "domain",
+          "localAssetPath",
+          "tags",
+          "rating",
+        ],
+      );
+
+  @override
+  Future<HostContributionSnapshotDto> crateApiTimeTraceApiPluginSnapshot({
+    required TimeTraceApi that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 45,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_host_contribution_snapshot_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiPluginSnapshotConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiPluginSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_plugin_snapshot",
+        argNames: ["that"],
+      );
+
+  @override
   PlatformInt64 crateApiTimeTraceApiPublishDiary({
     required TimeTraceApi that,
     required String date,
@@ -1188,7 +2023,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1221,7 +2056,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(path, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1254,7 +2089,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(command, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -1289,7 +2124,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1322,7 +2157,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1357,7 +2192,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1392,7 +2227,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(path, serializer);
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1412,6 +2247,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<HostContributionSnapshotDto> crateApiTimeTraceApiSetPluginEnabled({
+    required TimeTraceApi that,
+    required String pluginId,
+    required bool enabled,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(pluginId, serializer);
+          sse_encode_bool(enabled, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 53,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_host_contribution_snapshot_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiSetPluginEnabledConstMeta,
+        argValues: [that, pluginId, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiSetPluginEnabledConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_set_plugin_enabled",
+        argNames: ["that", "pluginId", "enabled"],
+      );
+
+  @override
   void crateApiTimeTraceApiSetSelfStartEnabled({
     required TimeTraceApi that,
     required bool enabled,
@@ -1427,7 +2302,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_bool(enabled, serializer);
           sse_encode_bool(minimized, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1460,7 +2335,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(paused, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1480,6 +2355,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiTimeTraceApiShutdownAll({required TimeTraceApi that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 56,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiShutdownAllConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiShutdownAllConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_shutdown_all",
+        argNames: ["that"],
+      );
+
+  @override
   void crateApiTimeTraceApiToggleStartup({
     required TimeTraceApi that,
     required PlatformInt64 id,
@@ -1495,7 +2404,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1515,6 +2424,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  int crateApiTimeTraceApiUiDiagnosticLevelMask({required TimeTraceApi that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_8,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTimeTraceApiUiDiagnosticLevelMaskConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiUiDiagnosticLevelMaskConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_ui_diagnostic_level_mask",
+        argNames: ["that"],
+      );
+
+  @override
   void crateApiTimeTraceApiUpdateDiaryEntry({
     required TimeTraceApi that,
     required PlatformInt64 id,
@@ -1530,7 +2468,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1597,6 +2535,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiRecapStatusDto dco_decode_ai_recap_status_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return AiRecapStatusDto(state: dco_decode_String(arr[0]));
+  }
+
+  @protected
   AppUsageDto dco_decode_app_usage_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1623,6 +2570,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlightCompletionMaterialDto
+  dco_decode_box_autoadd_flight_completion_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_flight_completion_material_dto(raw);
+  }
+
+  @protected
+  FlightSessionDto dco_decode_box_autoadd_flight_session_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_flight_session_dto(raw);
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto
+  dco_decode_box_autoadd_host_declarative_v_1_document_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_host_declarative_v_1_document_dto(raw);
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
@@ -1632,6 +2599,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IconDto dco_decode_box_autoadd_icon_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_icon_dto(raw);
+  }
+
+  @protected
+  MarketplaceCatalogQueryDto
+  dco_decode_box_autoadd_marketplace_catalog_query_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_marketplace_catalog_query_dto(raw);
+  }
+
+  @protected
+  MarketplaceErrorDto dco_decode_box_autoadd_marketplace_error_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_marketplace_error_dto(raw);
+  }
+
+  @protected
+  MarketplaceInstallRequestDto
+  dco_decode_box_autoadd_marketplace_install_request_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_marketplace_install_request_dto(raw);
+  }
+
+  @protected
+  MarketplacePluginRefDto dco_decode_box_autoadd_marketplace_plugin_ref_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_marketplace_plugin_ref_dto(raw);
+  }
+
+  @protected
+  MaterialDto dco_decode_box_autoadd_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_material_dto(raw);
+  }
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_u_64(raw);
   }
 
   @protected
@@ -1711,6 +2720,153 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlightCompletionMaterialDto dco_decode_flight_completion_material_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return FlightCompletionMaterialDto(
+      title: dco_decode_String(arr[0]),
+      kind: dco_decode_String(arr[1]),
+      sourceUrl: dco_decode_opt_String(arr[2]),
+      domain: dco_decode_opt_String(arr[3]),
+      localAssetPath: dco_decode_opt_String(arr[4]),
+      tags: dco_decode_String(arr[5]),
+      rating: dco_decode_opt_box_autoadd_i_64(arr[6]),
+    );
+  }
+
+  @protected
+  FlightMaterialDto dco_decode_flight_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return FlightMaterialDto(
+      flightId: dco_decode_i_64(arr[0]),
+      sortOrder: dco_decode_i_64(arr[1]),
+      material: dco_decode_material_dto(arr[2]),
+    );
+  }
+
+  @protected
+  FlightSessionDto dco_decode_flight_session_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return FlightSessionDto(
+      id: dco_decode_i_64(arr[0]),
+      startedAt: dco_decode_String(arr[1]),
+      endedAt: dco_decode_opt_String(arr[2]),
+      durationSecs: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      status: dco_decode_String(arr[4]),
+      satisfaction: dco_decode_opt_box_autoadd_i_64(arr[5]),
+      note: dco_decode_String(arr[6]),
+      date: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  HostContributionSnapshotDto dco_decode_host_contribution_snapshot_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return HostContributionSnapshotDto(
+      revision: dco_decode_u_64(arr[0]),
+      plugins: dco_decode_list_host_plugin_ui_state_dto(arr[1]),
+      active: dco_decode_list_host_projected_contribution_dto(arr[2]),
+    );
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto dco_decode_host_declarative_v_1_document_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return HostDeclarativeV1DocumentDto(
+      contributionId: dco_decode_String(arr[0]),
+      root: dco_decode_host_declarative_v_1_node_dto(arr[1]),
+    );
+  }
+
+  @protected
+  HostDeclarativeV1NodeDto dco_decode_host_declarative_v_1_node_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return HostDeclarativeV1NodeDto_Text(text: dco_decode_String(raw[1]));
+      case 1:
+        return HostDeclarativeV1NodeDto_Metric(
+          label: dco_decode_String(raw[1]),
+          value: dco_decode_String(raw[2]),
+        );
+      case 2:
+        return HostDeclarativeV1NodeDto_Stack(
+          children: dco_decode_list_host_declarative_v_1_node_dto(raw[1]),
+        );
+      case 3:
+        return HostDeclarativeV1NodeDto_List(
+          items: dco_decode_list_String(raw[1]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  HostPluginUiStateDto dco_decode_host_plugin_ui_state_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return HostPluginUiStateDto(
+      pluginId: dco_decode_String(arr[0]),
+      manifestJson: dco_decode_String(arr[1]),
+      desiredState: dco_decode_String(arr[2]),
+      runtimeState: dco_decode_String(arr[3]),
+      compatible: dco_decode_bool(arr[4]),
+      grantsSatisfied: dco_decode_bool(arr[5]),
+      generation: dco_decode_u_64(arr[6]),
+      failureCode: dco_decode_opt_String(arr[7]),
+      failureRetryable: dco_decode_bool(arr[8]),
+    );
+  }
+
+  @protected
+  HostProjectedContributionDto dco_decode_host_projected_contribution_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return HostProjectedContributionDto(
+      pluginId: dco_decode_String(arr[0]),
+      contributionJson: dco_decode_String(arr[1]),
+      route: dco_decode_opt_String(arr[2]),
+      declarativeDocument:
+          dco_decode_opt_box_autoadd_host_declarative_v_1_document_dto(arr[3]),
+    );
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeI64(raw);
@@ -1754,6 +2910,90 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<FlightMaterialDto> dco_decode_list_flight_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_flight_material_dto).toList();
+  }
+
+  @protected
+  List<FlightSessionDto> dco_decode_list_flight_session_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_flight_session_dto).toList();
+  }
+
+  @protected
+  List<HostDeclarativeV1NodeDto> dco_decode_list_host_declarative_v_1_node_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_host_declarative_v_1_node_dto)
+        .toList();
+  }
+
+  @protected
+  List<HostPluginUiStateDto> dco_decode_list_host_plugin_ui_state_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_host_plugin_ui_state_dto)
+        .toList();
+  }
+
+  @protected
+  List<HostProjectedContributionDto>
+  dco_decode_list_host_projected_contribution_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_host_projected_contribution_dto)
+        .toList();
+  }
+
+  @protected
+  List<MarketplaceBadgeDto> dco_decode_list_marketplace_badge_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_marketplace_badge_dto)
+        .toList();
+  }
+
+  @protected
+  List<MarketplaceCapabilityDto> dco_decode_list_marketplace_capability_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_marketplace_capability_dto)
+        .toList();
+  }
+
+  @protected
+  List<MarketplaceCatalogItemDto> dco_decode_list_marketplace_catalog_item_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_marketplace_catalog_item_dto)
+        .toList();
+  }
+
+  @protected
+  List<MarketplacePermissionReviewDto>
+  dco_decode_list_marketplace_permission_review_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_marketplace_permission_review_dto)
+        .toList();
+  }
+
+  @protected
+  List<MaterialDto> dco_decode_list_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_material_dto).toList();
+  }
+
+  @protected
   List<PageDto> dco_decode_list_page_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_page_dto).toList();
@@ -1793,9 +3033,271 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MarketplaceBadgeDto dco_decode_marketplace_badge_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceBadgeDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceCapabilityDto dco_decode_marketplace_capability_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceCapabilityDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceCatalogItemDto dco_decode_marketplace_catalog_item_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return MarketplaceCatalogItemDto(
+      release: dco_decode_marketplace_release_ref_dto(arr[0]),
+      displayName: dco_decode_String(arr[1]),
+      description: dco_decode_opt_String(arr[2]),
+      channel: dco_decode_marketplace_channel_dto(arr[3]),
+      state: dco_decode_marketplace_release_state_dto(arr[4]),
+      badges: dco_decode_list_marketplace_badge_dto(arr[5]),
+      compatibility: dco_decode_marketplace_disposition_dto(arr[6]),
+      permissions: dco_decode_list_marketplace_permission_review_dto(arr[7]),
+      packageBytes: dco_decode_u_64(arr[8]),
+      publishedAt: dco_decode_String(arr[9]),
+    );
+  }
+
+  @protected
+  MarketplaceCatalogPageDto dco_decode_marketplace_catalog_page_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MarketplaceCatalogPageDto(
+      schemaVersion: dco_decode_u_32(arr[0]),
+      catalogRevision: dco_decode_String(arr[1]),
+      generatedAt: dco_decode_String(arr[2]),
+      items: dco_decode_list_marketplace_catalog_item_dto(arr[3]),
+      nextCursor: dco_decode_opt_String(arr[4]),
+    );
+  }
+
+  @protected
+  MarketplaceCatalogQueryDto dco_decode_marketplace_catalog_query_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return MarketplaceCatalogQueryDto(
+      channel: dco_decode_String(arr[0]),
+      cursor: dco_decode_opt_String(arr[1]),
+      limit: dco_decode_u_8(arr[2]),
+    );
+  }
+
+  @protected
+  MarketplaceChannelDto dco_decode_marketplace_channel_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceChannelDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceDispositionDto dco_decode_marketplace_disposition_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceDispositionDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceErrorCodeDto dco_decode_marketplace_error_code_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceErrorCodeDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceErrorDto dco_decode_marketplace_error_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return MarketplaceErrorDto(
+      code: dco_decode_marketplace_error_code_dto(arr[0]),
+      retryable: dco_decode_bool(arr[1]),
+      correlationId: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  MarketplaceInstallPlanDto dco_decode_marketplace_install_plan_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return MarketplaceInstallPlanDto(
+      release: dco_decode_marketplace_release_ref_dto(arr[0]),
+      disposition: dco_decode_marketplace_disposition_dto(arr[1]),
+      requiredConsent: dco_decode_list_marketplace_permission_review_dto(
+        arr[2],
+      ),
+      diskBytes: dco_decode_u_64(arr[3]),
+    );
+  }
+
+  @protected
+  MarketplaceInstallRequestDto dco_decode_marketplace_install_request_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return MarketplaceInstallRequestDto(
+      release: dco_decode_marketplace_release_ref_dto(arr[0]),
+      consentCapabilityIds: dco_decode_list_marketplace_capability_dto(arr[1]),
+    );
+  }
+
+  @protected
+  MarketplaceOperationPhaseDto dco_decode_marketplace_operation_phase_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceOperationPhaseDto.values[raw as int];
+  }
+
+  @protected
+  MarketplaceOperationStateDto dco_decode_marketplace_operation_state_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return MarketplaceOperationStateDto(
+      phase: dco_decode_marketplace_operation_phase_dto(arr[0]),
+      error: dco_decode_opt_box_autoadd_marketplace_error_dto(arr[1]),
+    );
+  }
+
+  @protected
+  MarketplacePermissionReviewDto dco_decode_marketplace_permission_review_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return MarketplacePermissionReviewDto(
+      capability: dco_decode_marketplace_capability_dto(arr[0]),
+      summary: dco_decode_String(arr[1]),
+      rationale: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  MarketplacePluginDetailDto dco_decode_marketplace_plugin_detail_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MarketplacePluginDetailDto(
+      publisherId: dco_decode_String(arr[0]),
+      pluginId: dco_decode_String(arr[1]),
+      selectedRelease: dco_decode_marketplace_catalog_item_dto(arr[2]),
+      versions: dco_decode_list_marketplace_catalog_item_dto(arr[3]),
+      installPlan: dco_decode_marketplace_install_plan_dto(arr[4]),
+    );
+  }
+
+  @protected
+  MarketplacePluginRefDto dco_decode_marketplace_plugin_ref_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return MarketplacePluginRefDto(
+      publisherId: dco_decode_String(arr[0]),
+      pluginId: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  MarketplaceReleaseRefDto dco_decode_marketplace_release_ref_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MarketplaceReleaseRefDto(
+      releaseId: dco_decode_String(arr[0]),
+      publisherId: dco_decode_String(arr[1]),
+      pluginId: dco_decode_String(arr[2]),
+      version: dco_decode_String(arr[3]),
+      packageDigest: dco_decode_String(arr[4]),
+    );
+  }
+
+  @protected
+  MarketplaceReleaseStateDto dco_decode_marketplace_release_state_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MarketplaceReleaseStateDto.values[raw as int];
+  }
+
+  @protected
+  MaterialDto dco_decode_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return MaterialDto(
+      id: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      kind: dco_decode_String(arr[2]),
+      sourceUrl: dco_decode_opt_String(arr[3]),
+      domain: dco_decode_opt_String(arr[4]),
+      localAssetPath: dco_decode_opt_String(arr[5]),
+      tags: dco_decode_String(arr[6]),
+      rating: dco_decode_opt_box_autoadd_i_64(arr[7]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  FlightCompletionMaterialDto?
+  dco_decode_opt_box_autoadd_flight_completion_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_flight_completion_material_dto(raw);
+  }
+
+  @protected
+  FlightSessionDto? dco_decode_opt_box_autoadd_flight_session_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_flight_session_dto(raw);
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto?
+  dco_decode_opt_box_autoadd_host_declarative_v_1_document_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_host_declarative_v_1_document_dto(raw);
   }
 
   @protected
@@ -1808,6 +3310,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IconDto? dco_decode_opt_box_autoadd_icon_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_icon_dto(raw);
+  }
+
+  @protected
+  MarketplaceErrorDto? dco_decode_opt_box_autoadd_marketplace_error_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_marketplace_error_dto(raw);
+  }
+
+  @protected
+  MaterialDto? dco_decode_opt_box_autoadd_material_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_material_dto(raw);
+  }
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
   }
 
   @protected
@@ -1967,6 +3491,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiRecapStatusDto sse_decode_ai_recap_status_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state = sse_decode_String(deserializer);
+    return AiRecapStatusDto(state: var_state);
+  }
+
+  @protected
   AppUsageDto sse_decode_app_usage_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_appName = sse_decode_String(deserializer);
@@ -1994,6 +3527,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlightCompletionMaterialDto
+  sse_decode_box_autoadd_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_flight_completion_material_dto(deserializer));
+  }
+
+  @protected
+  FlightSessionDto sse_decode_box_autoadd_flight_session_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_flight_session_dto(deserializer));
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto
+  sse_decode_box_autoadd_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_host_declarative_v_1_document_dto(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
@@ -2003,6 +3562,54 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IconDto sse_decode_box_autoadd_icon_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_icon_dto(deserializer));
+  }
+
+  @protected
+  MarketplaceCatalogQueryDto
+  sse_decode_box_autoadd_marketplace_catalog_query_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_marketplace_catalog_query_dto(deserializer));
+  }
+
+  @protected
+  MarketplaceErrorDto sse_decode_box_autoadd_marketplace_error_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_marketplace_error_dto(deserializer));
+  }
+
+  @protected
+  MarketplaceInstallRequestDto
+  sse_decode_box_autoadd_marketplace_install_request_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_marketplace_install_request_dto(deserializer));
+  }
+
+  @protected
+  MarketplacePluginRefDto sse_decode_box_autoadd_marketplace_plugin_ref_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_marketplace_plugin_ref_dto(deserializer));
+  }
+
+  @protected
+  MaterialDto sse_decode_box_autoadd_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_material_dto(deserializer));
+  }
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_64(deserializer));
   }
 
   @protected
@@ -2093,6 +3700,181 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlightCompletionMaterialDto sse_decode_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_sourceUrl = sse_decode_opt_String(deserializer);
+    var var_domain = sse_decode_opt_String(deserializer);
+    var var_localAssetPath = sse_decode_opt_String(deserializer);
+    var var_tags = sse_decode_String(deserializer);
+    var var_rating = sse_decode_opt_box_autoadd_i_64(deserializer);
+    return FlightCompletionMaterialDto(
+      title: var_title,
+      kind: var_kind,
+      sourceUrl: var_sourceUrl,
+      domain: var_domain,
+      localAssetPath: var_localAssetPath,
+      tags: var_tags,
+      rating: var_rating,
+    );
+  }
+
+  @protected
+  FlightMaterialDto sse_decode_flight_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_flightId = sse_decode_i_64(deserializer);
+    var var_sortOrder = sse_decode_i_64(deserializer);
+    var var_material = sse_decode_material_dto(deserializer);
+    return FlightMaterialDto(
+      flightId: var_flightId,
+      sortOrder: var_sortOrder,
+      material: var_material,
+    );
+  }
+
+  @protected
+  FlightSessionDto sse_decode_flight_session_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_startedAt = sse_decode_String(deserializer);
+    var var_endedAt = sse_decode_opt_String(deserializer);
+    var var_durationSecs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_satisfaction = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_note = sse_decode_String(deserializer);
+    var var_date = sse_decode_String(deserializer);
+    return FlightSessionDto(
+      id: var_id,
+      startedAt: var_startedAt,
+      endedAt: var_endedAt,
+      durationSecs: var_durationSecs,
+      status: var_status,
+      satisfaction: var_satisfaction,
+      note: var_note,
+      date: var_date,
+    );
+  }
+
+  @protected
+  HostContributionSnapshotDto sse_decode_host_contribution_snapshot_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_revision = sse_decode_u_64(deserializer);
+    var var_plugins = sse_decode_list_host_plugin_ui_state_dto(deserializer);
+    var var_active = sse_decode_list_host_projected_contribution_dto(
+      deserializer,
+    );
+    return HostContributionSnapshotDto(
+      revision: var_revision,
+      plugins: var_plugins,
+      active: var_active,
+    );
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto sse_decode_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_contributionId = sse_decode_String(deserializer);
+    var var_root = sse_decode_host_declarative_v_1_node_dto(deserializer);
+    return HostDeclarativeV1DocumentDto(
+      contributionId: var_contributionId,
+      root: var_root,
+    );
+  }
+
+  @protected
+  HostDeclarativeV1NodeDto sse_decode_host_declarative_v_1_node_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_text = sse_decode_String(deserializer);
+        return HostDeclarativeV1NodeDto_Text(text: var_text);
+      case 1:
+        var var_label = sse_decode_String(deserializer);
+        var var_value = sse_decode_String(deserializer);
+        return HostDeclarativeV1NodeDto_Metric(
+          label: var_label,
+          value: var_value,
+        );
+      case 2:
+        var var_children = sse_decode_list_host_declarative_v_1_node_dto(
+          deserializer,
+        );
+        return HostDeclarativeV1NodeDto_Stack(children: var_children);
+      case 3:
+        var var_items = sse_decode_list_String(deserializer);
+        return HostDeclarativeV1NodeDto_List(items: var_items);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  HostPluginUiStateDto sse_decode_host_plugin_ui_state_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pluginId = sse_decode_String(deserializer);
+    var var_manifestJson = sse_decode_String(deserializer);
+    var var_desiredState = sse_decode_String(deserializer);
+    var var_runtimeState = sse_decode_String(deserializer);
+    var var_compatible = sse_decode_bool(deserializer);
+    var var_grantsSatisfied = sse_decode_bool(deserializer);
+    var var_generation = sse_decode_u_64(deserializer);
+    var var_failureCode = sse_decode_opt_String(deserializer);
+    var var_failureRetryable = sse_decode_bool(deserializer);
+    return HostPluginUiStateDto(
+      pluginId: var_pluginId,
+      manifestJson: var_manifestJson,
+      desiredState: var_desiredState,
+      runtimeState: var_runtimeState,
+      compatible: var_compatible,
+      grantsSatisfied: var_grantsSatisfied,
+      generation: var_generation,
+      failureCode: var_failureCode,
+      failureRetryable: var_failureRetryable,
+    );
+  }
+
+  @protected
+  HostProjectedContributionDto sse_decode_host_projected_contribution_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pluginId = sse_decode_String(deserializer);
+    var var_contributionJson = sse_decode_String(deserializer);
+    var var_route = sse_decode_opt_String(deserializer);
+    var var_declarativeDocument =
+        sse_decode_opt_box_autoadd_host_declarative_v_1_document_dto(
+          deserializer,
+        );
+    return HostProjectedContributionDto(
+      pluginId: var_pluginId,
+      contributionJson: var_contributionJson,
+      route: var_route,
+      declarativeDocument: var_declarativeDocument,
+    );
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getPlatformInt64();
@@ -2157,6 +3939,146 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <DiaryEntryDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_diary_entry_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FlightMaterialDto> sse_decode_list_flight_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FlightMaterialDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_flight_material_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FlightSessionDto> sse_decode_list_flight_session_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FlightSessionDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_flight_session_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HostDeclarativeV1NodeDto> sse_decode_list_host_declarative_v_1_node_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HostDeclarativeV1NodeDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_host_declarative_v_1_node_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HostPluginUiStateDto> sse_decode_list_host_plugin_ui_state_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HostPluginUiStateDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_host_plugin_ui_state_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HostProjectedContributionDto>
+  sse_decode_list_host_projected_contribution_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HostProjectedContributionDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_host_projected_contribution_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MarketplaceBadgeDto> sse_decode_list_marketplace_badge_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MarketplaceBadgeDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_marketplace_badge_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MarketplaceCapabilityDto> sse_decode_list_marketplace_capability_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MarketplaceCapabilityDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_marketplace_capability_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MarketplaceCatalogItemDto> sse_decode_list_marketplace_catalog_item_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MarketplaceCatalogItemDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_marketplace_catalog_item_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MarketplacePermissionReviewDto>
+  sse_decode_list_marketplace_permission_review_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MarketplacePermissionReviewDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_marketplace_permission_review_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MaterialDto> sse_decode_list_material_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MaterialDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_material_dto(deserializer));
     }
     return ans_;
   }
@@ -2231,11 +4153,340 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MarketplaceBadgeDto sse_decode_marketplace_badge_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceBadgeDto.values[inner];
+  }
+
+  @protected
+  MarketplaceCapabilityDto sse_decode_marketplace_capability_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceCapabilityDto.values[inner];
+  }
+
+  @protected
+  MarketplaceCatalogItemDto sse_decode_marketplace_catalog_item_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_release = sse_decode_marketplace_release_ref_dto(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_channel = sse_decode_marketplace_channel_dto(deserializer);
+    var var_state = sse_decode_marketplace_release_state_dto(deserializer);
+    var var_badges = sse_decode_list_marketplace_badge_dto(deserializer);
+    var var_compatibility = sse_decode_marketplace_disposition_dto(
+      deserializer,
+    );
+    var var_permissions = sse_decode_list_marketplace_permission_review_dto(
+      deserializer,
+    );
+    var var_packageBytes = sse_decode_u_64(deserializer);
+    var var_publishedAt = sse_decode_String(deserializer);
+    return MarketplaceCatalogItemDto(
+      release: var_release,
+      displayName: var_displayName,
+      description: var_description,
+      channel: var_channel,
+      state: var_state,
+      badges: var_badges,
+      compatibility: var_compatibility,
+      permissions: var_permissions,
+      packageBytes: var_packageBytes,
+      publishedAt: var_publishedAt,
+    );
+  }
+
+  @protected
+  MarketplaceCatalogPageDto sse_decode_marketplace_catalog_page_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schemaVersion = sse_decode_u_32(deserializer);
+    var var_catalogRevision = sse_decode_String(deserializer);
+    var var_generatedAt = sse_decode_String(deserializer);
+    var var_items = sse_decode_list_marketplace_catalog_item_dto(deserializer);
+    var var_nextCursor = sse_decode_opt_String(deserializer);
+    return MarketplaceCatalogPageDto(
+      schemaVersion: var_schemaVersion,
+      catalogRevision: var_catalogRevision,
+      generatedAt: var_generatedAt,
+      items: var_items,
+      nextCursor: var_nextCursor,
+    );
+  }
+
+  @protected
+  MarketplaceCatalogQueryDto sse_decode_marketplace_catalog_query_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_channel = sse_decode_String(deserializer);
+    var var_cursor = sse_decode_opt_String(deserializer);
+    var var_limit = sse_decode_u_8(deserializer);
+    return MarketplaceCatalogQueryDto(
+      channel: var_channel,
+      cursor: var_cursor,
+      limit: var_limit,
+    );
+  }
+
+  @protected
+  MarketplaceChannelDto sse_decode_marketplace_channel_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceChannelDto.values[inner];
+  }
+
+  @protected
+  MarketplaceDispositionDto sse_decode_marketplace_disposition_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceDispositionDto.values[inner];
+  }
+
+  @protected
+  MarketplaceErrorCodeDto sse_decode_marketplace_error_code_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceErrorCodeDto.values[inner];
+  }
+
+  @protected
+  MarketplaceErrorDto sse_decode_marketplace_error_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_code = sse_decode_marketplace_error_code_dto(deserializer);
+    var var_retryable = sse_decode_bool(deserializer);
+    var var_correlationId = sse_decode_opt_String(deserializer);
+    return MarketplaceErrorDto(
+      code: var_code,
+      retryable: var_retryable,
+      correlationId: var_correlationId,
+    );
+  }
+
+  @protected
+  MarketplaceInstallPlanDto sse_decode_marketplace_install_plan_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_release = sse_decode_marketplace_release_ref_dto(deserializer);
+    var var_disposition = sse_decode_marketplace_disposition_dto(deserializer);
+    var var_requiredConsent = sse_decode_list_marketplace_permission_review_dto(
+      deserializer,
+    );
+    var var_diskBytes = sse_decode_u_64(deserializer);
+    return MarketplaceInstallPlanDto(
+      release: var_release,
+      disposition: var_disposition,
+      requiredConsent: var_requiredConsent,
+      diskBytes: var_diskBytes,
+    );
+  }
+
+  @protected
+  MarketplaceInstallRequestDto sse_decode_marketplace_install_request_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_release = sse_decode_marketplace_release_ref_dto(deserializer);
+    var var_consentCapabilityIds = sse_decode_list_marketplace_capability_dto(
+      deserializer,
+    );
+    return MarketplaceInstallRequestDto(
+      release: var_release,
+      consentCapabilityIds: var_consentCapabilityIds,
+    );
+  }
+
+  @protected
+  MarketplaceOperationPhaseDto sse_decode_marketplace_operation_phase_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceOperationPhaseDto.values[inner];
+  }
+
+  @protected
+  MarketplaceOperationStateDto sse_decode_marketplace_operation_state_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_phase = sse_decode_marketplace_operation_phase_dto(deserializer);
+    var var_error = sse_decode_opt_box_autoadd_marketplace_error_dto(
+      deserializer,
+    );
+    return MarketplaceOperationStateDto(phase: var_phase, error: var_error);
+  }
+
+  @protected
+  MarketplacePermissionReviewDto sse_decode_marketplace_permission_review_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_capability = sse_decode_marketplace_capability_dto(deserializer);
+    var var_summary = sse_decode_String(deserializer);
+    var var_rationale = sse_decode_opt_String(deserializer);
+    return MarketplacePermissionReviewDto(
+      capability: var_capability,
+      summary: var_summary,
+      rationale: var_rationale,
+    );
+  }
+
+  @protected
+  MarketplacePluginDetailDto sse_decode_marketplace_plugin_detail_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_publisherId = sse_decode_String(deserializer);
+    var var_pluginId = sse_decode_String(deserializer);
+    var var_selectedRelease = sse_decode_marketplace_catalog_item_dto(
+      deserializer,
+    );
+    var var_versions = sse_decode_list_marketplace_catalog_item_dto(
+      deserializer,
+    );
+    var var_installPlan = sse_decode_marketplace_install_plan_dto(deserializer);
+    return MarketplacePluginDetailDto(
+      publisherId: var_publisherId,
+      pluginId: var_pluginId,
+      selectedRelease: var_selectedRelease,
+      versions: var_versions,
+      installPlan: var_installPlan,
+    );
+  }
+
+  @protected
+  MarketplacePluginRefDto sse_decode_marketplace_plugin_ref_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_publisherId = sse_decode_String(deserializer);
+    var var_pluginId = sse_decode_String(deserializer);
+    return MarketplacePluginRefDto(
+      publisherId: var_publisherId,
+      pluginId: var_pluginId,
+    );
+  }
+
+  @protected
+  MarketplaceReleaseRefDto sse_decode_marketplace_release_ref_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_releaseId = sse_decode_String(deserializer);
+    var var_publisherId = sse_decode_String(deserializer);
+    var var_pluginId = sse_decode_String(deserializer);
+    var var_version = sse_decode_String(deserializer);
+    var var_packageDigest = sse_decode_String(deserializer);
+    return MarketplaceReleaseRefDto(
+      releaseId: var_releaseId,
+      publisherId: var_publisherId,
+      pluginId: var_pluginId,
+      version: var_version,
+      packageDigest: var_packageDigest,
+    );
+  }
+
+  @protected
+  MarketplaceReleaseStateDto sse_decode_marketplace_release_state_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MarketplaceReleaseStateDto.values[inner];
+  }
+
+  @protected
+  MaterialDto sse_decode_material_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_sourceUrl = sse_decode_opt_String(deserializer);
+    var var_domain = sse_decode_opt_String(deserializer);
+    var var_localAssetPath = sse_decode_opt_String(deserializer);
+    var var_tags = sse_decode_String(deserializer);
+    var var_rating = sse_decode_opt_box_autoadd_i_64(deserializer);
+    return MaterialDto(
+      id: var_id,
+      title: var_title,
+      kind: var_kind,
+      sourceUrl: var_sourceUrl,
+      domain: var_domain,
+      localAssetPath: var_localAssetPath,
+      tags: var_tags,
+      rating: var_rating,
+    );
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  FlightCompletionMaterialDto?
+  sse_decode_opt_box_autoadd_flight_completion_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_flight_completion_material_dto(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  FlightSessionDto? sse_decode_opt_box_autoadd_flight_session_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_flight_session_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  HostDeclarativeV1DocumentDto?
+  sse_decode_opt_box_autoadd_host_declarative_v_1_document_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_host_declarative_v_1_document_dto(
+        deserializer,
+      ));
     } else {
       return null;
     }
@@ -2258,6 +4509,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_icon_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  MarketplaceErrorDto? sse_decode_opt_box_autoadd_marketplace_error_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_marketplace_error_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  MaterialDto? sse_decode_opt_box_autoadd_material_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_material_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_64(deserializer));
     } else {
       return null;
     }
@@ -2365,12 +4653,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -2425,6 +4707,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_ai_recap_status_dto(
+    AiRecapStatusDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.state, serializer);
+  }
+
+  @protected
   void sse_encode_app_usage_dto(AppUsageDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.appName, serializer);
@@ -2449,6 +4740,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_flight_completion_material_dto(
+    FlightCompletionMaterialDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_flight_completion_material_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_flight_session_dto(
+    FlightSessionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_flight_session_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_host_declarative_v_1_document_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -2461,6 +4779,57 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_icon_dto(IconDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_icon_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_catalog_query_dto(
+    MarketplaceCatalogQueryDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_catalog_query_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_error_dto(
+    MarketplaceErrorDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_error_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_install_request_dto(
+    MarketplaceInstallRequestDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_install_request_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_marketplace_plugin_ref_dto(
+    MarketplacePluginRefDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_plugin_ref_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_material_dto(
+    MaterialDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_material_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self, serializer);
   }
 
   @protected
@@ -2524,6 +4893,133 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_flight_completion_material_dto(
+    FlightCompletionMaterialDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_opt_String(self.sourceUrl, serializer);
+    sse_encode_opt_String(self.domain, serializer);
+    sse_encode_opt_String(self.localAssetPath, serializer);
+    sse_encode_String(self.tags, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.rating, serializer);
+  }
+
+  @protected
+  void sse_encode_flight_material_dto(
+    FlightMaterialDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.flightId, serializer);
+    sse_encode_i_64(self.sortOrder, serializer);
+    sse_encode_material_dto(self.material, serializer);
+  }
+
+  @protected
+  void sse_encode_flight_session_dto(
+    FlightSessionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.startedAt, serializer);
+    sse_encode_opt_String(self.endedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.durationSecs, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.satisfaction, serializer);
+    sse_encode_String(self.note, serializer);
+    sse_encode_String(self.date, serializer);
+  }
+
+  @protected
+  void sse_encode_host_contribution_snapshot_dto(
+    HostContributionSnapshotDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.revision, serializer);
+    sse_encode_list_host_plugin_ui_state_dto(self.plugins, serializer);
+    sse_encode_list_host_projected_contribution_dto(self.active, serializer);
+  }
+
+  @protected
+  void sse_encode_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.contributionId, serializer);
+    sse_encode_host_declarative_v_1_node_dto(self.root, serializer);
+  }
+
+  @protected
+  void sse_encode_host_declarative_v_1_node_dto(
+    HostDeclarativeV1NodeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case HostDeclarativeV1NodeDto_Text(text: final text):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(text, serializer);
+      case HostDeclarativeV1NodeDto_Metric(
+        label: final label,
+        value: final value,
+      ):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(label, serializer);
+        sse_encode_String(value, serializer);
+      case HostDeclarativeV1NodeDto_Stack(children: final children):
+        sse_encode_i_32(2, serializer);
+        sse_encode_list_host_declarative_v_1_node_dto(children, serializer);
+      case HostDeclarativeV1NodeDto_List(items: final items):
+        sse_encode_i_32(3, serializer);
+        sse_encode_list_String(items, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_host_plugin_ui_state_dto(
+    HostPluginUiStateDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.pluginId, serializer);
+    sse_encode_String(self.manifestJson, serializer);
+    sse_encode_String(self.desiredState, serializer);
+    sse_encode_String(self.runtimeState, serializer);
+    sse_encode_bool(self.compatible, serializer);
+    sse_encode_bool(self.grantsSatisfied, serializer);
+    sse_encode_u_64(self.generation, serializer);
+    sse_encode_opt_String(self.failureCode, serializer);
+    sse_encode_bool(self.failureRetryable, serializer);
+  }
+
+  @protected
+  void sse_encode_host_projected_contribution_dto(
+    HostProjectedContributionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.pluginId, serializer);
+    sse_encode_String(self.contributionJson, serializer);
+    sse_encode_opt_String(self.route, serializer);
+    sse_encode_opt_box_autoadd_host_declarative_v_1_document_dto(
+      self.declarativeDocument,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putPlatformInt64(self);
@@ -2579,6 +5075,126 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_diary_entry_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_flight_material_dto(
+    List<FlightMaterialDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_flight_material_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_flight_session_dto(
+    List<FlightSessionDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_flight_session_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_host_declarative_v_1_node_dto(
+    List<HostDeclarativeV1NodeDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_host_declarative_v_1_node_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_host_plugin_ui_state_dto(
+    List<HostPluginUiStateDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_host_plugin_ui_state_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_host_projected_contribution_dto(
+    List<HostProjectedContributionDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_host_projected_contribution_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_marketplace_badge_dto(
+    List<MarketplaceBadgeDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_marketplace_badge_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_marketplace_capability_dto(
+    List<MarketplaceCapabilityDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_marketplace_capability_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_marketplace_catalog_item_dto(
+    List<MarketplaceCatalogItemDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_marketplace_catalog_item_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_marketplace_permission_review_dto(
+    List<MarketplacePermissionReviewDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_marketplace_permission_review_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_material_dto(
+    List<MaterialDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_material_dto(item, serializer);
     }
   }
 
@@ -2648,12 +5264,271 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_marketplace_badge_dto(
+    MarketplaceBadgeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_capability_dto(
+    MarketplaceCapabilityDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_catalog_item_dto(
+    MarketplaceCatalogItemDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_release_ref_dto(self.release, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_marketplace_channel_dto(self.channel, serializer);
+    sse_encode_marketplace_release_state_dto(self.state, serializer);
+    sse_encode_list_marketplace_badge_dto(self.badges, serializer);
+    sse_encode_marketplace_disposition_dto(self.compatibility, serializer);
+    sse_encode_list_marketplace_permission_review_dto(
+      self.permissions,
+      serializer,
+    );
+    sse_encode_u_64(self.packageBytes, serializer);
+    sse_encode_String(self.publishedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_catalog_page_dto(
+    MarketplaceCatalogPageDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.schemaVersion, serializer);
+    sse_encode_String(self.catalogRevision, serializer);
+    sse_encode_String(self.generatedAt, serializer);
+    sse_encode_list_marketplace_catalog_item_dto(self.items, serializer);
+    sse_encode_opt_String(self.nextCursor, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_catalog_query_dto(
+    MarketplaceCatalogQueryDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.channel, serializer);
+    sse_encode_opt_String(self.cursor, serializer);
+    sse_encode_u_8(self.limit, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_channel_dto(
+    MarketplaceChannelDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_disposition_dto(
+    MarketplaceDispositionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_error_code_dto(
+    MarketplaceErrorCodeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_error_dto(
+    MarketplaceErrorDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_error_code_dto(self.code, serializer);
+    sse_encode_bool(self.retryable, serializer);
+    sse_encode_opt_String(self.correlationId, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_install_plan_dto(
+    MarketplaceInstallPlanDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_release_ref_dto(self.release, serializer);
+    sse_encode_marketplace_disposition_dto(self.disposition, serializer);
+    sse_encode_list_marketplace_permission_review_dto(
+      self.requiredConsent,
+      serializer,
+    );
+    sse_encode_u_64(self.diskBytes, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_install_request_dto(
+    MarketplaceInstallRequestDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_release_ref_dto(self.release, serializer);
+    sse_encode_list_marketplace_capability_dto(
+      self.consentCapabilityIds,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_marketplace_operation_phase_dto(
+    MarketplaceOperationPhaseDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_operation_state_dto(
+    MarketplaceOperationStateDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_operation_phase_dto(self.phase, serializer);
+    sse_encode_opt_box_autoadd_marketplace_error_dto(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_permission_review_dto(
+    MarketplacePermissionReviewDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_marketplace_capability_dto(self.capability, serializer);
+    sse_encode_String(self.summary, serializer);
+    sse_encode_opt_String(self.rationale, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_plugin_detail_dto(
+    MarketplacePluginDetailDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.publisherId, serializer);
+    sse_encode_String(self.pluginId, serializer);
+    sse_encode_marketplace_catalog_item_dto(self.selectedRelease, serializer);
+    sse_encode_list_marketplace_catalog_item_dto(self.versions, serializer);
+    sse_encode_marketplace_install_plan_dto(self.installPlan, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_plugin_ref_dto(
+    MarketplacePluginRefDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.publisherId, serializer);
+    sse_encode_String(self.pluginId, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_release_ref_dto(
+    MarketplaceReleaseRefDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.releaseId, serializer);
+    sse_encode_String(self.publisherId, serializer);
+    sse_encode_String(self.pluginId, serializer);
+    sse_encode_String(self.version, serializer);
+    sse_encode_String(self.packageDigest, serializer);
+  }
+
+  @protected
+  void sse_encode_marketplace_release_state_dto(
+    MarketplaceReleaseStateDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_material_dto(MaterialDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_opt_String(self.sourceUrl, serializer);
+    sse_encode_opt_String(self.domain, serializer);
+    sse_encode_opt_String(self.localAssetPath, serializer);
+    sse_encode_String(self.tags, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.rating, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_flight_completion_material_dto(
+    FlightCompletionMaterialDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_flight_completion_material_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_flight_session_dto(
+    FlightSessionDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_flight_session_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_host_declarative_v_1_document_dto(
+    HostDeclarativeV1DocumentDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_host_declarative_v_1_document_dto(
+        self,
+        serializer,
+      );
     }
   }
 
@@ -2680,6 +5555,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_icon_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_marketplace_error_dto(
+    MarketplaceErrorDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_marketplace_error_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_material_dto(
+    MaterialDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_material_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_64(self, serializer);
     }
   }
 
@@ -2768,12 +5679,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
   }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
 }
 
 @sealed
@@ -2811,6 +5716,18 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
       .api
       .crateApiTimeTraceApiAddDiaryImage(that: this, date: date, path: path);
 
+  /// Reads the minimal AI Recap presentation state through a revocable,
+  /// first-party entitlement lease. A caller without a verified, enabled AI
+  /// Recap entitlement receives the same opaque `plugin_not_projectable`
+  /// denial used by other plugin data planes.
+  ///
+  /// This does not create a provider profile, choose a model, start the AI
+  /// composition root, or disclose provider configuration. Those operations
+  /// remain unavailable until trusted application bootstrap owns their real
+  /// inputs.
+  Future<AiRecapStatusDto> aiRecapStatus() =>
+      RustLib.instance.api.crateApiTimeTraceApiAiRecapStatus(that: this);
+
   /// Clear ALL tracked usage data (sessions + page visits).
   void clearData() =>
       RustLib.instance.api.crateApiTimeTraceApiClearData(that: this);
@@ -2819,12 +5736,100 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   void deleteDiaryEntry({required PlatformInt64 id}) => RustLib.instance.api
       .crateApiTimeTraceApiDeleteDiaryEntry(that: this, id: id);
 
+  /// Emit one bounded, structured UI diagnostic without accepting free text.
+  ///
+  /// Event and error codes must be lowercase canonical tokens. Invalid input
+  /// is replaced by a stable rejection event and is never written verbatim.
+  void emitUiDiagnostic({
+    required String level,
+    required String eventCode,
+    String? errorCode,
+    BigInt? durationMs,
+  }) => RustLib.instance.api.crateApiTimeTraceApiEmitUiDiagnostic(
+    that: this,
+    level: level,
+    eventCode: eventCode,
+    errorCode: errorCode,
+    durationMs: durationMs,
+  );
+
   /// Export usage data for a date range as CSV.
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end}) => RustLib
       .instance
       .api
       .crateApiTimeTraceApiExportCsv(that: this, start: start, end: end);
+
+  /// Link a material to a flight session.
+  Future<void> flightAddMaterial({
+    required PlatformInt64 flightId,
+    required PlatformInt64 materialId,
+  }) => RustLib.instance.api.crateApiTimeTraceApiFlightAddMaterial(
+    that: this,
+    flightId: flightId,
+    materialId: materialId,
+  );
+
+  /// Complete the current active flight.
+  Future<PlatformInt64> flightComplete({
+    PlatformInt64? satisfaction,
+    required String note,
+  }) => RustLib.instance.api.crateApiTimeTraceApiFlightComplete(
+    that: this,
+    satisfaction: satisfaction,
+    note: note,
+  );
+
+  /// Completes the current flight and optional material as one async,
+  /// lifecycle-gated database transaction.
+  Future<PlatformInt64> flightCompleteWithMaterial({
+    PlatformInt64? satisfaction,
+    required String note,
+    FlightCompletionMaterialDto? material,
+  }) => RustLib.instance.api.crateApiTimeTraceApiFlightCompleteWithMaterial(
+    that: this,
+    satisfaction: satisfaction,
+    note: note,
+    material: material,
+  );
+
+  /// Discard the current active flight.
+  Future<PlatformInt64> flightDiscard() =>
+      RustLib.instance.api.crateApiTimeTraceApiFlightDiscard(that: this);
+
+  /// Get the currently active flight session, if any.
+  Future<FlightSessionDto?> flightGetCurrent() =>
+      RustLib.instance.api.crateApiTimeTraceApiFlightGetCurrent(that: this);
+
+  /// Get all materials linked to a flight session, in order.
+  Future<List<FlightMaterialDto>> flightGetMaterials({
+    required PlatformInt64 flightId,
+  }) => RustLib.instance.api.crateApiTimeTraceApiFlightGetMaterials(
+    that: this,
+    flightId: flightId,
+  );
+
+  /// Get flight sessions within a date range (inclusive).
+  Future<List<FlightSessionDto>> flightRange({
+    required String start,
+    required String end,
+  }) => RustLib.instance.api.crateApiTimeTraceApiFlightRange(
+    that: this,
+    start: start,
+    end: end,
+  );
+
+  /// Get the most recent N completed flight sessions.
+  Future<List<FlightSessionDto>> flightRecent({required PlatformInt64 limit}) =>
+      RustLib.instance.api.crateApiTimeTraceApiFlightRecent(
+        that: this,
+        limit: limit,
+      );
+
+  /// Begin a new flight session. Returns the session id.
+  /// Returns an error string if an active session already exists.
+  Future<PlatformInt64> flightStart() =>
+      RustLib.instance.api.crateApiTimeTraceApiFlightStart(that: this);
 
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date}) =>
@@ -2965,6 +5970,65 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   bool isTrackingPaused() =>
       RustLib.instance.api.crateApiTimeTraceApiIsTrackingPaused(that: this);
 
+  /// Resolves a Marketplace detail by its typed publisher/plugin identity.
+  Future<MarketplacePluginDetailDto> marketplaceDetail({
+    required MarketplacePluginRefDto reference,
+  }) => RustLib.instance.api.crateApiTimeTraceApiMarketplaceDetail(
+    that: this,
+    reference: reference,
+  );
+
+  /// Installs an exact reviewed Marketplace release with exact consent ids.
+  Future<MarketplaceOperationStateDto> marketplaceInstall({
+    required MarketplaceInstallRequestDto request,
+  }) => RustLib.instance.api.crateApiTimeTraceApiMarketplaceInstall(
+    that: this,
+    request: request,
+  );
+
+  /// Lists only host-verified Marketplace presentation DTOs.
+  Future<MarketplaceCatalogPageDto> marketplaceList({
+    required MarketplaceCatalogQueryDto query,
+  }) => RustLib.instance.api.crateApiTimeTraceApiMarketplaceList(
+    that: this,
+    query: query,
+  );
+
+  /// Get a material by id.
+  Future<MaterialDto?> materialGet({required PlatformInt64 id}) =>
+      RustLib.instance.api.crateApiTimeTraceApiMaterialGet(that: this, id: id);
+
+  /// Get all materials, newest first.
+  Future<List<MaterialDto>> materialList() =>
+      RustLib.instance.api.crateApiTimeTraceApiMaterialList(that: this);
+
+  /// Insert or find a material by title. Returns the material id.
+  Future<PlatformInt64> materialUpsert({
+    required String title,
+    required String kind,
+    String? sourceUrl,
+    String? domain,
+    String? localAssetPath,
+    required String tags,
+    PlatformInt64? rating,
+  }) => RustLib.instance.api.crateApiTimeTraceApiMaterialUpsert(
+    that: this,
+    title: title,
+    kind: kind,
+    sourceUrl: sourceUrl,
+    domain: domain,
+    localAssetPath: localAssetPath,
+    tags: tags,
+    rating: rating,
+  );
+
+  /// Returns the latest immutable plugin lifecycle and contribution view.
+  ///
+  /// This uses normal asynchronous FRB dispatch so cloning the bounded DTO
+  /// never runs on the Flutter UI isolate.
+  Future<HostContributionSnapshotDto> pluginSnapshot() =>
+      RustLib.instance.api.crateApiTimeTraceApiPluginSnapshot(that: this);
+
   /// Publish: promote the day's draft or insert a new published entry.
   PlatformInt64 publishDiary({required String date, required String content}) =>
       RustLib.instance.api.crateApiTimeTraceApiPublishDiary(
@@ -3012,6 +6076,21 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     entryId: entryId,
   );
 
+  /// Enables or disables a plugin on a Rust worker. Marketplace-installed
+  /// packages persist their desired state in the Marketplace registry and
+  /// reload from that registry; bundled plugins retain their lifecycle path.
+  ///
+  /// This intentionally uses normal asynchronous FRB dispatch because the
+  /// transition atomically persists lifecycle state before publishing.
+  Future<HostContributionSnapshotDto> setPluginEnabled({
+    required String pluginId,
+    required bool enabled,
+  }) => RustLib.instance.api.crateApiTimeTraceApiSetPluginEnabled(
+    that: this,
+    pluginId: pluginId,
+    enabled: enabled,
+  );
+
   /// Configures current-user startup without requiring administrator rights.
   void setSelfStartEnabled({required bool enabled, required bool minimized}) =>
       RustLib.instance.api.crateApiTimeTraceApiSetSelfStartEnabled(
@@ -3024,6 +6103,15 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   void setTrackingPaused({required bool paused}) => RustLib.instance.api
       .crateApiTimeTraceApiSetTrackingPaused(that: this, paused: paused);
 
+  /// Stop reports, plugins, and collection in order, then flush diagnostics.
+  ///
+  /// This method intentionally uses normal asynchronous FRB dispatch because
+  /// collector teardown may join platform worker threads. Logging shutdown is
+  /// kept inside the same Rust call so the host cannot flush while a collector
+  /// is still producing events.
+  Future<void> shutdownAll() =>
+      RustLib.instance.api.crateApiTimeTraceApiShutdownAll(that: this);
+
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable}) =>
       RustLib.instance.api.crateApiTimeTraceApiToggleStartup(
@@ -3031,6 +6119,13 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
         id: id,
         enable: enable,
       );
+
+  /// Return the process-start diagnostic level mask for the UI bridge.
+  ///
+  /// Bit positions follow `trace`, `debug`, `info`, `warn`, and `error`.
+  /// The filter is intentionally immutable until the next process start.
+  int uiDiagnosticLevelMask() => RustLib.instance.api
+      .crateApiTimeTraceApiUiDiagnosticLevelMask(that: this);
 
   /// Update a diary entry's content by id.
   void updateDiaryEntry({required PlatformInt64 id, required String content}) =>

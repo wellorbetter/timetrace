@@ -4,10 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import 'frb_generated.dart';
+import 'marketplace.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'plugins/service.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `parse_date`, `setup_logging`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `create_platform_collector`, `csv_field`, `flight_to_dto`, `marketplace_error_token`, `material_to_dto`, `new`, `new`, `parse_date`, `report_data_root`, `run`, `set_paused`, `shutdown_all_in_order`, `shutdown`, `start_ai_report_store`, `with_private_flight`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CollectorRuntime`, `ShutdownOnce`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -16,6 +19,17 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Register a diary image for a date.
   String addDiaryImage({required String date, required String path});
+
+  /// Reads the minimal AI Recap presentation state through a revocable,
+  /// first-party entitlement lease. A caller without a verified, enabled AI
+  /// Recap entitlement receives the same opaque `plugin_not_projectable`
+  /// denial used by other plugin data planes.
+  ///
+  /// This does not create a provider profile, choose a model, start the AI
+  /// composition root, or disclose provider configuration. Those operations
+  /// remain unavailable until trusted application bootstrap owns their real
+  /// inputs.
+  Future<AiRecapStatusDto> aiRecapStatus();
 
   /// Clear ALL tracked usage data (sessions + page visits).
   void clearData();
@@ -27,9 +41,64 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id});
 
+  /// Emit one bounded, structured UI diagnostic without accepting free text.
+  ///
+  /// Event and error codes must be lowercase canonical tokens. Invalid input
+  /// is replaced by a stable rejection event and is never written verbatim.
+  void emitUiDiagnostic({
+    required String level,
+    required String eventCode,
+    String? errorCode,
+    BigInt? durationMs,
+  });
+
   /// Export usage data for a date range as CSV.
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end});
+
+  /// Link a material to a flight session.
+  Future<void> flightAddMaterial({
+    required PlatformInt64 flightId,
+    required PlatformInt64 materialId,
+  });
+
+  /// Complete the current active flight.
+  Future<PlatformInt64> flightComplete({
+    PlatformInt64? satisfaction,
+    required String note,
+  });
+
+  /// Completes the current flight and optional material as one async,
+  /// lifecycle-gated database transaction.
+  Future<PlatformInt64> flightCompleteWithMaterial({
+    PlatformInt64? satisfaction,
+    required String note,
+    FlightCompletionMaterialDto? material,
+  });
+
+  /// Discard the current active flight.
+  Future<PlatformInt64> flightDiscard();
+
+  /// Get the currently active flight session, if any.
+  Future<FlightSessionDto?> flightGetCurrent();
+
+  /// Get all materials linked to a flight session, in order.
+  Future<List<FlightMaterialDto>> flightGetMaterials({
+    required PlatformInt64 flightId,
+  });
+
+  /// Get flight sessions within a date range (inclusive).
+  Future<List<FlightSessionDto>> flightRange({
+    required String start,
+    required String end,
+  });
+
+  /// Get the most recent N completed flight sessions.
+  Future<List<FlightSessionDto>> flightRecent({required PlatformInt64 limit});
+
+  /// Begin a new flight session. Returns the session id.
+  /// Returns an error string if an active session already exists.
+  Future<PlatformInt64> flightStart();
 
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date});
@@ -112,6 +181,44 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Whether tracking is currently paused.
   bool isTrackingPaused();
 
+  /// Resolves a Marketplace detail by its typed publisher/plugin identity.
+  Future<MarketplacePluginDetailDto> marketplaceDetail({
+    required MarketplacePluginRefDto reference,
+  });
+
+  /// Installs an exact reviewed Marketplace release with exact consent ids.
+  Future<MarketplaceOperationStateDto> marketplaceInstall({
+    required MarketplaceInstallRequestDto request,
+  });
+
+  /// Lists only host-verified Marketplace presentation DTOs.
+  Future<MarketplaceCatalogPageDto> marketplaceList({
+    required MarketplaceCatalogQueryDto query,
+  });
+
+  /// Get a material by id.
+  Future<MaterialDto?> materialGet({required PlatformInt64 id});
+
+  /// Get all materials, newest first.
+  Future<List<MaterialDto>> materialList();
+
+  /// Insert or find a material by title. Returns the material id.
+  Future<PlatformInt64> materialUpsert({
+    required String title,
+    required String kind,
+    String? sourceUrl,
+    String? domain,
+    String? localAssetPath,
+    required String tags,
+    PlatformInt64? rating,
+  });
+
+  /// Returns the latest immutable plugin lifecycle and contribution view.
+  ///
+  /// This uses normal asynchronous FRB dispatch so cloning the bounded DTO
+  /// never runs on the Flutter UI isolate.
+  Future<HostContributionSnapshotDto> pluginSnapshot();
+
   /// Publish: promote the day's draft or insert a new published entry.
   PlatformInt64 publishDiary({required String date, required String content});
 
@@ -137,17 +244,64 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required PlatformInt64 entryId,
   });
 
+  /// Enables or disables a plugin on a Rust worker. Marketplace-installed
+  /// packages persist their desired state in the Marketplace registry and
+  /// reload from that registry; bundled plugins retain their lifecycle path.
+  ///
+  /// This intentionally uses normal asynchronous FRB dispatch because the
+  /// transition atomically persists lifecycle state before publishing.
+  Future<HostContributionSnapshotDto> setPluginEnabled({
+    required String pluginId,
+    required bool enabled,
+  });
+
   /// Configures current-user startup without requiring administrator rights.
   void setSelfStartEnabled({required bool enabled, required bool minimized});
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
 
+  /// Stop reports, plugins, and collection in order, then flush diagnostics.
+  ///
+  /// This method intentionally uses normal asynchronous FRB dispatch because
+  /// collector teardown may join platform worker threads. Logging shutdown is
+  /// kept inside the same Rust call so the host cannot flush while a collector
+  /// is still producing events.
+  Future<void> shutdownAll();
+
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable});
 
+  /// Return the process-start diagnostic level mask for the UI bridge.
+  ///
+  /// Bit positions follow `trace`, `debug`, `info`, `warn`, and `error`.
+  /// The filter is intentionally immutable until the next process start.
+  int uiDiagnosticLevelMask();
+
   /// Update a diary entry's content by id.
   void updateDiaryEntry({required PlatformInt64 id, required String content});
+}
+
+/// Safe, entitlement-gated presentation state for the first-party AI Recap
+/// renderer. It contains no endpoint, provider profile, credential, report,
+/// or usage data.
+class AiRecapStatusDto {
+  /// Stable host-owned state token. The only currently supported value is
+  /// `configuration_required`; the composition root is deliberately not
+  /// started until the application has supplied real configuration.
+  final String state;
+
+  const AiRecapStatusDto({required this.state});
+
+  @override
+  int get hashCode => state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiRecapStatusDto &&
+          runtimeType == other.runtimeType &&
+          state == other.state;
 }
 
 class AppUsageDto {
@@ -362,6 +516,124 @@ class DiaryEntryDto {
           status == other.status;
 }
 
+/// Optional material draft committed atomically with a flight completion.
+class FlightCompletionMaterialDto {
+  final String title;
+  final String kind;
+  final String? sourceUrl;
+  final String? domain;
+  final String? localAssetPath;
+  final String tags;
+  final PlatformInt64? rating;
+
+  const FlightCompletionMaterialDto({
+    required this.title,
+    required this.kind,
+    this.sourceUrl,
+    this.domain,
+    this.localAssetPath,
+    required this.tags,
+    this.rating,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      kind.hashCode ^
+      sourceUrl.hashCode ^
+      domain.hashCode ^
+      localAssetPath.hashCode ^
+      tags.hashCode ^
+      rating.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlightCompletionMaterialDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          kind == other.kind &&
+          sourceUrl == other.sourceUrl &&
+          domain == other.domain &&
+          localAssetPath == other.localAssetPath &&
+          tags == other.tags &&
+          rating == other.rating;
+}
+
+/// A material linked to a flight.
+class FlightMaterialDto {
+  final PlatformInt64 flightId;
+  final PlatformInt64 sortOrder;
+  final MaterialDto material;
+
+  const FlightMaterialDto({
+    required this.flightId,
+    required this.sortOrder,
+    required this.material,
+  });
+
+  @override
+  int get hashCode =>
+      flightId.hashCode ^ sortOrder.hashCode ^ material.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlightMaterialDto &&
+          runtimeType == other.runtimeType &&
+          flightId == other.flightId &&
+          sortOrder == other.sortOrder &&
+          material == other.material;
+}
+
+/// A flight session record.
+class FlightSessionDto {
+  final PlatformInt64 id;
+  final String startedAt;
+  final String? endedAt;
+  final PlatformInt64? durationSecs;
+  final String status;
+  final PlatformInt64? satisfaction;
+  final String note;
+  final String date;
+
+  const FlightSessionDto({
+    required this.id,
+    required this.startedAt,
+    this.endedAt,
+    this.durationSecs,
+    required this.status,
+    this.satisfaction,
+    required this.note,
+    required this.date,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      startedAt.hashCode ^
+      endedAt.hashCode ^
+      durationSecs.hashCode ^
+      status.hashCode ^
+      satisfaction.hashCode ^
+      note.hashCode ^
+      date.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlightSessionDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          startedAt == other.startedAt &&
+          endedAt == other.endedAt &&
+          durationSecs == other.durationSecs &&
+          status == other.status &&
+          satisfaction == other.satisfaction &&
+          note == other.note &&
+          date == other.date;
+}
+
 /// Raw RGBA icon pixels for rendering in Flutter.
 class IconDto {
   final PlatformInt64 width;
@@ -385,6 +657,54 @@ class IconDto {
           width == other.width &&
           height == other.height &&
           rgba == other.rgba;
+}
+
+/// A material record.
+class MaterialDto {
+  final PlatformInt64 id;
+  final String title;
+  final String kind;
+  final String? sourceUrl;
+  final String? domain;
+  final String? localAssetPath;
+  final String tags;
+  final PlatformInt64? rating;
+
+  const MaterialDto({
+    required this.id,
+    required this.title,
+    required this.kind,
+    this.sourceUrl,
+    this.domain,
+    this.localAssetPath,
+    required this.tags,
+    this.rating,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      kind.hashCode ^
+      sourceUrl.hashCode ^
+      domain.hashCode ^
+      localAssetPath.hashCode ^
+      tags.hashCode ^
+      rating.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MaterialDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          kind == other.kind &&
+          sourceUrl == other.sourceUrl &&
+          domain == other.domain &&
+          localAssetPath == other.localAssetPath &&
+          tags == other.tags &&
+          rating == other.rating;
 }
 
 class PageDto {

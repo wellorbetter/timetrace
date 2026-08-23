@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellorbetterai.com/contracts/ttx-marketplace-capability-v1.schema.json",
+  "title": "TimeTrace Marketplace TTX Capability v1",
+  "$comment": "Strict P0 subset of PluginManifest capability requests. Unknown base-contract capability IDs are intentionally rejected until their desktop enforcement path ships.",
+  "$defs": {
+    "domain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+    },
+    "rationale": { "type": ["string", "null"], "maxLength": 2048 },
+    "usage_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_range_days": { "type": ["integer", "null"], "minimum": 1, "maximum": 90 },
+        "allowed_granularities": { "type": "array", "uniqueItems": true, "maxItems": 3, "items": { "enum": ["day", "application", "hour"] } },
+        "max_rows": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000 },
+        "max_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 1048576 }
+      }
+    },
+    "cloud_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_domains": { "type": "array", "uniqueItems": true, "maxItems": 32, "items": { "$ref": "#/$defs/domain" } }
+      }
+    },
+    "empty_constraints": { "type": "object", "maxProperties": 0, "additionalProperties": false }
+  },
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false, "required": ["id"],
+      "properties": {
+        "id": { "const": "usage.aggregate.read" },
+        "constraints": { "$ref": "#/$defs/usage_constraints" },
+        "rationale": { "$ref": "#/$defs/rationale" }
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false, "required": ["id"],
+      "properties": {
+        "id": { "const": "ai.cloud" },
+        "constraints": { "$ref": "#/$defs/cloud_constraints" },
+        "rationale": { "$ref": "#/$defs/rationale" }
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false, "required": ["id"],
+      "properties": {
+        "id": { "const": "ai.local" },
+        "constraints": { "$ref": "#/$defs/empty_constraints" },
+        "rationale": { "$ref": "#/$defs/rationale" }
+      }
+    }
+  ]
+}

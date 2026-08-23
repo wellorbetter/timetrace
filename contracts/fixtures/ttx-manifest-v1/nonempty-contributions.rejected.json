@@ -1,0 +1,1 @@
+{"contributions":[{"descriptor":{"metadata":{"display":{"title":"Overview"},"id":"sample-insights.overview","order":0},"renderer":{"mode":"declarative_v1"},"view_id":"overview"},"kind":"page"}],"display_name":"Sample Insights","host_api":">=1.0.0, <2.0.0","id":"sample-insights","platforms":["windows_x64"],"publisher":"timetrace-labs","schema_version":1,"version":"1.2.3"}
