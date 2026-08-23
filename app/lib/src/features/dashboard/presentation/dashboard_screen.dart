@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
+import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_card.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
+import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
@@ -154,10 +156,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     if (deselecting) return;
     try {
       final api = ref.read(apiProvider);
-      final sel = ref.read(dashboardRangeProvider);
-      final d = sel.effectiveDay;
-      final end =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final end = ref.read(dashboardRangeBoundsProvider).end;
       final pages = api.getWindowTitles(
         appName: _visibleApps[i].appName,
         date: end,
@@ -340,7 +339,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         .where((a) => a.totalSeconds > 0)
         .toList(growable: false);
     final sel = ref.watch(dashboardRangeProvider);
-    final calDay = sel.effectiveDay;
+    final calDay = ref.watch(dashboardRangeBoundsProvider).endDate;
     _visibleApps = apps;
     _measureCalendar();
 
@@ -394,6 +393,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                const AiRecapCard(),
                 // First-launch hint when the current range has no data yet
                 if (apps.isEmpty)
                   Card(

@@ -11,6 +11,11 @@ use anyhow::Result;
 use flutter_rust_bridge::frb;
 use timetrace_core::*;
 
+use crate::ai_recap::{
+    AiRecapDto, AiRecapGenerateReplyDto, AiRecapService, AiRecapStatusDto,
+    SqliteAggregateUsageSource,
+};
+
 /// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
 fn setup_logging() {
     use tracing_subscriber::prelude::*;
@@ -126,6 +131,7 @@ pub struct ConfigDto {
 
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
+    ai_recap: AiRecapService,
     monitor: std::sync::Mutex<Option<EventSourceHandle>>,
     paused: std::sync::atomic::AtomicBool,
 }
@@ -160,8 +166,12 @@ impl TimeTraceApi {
         if initially_paused {
             handle.pause();
         }
+        let ai_recap = AiRecapService::new(Arc::new(SqliteAggregateUsageSource::new(
+            db.clone(),
+        )));
         let api = TimeTraceApi {
             db,
+            ai_recap,
             monitor: std::sync::Mutex::new(Some(handle)),
             paused: std::sync::atomic::AtomicBool::new(initially_paused),
         };
@@ -210,6 +220,34 @@ impl TimeTraceApi {
             since: DataStore::recording_started_at(&*self.db)
                 .map(|t| t.format("%Y-%m-%d").to_string()),
         }
+    }
+
+    /// Redacted DeepSeek configuration state; never exposes credential data.
+    #[frb(sync)]
+    pub fn ai_recap_status(&self) -> AiRecapStatusDto {
+        self.ai_recap.status()
+    }
+
+    /// Reads only the bounded in-process result cache; performs no network I/O.
+    #[frb(sync)]
+    pub fn get_latest_ai_recap(
+        &self,
+        scope: String,
+        start: String,
+        end: String,
+    ) -> Option<AiRecapDto> {
+        self.ai_recap.latest(&scope, &start, &end)
+    }
+
+    /// Explicitly generates a recap on a normal FRB worker thread.
+    pub fn generate_ai_recap(
+        &self,
+        scope: String,
+        start: String,
+        end: String,
+        model: String,
+    ) -> AiRecapGenerateReplyDto {
+        self.ai_recap.generate(scope, start, end, model)
     }
 
     /// Reports whether a database read has entered its non-panicking fallback.

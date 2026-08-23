@@ -3,6 +3,7 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import 'ai_recap.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
@@ -17,6 +18,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Register a diary image for a date.
   String addDiaryImage({required String date, required String path});
 
+  /// Redacted DeepSeek configuration state; never exposes credential data.
+  AiRecapStatusDto aiRecapStatus();
+
   /// Clear ALL tracked usage data (sessions + page visits).
   void clearData();
 
@@ -30,6 +34,14 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Export usage data for a date range as CSV.
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end});
+
+  /// Explicitly generates a recap on a normal FRB worker thread.
+  Future<AiRecapGenerateReplyDto> generateAiRecap({
+    required String scope,
+    required String start,
+    required String end,
+    required String model,
+  });
 
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date});
@@ -84,6 +96,13 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Apps active within a specific hour of a date (seconds per app).
   List<AppUsageDto> getHourApps({required String date, required int hour});
+
+  /// Reads only the bounded in-process result cache; performs no network I/O.
+  AiRecapDto? getLatestAiRecap({
+    required String scope,
+    required String start,
+    required String end,
+  });
 
   /// All startup entries.
   List<StartupDto> getStartupEntries();

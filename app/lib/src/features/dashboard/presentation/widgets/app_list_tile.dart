@@ -29,8 +29,7 @@ class _AppListTileState extends ConsumerState<AppListTile> {
     });
     if (_expanded) {
       final api = ref.read(apiProvider);
-      final range = ref.read(dashboardRangeProvider);
-      final end = _rangeEnd(range);
+      final end = ref.read(dashboardRangeBoundsProvider).end;
       final pages = api
           .getWindowTitles(appName: widget.app.appName, date: end)
           .map((p) => (p.title, p.seconds.toInt()))
@@ -42,13 +41,6 @@ class _AppListTileState extends ConsumerState<AppListTile> {
         });
       }
     }
-  }
-
-  String _rangeEnd(DateRangeSelection sel) {
-    final d = sel.effectiveDay;
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    return fmt(d);
   }
 
   @override

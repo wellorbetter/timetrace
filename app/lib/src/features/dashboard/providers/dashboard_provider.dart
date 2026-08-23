@@ -1,41 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
+import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection.dart';
 import 'package:window_manager/window_manager.dart';
-
-/// Supported date ranges.
-enum DateRange { today, yesterday, week, month, custom }
-
-/// Selected range plus an optional concrete day (used for [DateRange.custom]).
-@immutable
-class DateRangeSelection {
-  const DateRangeSelection(this.range, {this.day});
-
-  final DateRange range;
-
-  /// Concrete calendar day; non-null when [range] is [DateRange.custom].
-  final DateTime? day;
-
-  /// The single day all day-level views (hourly/summary/diary) should show.
-  DateTime get effectiveDay {
-    final now = DateTime.now();
-    switch (range) {
-      case DateRange.today:
-        return now;
-      case DateRange.yesterday:
-        return now.subtract(const Duration(days: 1));
-      case DateRange.custom:
-        return day ?? now;
-      case DateRange.week:
-      case DateRange.month:
-        return now;
-    }
-  }
-}
 
 /// Currently selected date range (Riverpod 3 - small Notifier).
 class DateRangeNotifier extends Notifier<DateRangeSelection> {
@@ -55,6 +25,17 @@ final dashboardRangeProvider =
       DateRangeNotifier.new,
     );
 
+/// One caller-captured local-calendar range shared by every dashboard reader.
+/// It invalidates once at the next local midnight so the DB and AI projection
+/// can never compute different dates during the same frame.
+final dashboardRangeBoundsProvider = Provider<DateRangeBounds>((ref) {
+  final now = DateTime.now();
+  final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+  final timer = Timer(nextMidnight.difference(now), ref.invalidateSelf);
+  ref.onDispose(timer.cancel);
+  return resolveDateRange(ref.watch(dashboardRangeProvider), now);
+});
+
 
 /// Dashboard state provider with auto-refresh.
 class DashboardNotifier extends AsyncNotifier<DashboardState> {
@@ -66,20 +47,19 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   @override
   Future<DashboardState> build() async {
     // Rebuild when the range changes.
-    ref.watch(dashboardRangeProvider);
+    final bounds = ref.watch(dashboardRangeBoundsProvider);
     _timer?.cancel();
     // Refresh only while the window is visible; 10s is plenty for a local DB.
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
     ref.onDispose(() => _timer?.cancel());
-    final bounds = _boundsKey(ref.read(dashboardRangeProvider));
-    final cached = _cache[bounds];
+    final cached = _cache[bounds.cacheKey];
     if (cached != null) {
       // 先展示缓存，再后台刷新保证新鲜度。
       Future.microtask(_refresh);
       return cached;
     }
     final loaded = await _load();
-    _cache[bounds] = loaded;
+    _cache[bounds.cacheKey] = loaded;
     _trimCache();
     return loaded;
   }
@@ -89,18 +69,13 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     try {
       if (!(await windowManager.isVisible())) return;
       final loaded = await _load();
-      final bounds = _boundsKey(ref.read(dashboardRangeProvider));
-      _cache[bounds] = loaded;
+      final bounds = ref.read(dashboardRangeBoundsProvider);
+      _cache[bounds.cacheKey] = loaded;
       _trimCache();
       state = AsyncData(loaded);
     } catch (_) {
       // 保持旧数据，静默失败。
     }
-  }
-
-  String _boundsKey(DateRangeSelection sel) {
-    final (start, end) = _rangeBounds(sel);
-    return '$start|$end';
   }
 
   void _trimCache() {
@@ -112,10 +87,9 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
   Future<DashboardState> _load() async {
     final api = ref.read(apiProvider);
-    final range = ref.read(dashboardRangeProvider);
-    final (start, end) = _rangeBounds(range);
+    final bounds = ref.read(dashboardRangeBoundsProvider);
     // Single FFI call for the whole dashboard.
-    final data = api.getDashboardData(start: start, end: end);
+    final data = api.getDashboardData(start: bounds.start, end: bounds.end);
     final databaseDegraded = api.isDatabaseDegraded();
     final (thisWeek, lastWeek) = api.getWeekTotals();
     return DashboardState(
@@ -130,31 +104,6 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     );
   }
 
-    (String, String) _rangeBounds(DateRangeSelection sel) {
-    final now = DateTime.now();
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    final today = fmt(now);
-    switch (sel.range) {
-      case DateRange.today:
-        return (today, today);
-      case DateRange.yesterday:
-        final y = now.subtract(const Duration(days: 1));
-        final ys = fmt(y);
-        return (ys, ys);
-      case DateRange.custom:
-        final ds = fmt(sel.day ?? now);
-        return (ds, ds);
-      case DateRange.week:
-        final monday = now.subtract(Duration(days: now.weekday - 1));
-        return (fmt(monday), today);
-      case DateRange.month:
-        return (
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-01',
-          today,
-        );
-    }
-  }
 }
 
 final dashboardProvider =
