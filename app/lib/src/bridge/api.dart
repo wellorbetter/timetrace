@@ -7,7 +7,7 @@ import 'ai_recap.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `parse_date`, `setup_logging`
+// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `expand_safe_path_variables`, `parse_date`, `safe_path_variable`, `setup_logging`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
@@ -22,11 +22,14 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   AiRecapStatusDto aiRecapStatus();
 
   /// Clear ALL tracked usage data (sessions + page visits).
-  void clearData();
+  bool clearData();
 
   /// Create the API, opening the DB and starting the background monitor.
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
+
+  /// Removes the secure API key; a legacy environment key may become active again.
+  Future<AiRecapSettingsReplyDto> deleteAiRecapApiKey();
 
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id});
@@ -35,12 +38,11 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end});
 
-  /// Explicitly generates a recap on a normal FRB worker thread.
+  /// Explicitly generates a report on a normal FRB worker thread.
   Future<AiRecapGenerateReplyDto> generateAiRecap({
     required String scope,
     required String start,
     required String end,
-    required String model,
   });
 
   /// Hourly active-seconds for one app on a date (24 buckets).
@@ -104,6 +106,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String end,
   });
 
+  /// Reads at most one persisted report per type, newest first, without network I/O.
+  List<AiRecapDto> getLatestAiReports();
+
   /// All startup entries.
   List<StartupDto> getStartupEntries();
 
@@ -121,6 +126,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String appName,
     required String date,
   });
+
+  /// Explicitly imports the legacy environment key into secure storage.
+  Future<AiRecapSettingsReplyDto> importAiRecapEnvironmentKey();
 
   /// Reports whether a database read has entered its non-panicking fallback.
   bool isDatabaseDegraded();
@@ -141,8 +149,16 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// quotes/args stripped). Returns None if no .exe is found.
   String? resolveExePath({required String command});
 
+  /// Securely creates or replaces the DeepSeek API key.
+  Future<AiRecapSettingsReplyDto> saveAiRecapApiKey({required String apiKey});
+
   /// Autosave a draft for a date (one draft per day). Returns its id.
   PlatformInt64 saveDiaryDraft({required String date, required String content});
+
+  /// Saves the default DeepSeek model used by subsequent report generation.
+  Future<AiRecapSettingsReplyDto> setAiRecapDefaultModel({
+    required String model,
+  });
 
   /// Persist user configuration (applies on next monitor start).
   void setConfig({required ConfigDto config});
@@ -161,6 +177,9 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
+
+  /// Explicitly tests DeepSeek credentials without sending usage aggregates.
+  Future<AiRecapConnectionReplyDto> testAiRecapConnection();
 
   /// Enable/disable a startup entry.
   void toggleStartup({required PlatformInt64 id, required bool enable});

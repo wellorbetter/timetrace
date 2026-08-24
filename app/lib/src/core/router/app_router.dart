@@ -102,18 +102,23 @@ int _indexOf(BuildContext context) {
   return i >= 0 ? i : 0;
 }
 
+GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
+  initialLocation: initialLocation,
+  routes: [
+    ShellRoute(
+      builder: (context, state, child) => AppShell(child: child),
+      routes: [
+        GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+        GoRoute(path: '/reports', builder: (_, _) => const AiRecapScreen()),
+        GoRoute(path: '/ai-recap', redirect: (_, _) => '/reports'),
+        GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      ],
+    ),
+  ],
+);
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
-    initialLocation: '/dashboard',
-    routes: [
-      ShellRoute(
-        builder: (context, state, child) => AppShell(child: child),
-        routes: [
-          GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
-          GoRoute(path: '/ai-recap', builder: (_, _) => const AiRecapScreen()),
-          GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
-        ],
-      ),
-    ],
-  );
+  final router = createAppRouter();
+  ref.onDispose(router.dispose);
+  return router;
 });

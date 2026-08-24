@@ -6,9 +6,31 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Reply for an explicit, aggregate-free provider connection test.
+class AiRecapConnectionReplyDto {
+  /// True only after DeepSeek accepts the configured credential.
+  final bool success;
+
+  /// Redacted typed failure when the test did not succeed.
+  final AiRecapErrorDto? error;
+
+  const AiRecapConnectionReplyDto({required this.success, this.error});
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiRecapConnectionReplyDto &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error;
+}
+
 /// A complete, validated recap result safe to expose to Flutter.
 class AiRecapDto {
-  /// Logical period selected by the user: `today` or `week_to_date`.
+  /// Logical report type: `daily`, `weekly`, or `monthly`.
   final String scope;
 
   /// Inclusive local-calendar start date in `YYYY-MM-DD` form.
@@ -32,6 +54,9 @@ class AiRecapDto {
   /// One to three validated Chinese suggestions.
   final List<AiRecapStatementDto> suggestions;
 
+  /// Deterministic top application rows computed locally, never by the model.
+  final List<AiRecapEvidenceDto> topApplications;
+
   /// Active seconds across every valid aggregate row, including truncated rows.
   final PlatformInt64 totalActiveSeconds;
 
@@ -47,6 +72,7 @@ class AiRecapDto {
     required this.summary,
     required this.highlights,
     required this.suggestions,
+    required this.topApplications,
     required this.totalActiveSeconds,
     required this.applicationCount,
   });
@@ -61,6 +87,7 @@ class AiRecapDto {
       summary.hashCode ^
       highlights.hashCode ^
       suggestions.hashCode ^
+      topApplications.hashCode ^
       totalActiveSeconds.hashCode ^
       applicationCount.hashCode;
 
@@ -77,6 +104,7 @@ class AiRecapDto {
           summary == other.summary &&
           highlights == other.highlights &&
           suggestions == other.suggestions &&
+          topApplications == other.topApplications &&
           totalActiveSeconds == other.totalActiveSeconds &&
           applicationCount == other.applicationCount;
 }
@@ -150,6 +178,28 @@ class AiRecapGenerateReplyDto {
           error == other.error;
 }
 
+/// Mutually exclusive reply for a settings mutation.
+class AiRecapSettingsReplyDto {
+  /// Refreshed redacted state on success or best-effort state on failure.
+  final AiRecapStatusDto status;
+
+  /// Redacted typed failure, if the mutation failed.
+  final AiRecapErrorDto? error;
+
+  const AiRecapSettingsReplyDto({required this.status, this.error});
+
+  @override
+  int get hashCode => status.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiRecapSettingsReplyDto &&
+          runtimeType == other.runtimeType &&
+          status == other.status &&
+          error == other.error;
+}
+
 /// One validated Chinese statement and its provider-supplied evidence.
 class AiRecapStatementDto {
   /// Locally rendered Chinese statement text.
@@ -174,7 +224,10 @@ class AiRecapStatementDto {
 
 /// Provider configuration state safe to expose to Flutter.
 class AiRecapStatusDto {
-  /// Whether a non-empty, bounded `DEEPSEEK_API_KEY` is available.
+  /// Whether the complete local AI report service is available.
+  final bool serviceAvailable;
+
+  /// Whether a bounded key is available from an allowed source.
   final bool configured;
 
   /// Human-readable provider name; never contains endpoint or key data.
@@ -183,22 +236,45 @@ class AiRecapStatusDto {
   /// Model selected when the UI has not chosen another supported model.
   final String defaultModel;
 
+  /// `secure_store`, `legacy_environment`, `none`, or `unavailable`.
+  final String credentialSource;
+
+  /// Whether the operating-system secure credential store is available.
+  final bool secureStorageAvailable;
+
+  /// Whether a legacy environment key can currently be imported securely.
+  final bool environmentMigrationAvailable;
+
   const AiRecapStatusDto({
+    required this.serviceAvailable,
     required this.configured,
     required this.provider,
     required this.defaultModel,
+    required this.credentialSource,
+    required this.secureStorageAvailable,
+    required this.environmentMigrationAvailable,
   });
 
   @override
   int get hashCode =>
-      configured.hashCode ^ provider.hashCode ^ defaultModel.hashCode;
+      serviceAvailable.hashCode ^
+      configured.hashCode ^
+      provider.hashCode ^
+      defaultModel.hashCode ^
+      credentialSource.hashCode ^
+      secureStorageAvailable.hashCode ^
+      environmentMigrationAvailable.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is AiRecapStatusDto &&
           runtimeType == other.runtimeType &&
+          serviceAvailable == other.serviceAvailable &&
           configured == other.configured &&
           provider == other.provider &&
-          defaultModel == other.defaultModel;
+          defaultModel == other.defaultModel &&
+          credentialSource == other.credentialSource &&
+          secureStorageAvailable == other.secureStorageAvailable &&
+          environmentMigrationAvailable == other.environmentMigrationAvailable;
 }

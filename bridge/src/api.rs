@@ -12,9 +12,10 @@ use flutter_rust_bridge::frb;
 use timetrace_core::*;
 
 use crate::ai_recap::{
-    AiRecapDto, AiRecapGenerateReplyDto, AiRecapService, AiRecapStatusDto,
-    SqliteAggregateUsageSource,
+    AiRecapConnectionReplyDto, AiRecapDto, AiRecapGenerateReplyDto, AiRecapService,
+    AiRecapSettingsReplyDto, AiRecapStatusDto, SqliteAggregateUsageSource,
 };
+use crate::ai_report_store::{AiReportStore, SqliteAiReportStore, UnavailableAiReportStore};
 
 /// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
 fn setup_logging() {
@@ -142,13 +143,24 @@ impl TimeTraceApi {
     pub fn create(db_path: String) -> Result<TimeTraceApi> {
         setup_logging();
         tracing::info!("TimeTrace bridge starting, db={}", db_path);
-        let db = Arc::new(SqliteStore::open(PathBuf::from(&db_path))?);
+        let database_path = PathBuf::from(&db_path);
+        let db = Arc::new(SqliteStore::open(database_path.clone())?);
 
         // Auto-scan startup entries on first launch
         if DataStore::get_all_startup_entries(&*db).is_empty() {
             let entries = WindowsStartupScanner::new().scan();
             DataStore::upsert_startup_entries(&*db, &entries);
         }
+
+        // Initialize feature-local AI persistence before the monitor starts.
+        // AI failure is isolated and never prevents tracking or the shell.
+        let report_store: Arc<dyn AiReportStore> = match SqliteAiReportStore::open(database_path) {
+            Ok(store) => Arc::new(store),
+            Err(_) => {
+                tracing::warn!("AI report storage unavailable; AI reports disabled");
+                Arc::new(UnavailableAiReportStore)
+            }
+        };
 
         // Start background monitor.
         let config = AppConfig::load();
@@ -166,9 +178,10 @@ impl TimeTraceApi {
         if initially_paused {
             handle.pause();
         }
-        let ai_recap = AiRecapService::new(Arc::new(SqliteAggregateUsageSource::new(
-            db.clone(),
-        )));
+        let ai_recap = AiRecapService::new(
+            Arc::new(SqliteAggregateUsageSource::new(db.clone())),
+            report_store,
+        );
         let api = TimeTraceApi {
             db,
             ai_recap,
@@ -239,15 +252,45 @@ impl TimeTraceApi {
         self.ai_recap.latest(&scope, &start, &end)
     }
 
-    /// Explicitly generates a recap on a normal FRB worker thread.
+    /// Reads at most one persisted report per type, newest first, without network I/O.
+    #[frb(sync)]
+    pub fn get_latest_ai_reports(&self) -> Vec<AiRecapDto> {
+        self.ai_recap.latest_reports()
+    }
+
+    /// Securely creates or replaces the DeepSeek API key.
+    pub fn save_ai_recap_api_key(&self, api_key: String) -> AiRecapSettingsReplyDto {
+        self.ai_recap.save_api_key(api_key)
+    }
+
+    /// Explicitly imports the legacy environment key into secure storage.
+    pub fn import_ai_recap_environment_key(&self) -> AiRecapSettingsReplyDto {
+        self.ai_recap.import_environment_api_key()
+    }
+
+    /// Removes the secure API key; a legacy environment key may become active again.
+    pub fn delete_ai_recap_api_key(&self) -> AiRecapSettingsReplyDto {
+        self.ai_recap.delete_api_key()
+    }
+
+    /// Saves the default DeepSeek model used by subsequent report generation.
+    pub fn set_ai_recap_default_model(&self, model: String) -> AiRecapSettingsReplyDto {
+        self.ai_recap.set_default_model(model)
+    }
+
+    /// Explicitly tests DeepSeek credentials without sending usage aggregates.
+    pub fn test_ai_recap_connection(&self) -> AiRecapConnectionReplyDto {
+        self.ai_recap.test_connection()
+    }
+
+    /// Explicitly generates a report on a normal FRB worker thread.
     pub fn generate_ai_recap(
         &self,
         scope: String,
         start: String,
         end: String,
-        model: String,
     ) -> AiRecapGenerateReplyDto {
-        self.ai_recap.generate(scope, start, end, model)
+        self.ai_recap.generate(scope, start, end)
     }
 
     /// Reports whether a database read has entered its non-panicking fallback.
@@ -551,9 +594,14 @@ impl TimeTraceApi {
 
     /// Clear ALL tracked usage data (sessions + page visits).
     #[frb(sync)]
-    pub fn clear_data(&self) {
+    pub fn clear_data(&self) -> bool {
         tracing::info!("Clearing all usage data");
         DataStore::clear_all_data(&*self.db);
+        if let Err(error) = self.ai_recap.clear_reports() {
+            tracing::warn!(error = %error, "failed to clear persisted AI reports");
+            return false;
+        }
+        true
     }
 
     /// Export usage data for a date range as CSV.
@@ -583,54 +631,54 @@ fn parse_date(s: &str) -> chrono::NaiveDate {
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or_else(|_| chrono::Local::now().date_naive())
 }
 
-/// Extract a clean, env-expanded exe path from a startup command line.
-/// Handles: quoted paths, trailing args, %VAR% env vars, double backslashes.
+/// Extract a clean executable path from a startup command line.
+/// Only a fixed allowlist of non-secret path variables may be expanded.
 fn clean_exe_path(cmd: &str) -> Option<String> {
     let lower = cmd.to_lowercase();
     let idx = lower.find(".exe").or_else(|| lower.find(".lnk"))?;
-    let end = idx + if lower[idx..].starts_with(".exe") { 4 } else { 4 };
+    let end = idx + 4;
     if end > cmd.len() {
         return None;
     }
     let before = &cmd[..end];
-    // The exe path itself may contain spaces (e.g. "C:\\Program Files\\...").
-    // Only a quoted command lets us trim leading tokens; otherwise the whole
-    // prefix up to ".exe" IS the path (arguments can only follow ".exe").
-    let start = before
-        .rfind('"')
-        .map(|q| q + 1)
-        
-        .unwrap_or(0);
+    let start = before.rfind('"').map(|q| q + 1).unwrap_or(0);
     if start >= end {
         return None;
     }
-    let raw = &cmd[start..end];
+    let raw = cmd[start..end].replace("\\\\", "\\");
+    expand_safe_path_variables(&raw)
+}
 
-    // Normalize double backslashes from registry escaping: \\ → \
-    // (only when the path otherwise parses — a single backslash stays)
-    let raw = raw.replace("\\\\", "\\");
+fn expand_safe_path_variables(raw: &str) -> Option<String> {
+    let mut expanded = String::with_capacity(raw.len());
+    let mut remainder = raw;
+    while let Some(open) = remainder.find('%') {
+        expanded.push_str(&remainder[..open]);
+        let after_open = &remainder[open + 1..];
+        let close = after_open.find('%')?;
+        let name = &after_open[..close];
+        expanded.push_str(&safe_path_variable(name)?);
+        remainder = &after_open[close + 1..];
+    }
+    expanded.push_str(remainder);
+    (!expanded.contains('%')).then_some(expanded)
+}
 
-    // Expand %VAR% using process environment (windir, SystemRoot, etc.)
-    let mut expanded = raw.to_string();
-    for (k, v) in std::env::vars() {
-        expanded = expanded.replace(&format!("%{}%", k), &v);
+fn safe_path_variable(name: &str) -> Option<String> {
+    match name.to_ascii_lowercase().as_str() {
+        "windir" => Some(std::env::var("windir").or_else(|_| std::env::var("SystemRoot")).unwrap_or_else(|_| "C:\\Windows".to_owned())),
+        "systemroot" => Some(std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_owned())),
+        "programfiles" => Some(std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_owned())),
+        "programfiles(x86)" => Some(std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| "C:\\Program Files (x86)".to_owned())),
+        "programw6432" => std::env::var("ProgramW6432").ok(),
+        "systemdrive" => Some(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_owned())),
+        "localappdata" => std::env::var("LOCALAPPDATA").ok(),
+        "appdata" => std::env::var("APPDATA").ok(),
+        "userprofile" => std::env::var("USERPROFILE").ok(),
+        "commonprogramfiles" => std::env::var("CommonProgramFiles").ok(),
+        "commonprogramfiles(x86)" => std::env::var("CommonProgramFiles(x86)").ok(),
+        _ => None,
     }
-    // Fallback for common vars if somehow not in env
-    let common = [
-        ("windir", "C:\\Windows"),
-        ("SystemRoot", "C:\\Windows"),
-        ("ProgramFiles", "C:\\Program Files"),
-        ("ProgramFiles(x86)", "C:\\Program Files (x86)"),
-        ("SystemDrive", "C:"),
-    ];
-    for (k, v) in common {
-        expanded = expanded.replace(&format!("%{}%", k), v);
-    }
-
-    if expanded.contains("%") {
-        return None; // unresolved env var — can't iconify
-    }
-    Some(expanded)
 }
 #[cfg(test)]
 mod tests {
@@ -652,6 +700,15 @@ mod tests {
     fn no_space_path_unchanged() {
         let p = clean_exe_path(r"D:\QQ\QQ.exe").unwrap();
         assert_eq!(p, r"D:\QQ\QQ.exe");
+    }
+
+    #[test]
+    fn startup_path_expands_only_fixed_non_secret_variables() {
+        let system_command =
+            clean_exe_path(r"%SystemRoot%\System32\cmd.exe").expect("safe system path");
+        assert!(system_command.eq_ignore_ascii_case(r"C:\Windows\System32\cmd.exe"));
+        assert_eq!(clean_exe_path(r"%DEEPSEEK_API_KEY%.exe"), None);
+        assert_eq!(clean_exe_path(r"%UNLISTED_SECRET%.exe"), None);
     }
 
     #[test]

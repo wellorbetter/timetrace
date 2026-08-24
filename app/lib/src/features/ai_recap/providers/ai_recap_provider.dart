@@ -6,6 +6,7 @@ import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_recap_port.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/infrastructure/bridge_ai_recap_port.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_credential_provider.dart';
 
 final aiRecapPortProvider = Provider<AiRecapPort>(
   (ref) => BridgeAiRecapPort(TimeTraceAiRecapBridgeApi(ref.watch(apiProvider))),
@@ -39,14 +40,12 @@ class AiRecapRangeProjection {
 class AiRecapState {
   const AiRecapState({
     required this.status,
-    required this.model,
     this.results = const {},
     this.failures = const {},
     this.pendingKey,
   });
 
   final AiRecapProviderStatus status;
-  final AiRecapModel model;
   final Map<AiRecapRangeKey, AiRecapResult> results;
   final Map<AiRecapRangeKey, AiRecapFailure> failures;
   final AiRecapRangeKey? pendingKey;
@@ -58,16 +57,35 @@ class AiRecapState {
         failure: failures[key],
       );
 
+  AiRecapResult? get latestReport {
+    AiRecapResult? newest;
+    for (final result in results.values) {
+      if (newest == null || result.generatedAt.isAfter(newest.generatedAt)) {
+        newest = result;
+      }
+    }
+    return newest;
+  }
+
+  AiRecapResult? latestReportFor(AiRecapScope scope) {
+    AiRecapResult? newest;
+    for (final result in results.values) {
+      if (result.rangeKey.scope != scope) continue;
+      if (newest == null || result.generatedAt.isAfter(newest.generatedAt)) {
+        newest = result;
+      }
+    }
+    return newest;
+  }
+
   AiRecapState copyWith({
     AiRecapProviderStatus? status,
-    AiRecapModel? model,
     Map<AiRecapRangeKey, AiRecapResult>? results,
     Map<AiRecapRangeKey, AiRecapFailure>? failures,
     Object? pendingKey = _unchanged,
   }) {
     return AiRecapState(
       status: status ?? this.status,
-      model: model ?? this.model,
       results: results ?? this.results,
       failures: failures ?? this.failures,
       pendingKey: identical(pendingKey, _unchanged)
@@ -80,42 +98,60 @@ class AiRecapState {
 }
 
 class AiRecapController extends Notifier<AiRecapState> {
-  static const int _resultCapacity = 4;
+  static const int _scopeCapacity = 3;
 
   AiRecapPort get _port => ref.read(aiRecapPortProvider);
 
   @override
   AiRecapState build() {
-    final status = ref.watch(aiRecapPortProvider).status();
-    return AiRecapState(status: status, model: status.defaultModel);
+    final credentialRevision = ref.watch(aiCredentialRevisionProvider);
+    final port = ref.watch(aiRecapPortProvider);
+    try {
+      return AiRecapState(
+        status: credentialRevision == 0
+            ? const AiRecapProviderStatus.unconfigured()
+            : port.status(),
+        results: _reportMap(port.latestReports()),
+      );
+    } catch (_) {
+      return const AiRecapState(status: AiRecapProviderStatus.unavailable());
+    }
   }
 
-  /// Refreshes only local provider status and the in-process result for [key].
-  /// This method never performs network I/O and never exposes a loading state.
-  void synchronize(AiRecapRangeKey key) {
-    final status = _port.status();
+  /// Reloads redacted settings and persisted reports. This is local-only and
+  /// never contacts the provider.
+  void synchronize() {
     try {
-      final latest = state.results[key] ?? _port.latest(key);
-      if (latest != null && latest.rangeKey != key) {
-        _setFailure(
-          key,
-          const AiRecapFailure(
-            code: AiRecapFailureCode.invalidResponse,
-            retryable: true,
-          ),
-          status: status,
-        );
-        return;
-      }
+      final results = _reportMap(_port.latestReports());
       final failures = Map<AiRecapRangeKey, AiRecapFailure>.of(state.failures)
-        ..remove(key);
+        ..removeWhere((key, _) => results.containsKey(key));
       state = state.copyWith(
-        status: status,
-        results: latest == null ? state.results : _withResult(key, latest),
+        status: _port.status(),
+        results: results,
         failures: Map.unmodifiable(failures),
       );
-    } on AiRecapFailure catch (failure) {
-      _setFailure(key, failure, status: status);
+    } catch (_) {
+      state = state.copyWith(status: const AiRecapProviderStatus.unavailable());
+    }
+  }
+
+  /// Refreshes only redacted settings after the Settings screen mutates them.
+  void refreshStatus() {
+    try {
+      state = state.copyWith(status: _port.status());
+    } catch (_) {
+      state = state.copyWith(status: const AiRecapProviderStatus.unavailable());
+    }
+  }
+
+  /// Generates a report after an explicit user action. The native service
+  /// chooses the persisted default model.
+  Future<void> generate(AiRecapRangeKey key) async {
+    if (state.pendingKey != null) return;
+
+    AiRecapProviderStatus status;
+    try {
+      status = _port.status();
     } catch (_) {
       _setFailure(
         key,
@@ -123,22 +159,10 @@ class AiRecapController extends Notifier<AiRecapState> {
           code: AiRecapFailureCode.bridgeUnavailable,
           retryable: true,
         ),
-        status: status,
+        status: const AiRecapProviderStatus.unavailable(),
       );
+      return;
     }
-  }
-
-  /// Changes the next explicitly requested model without triggering work.
-  void selectModel(AiRecapModel model) {
-    if (state.model == model) return;
-    state = state.copyWith(model: model);
-  }
-
-  /// Generates a recap for [key] after an explicit user action.
-  Future<void> generate(AiRecapRangeKey key) async {
-    if (state.pendingKey != null) return;
-
-    final status = _port.status();
     if (!status.serviceAvailable) {
       _setFailure(
         key,
@@ -182,7 +206,7 @@ class AiRecapController extends Notifier<AiRecapState> {
     );
 
     try {
-      final result = await _port.generate(key, state.model);
+      final result = await _port.generate(key);
       if (result.rangeKey != key) {
         throw const AiRecapFailure(
           code: AiRecapFailureCode.invalidResponse,
@@ -193,7 +217,7 @@ class AiRecapController extends Notifier<AiRecapState> {
         state.failures,
       )..remove(key);
       state = state.copyWith(
-        results: _withResult(key, result),
+        results: _withResult(result),
         failures: Map.unmodifiable(currentFailures),
         pendingKey: null,
       );
@@ -211,15 +235,15 @@ class AiRecapController extends Notifier<AiRecapState> {
     }
   }
 
-  Map<AiRecapRangeKey, AiRecapResult> _withResult(
-    AiRecapRangeKey key,
-    AiRecapResult result,
-  ) {
+  Map<AiRecapRangeKey, AiRecapResult> _withResult(AiRecapResult result) {
     final bounded = LinkedHashMap<AiRecapRangeKey, AiRecapResult>.of(
       state.results,
-    )..remove(key);
-    bounded[key] = result;
-    while (bounded.length > _resultCapacity) {
+    );
+    bounded.removeWhere(
+      (_, value) => value.rangeKey.scope == result.rangeKey.scope,
+    );
+    bounded[result.rangeKey] = result;
+    while (bounded.length > _scopeCapacity) {
       bounded.remove(bounded.keys.first);
     }
     return Map.unmodifiable(bounded);
@@ -235,7 +259,7 @@ class AiRecapController extends Notifier<AiRecapState> {
       state.failures,
     )..remove(key);
     failures[key] = failure;
-    while (failures.length > _resultCapacity) {
+    while (failures.length > _scopeCapacity) {
       failures.remove(failures.keys.first);
     }
     state = state.copyWith(
@@ -244,6 +268,26 @@ class AiRecapController extends Notifier<AiRecapState> {
       pendingKey: pendingKey,
     );
   }
+}
+
+Map<AiRecapRangeKey, AiRecapResult> _reportMap(
+  Iterable<AiRecapResult> reports,
+) {
+  final newestByScope = <AiRecapScope, AiRecapResult>{};
+  for (final report in reports) {
+    if (!report.rangeKey.isValid || !report.rangeKey.scope.isSupported) {
+      continue;
+    }
+    final existing = newestByScope[report.rangeKey.scope];
+    if (existing == null || report.generatedAt.isAfter(existing.generatedAt)) {
+      newestByScope[report.rangeKey.scope] = report;
+    }
+  }
+  final values = <AiRecapRangeKey, AiRecapResult>{};
+  for (final report in newestByScope.values) {
+    values[report.rangeKey] = report;
+  }
+  return Map.unmodifiable(values);
 }
 
 final aiRecapControllerProvider =

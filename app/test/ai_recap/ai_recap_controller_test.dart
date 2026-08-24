@@ -4,260 +4,255 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_recap_port.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_credential_provider.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
 
 void main() {
-  test('build, local synchronization and model changes never generate', () {
-    final key = _key(24);
-    final port = _FakePort(latestValues: {key: _result(key, '已有回顾')});
-    final container = ProviderContainer(
-      overrides: [aiRecapPortProvider.overrideWithValue(port)],
+  test('build and local synchronization never generate or contact AI', () {
+    final daily = _daily(24);
+    final weekly = _weekly();
+    final port = _FakePort(
+      reports: [
+        _result(daily, '已有日报', generatedAtMinute: 1),
+        _result(weekly, '已有周报', generatedAtMinute: 2),
+      ],
     );
+    final container = _container(port);
     addTearDown(container.dispose);
 
-    final controller = container.read(aiRecapControllerProvider.notifier);
-    expect(container.read(aiRecapControllerProvider).status.configured, isTrue);
-    controller.synchronize(key);
-    controller.selectModel(AiRecapModel.pro);
+    var state = container.read(aiRecapControllerProvider);
+    expect(state.results[daily]?.summary.text, '已有日报');
+    expect(state.latestReportFor(AiRecapScope.weekly)?.summary.text, '已有周报');
+    expect(state.latestReport?.summary.text, '已有周报');
 
-    final state = container.read(aiRecapControllerProvider);
-    expect(state.results[key]?.summary.text, '已有回顾');
-    expect(state.model, AiRecapModel.pro);
+    container.read(aiRecapControllerProvider.notifier).synchronize();
+    state = container.read(aiRecapControllerProvider);
+    expect(state.results, hasLength(2));
     expect(port.generateCalls, 0);
   });
 
-  test(
-    'generation keeps the old result visible and coalesces duplicate calls',
-    () async {
-      final key = _key(24);
-      final pending = Completer<AiRecapResult>();
-      final port = _FakePort(
-        latestValues: {key: _result(key, '旧结果')},
-        pending: pending,
-      );
-      final container = ProviderContainer(
-        overrides: [aiRecapPortProvider.overrideWithValue(port)],
-      );
-      addTearDown(container.dispose);
-      final controller = container.read(aiRecapControllerProvider.notifier)
-        ..synchronize(key);
-
-      final first = controller.generate(key);
-      final second = controller.generate(key);
-      expect(
-        container.read(aiRecapControllerProvider).results[key]?.summary.text,
-        '旧结果',
-      );
-      expect(container.read(aiRecapControllerProvider).pendingKey, key);
-      expect(port.generateCalls, 1);
-
-      pending.complete(_result(key, '新结果'));
-      await Future.wait([first, second]);
-      expect(
-        container.read(aiRecapControllerProvider).results[key]?.summary.text,
-        '新结果',
-      );
-      expect(container.read(aiRecapControllerProvider).pendingKey, isNull);
-    },
-  );
-
-  test('typed failure preserves the previous recap', () async {
-    final key = _key(24);
-    final port = _FakePort(
-      latestValues: {key: _result(key, '保留内容')},
-      failure: const AiRecapFailure(
-        code: AiRecapFailureCode.timeout,
-        retryable: true,
-      ),
-    );
-    final container = ProviderContainer(
-      overrides: [aiRecapPortProvider.overrideWithValue(port)],
-    );
+  test('settings revision locally reloads redacted status and reports', () {
+    final key = _daily(24);
+    final port = _FakePort();
+    final container = _container(port);
     addTearDown(container.dispose);
-    final controller = container.read(aiRecapControllerProvider.notifier)
-      ..synchronize(key);
+    expect(container.read(aiRecapControllerProvider).results, isEmpty);
 
-    await controller.generate(key);
-    final projection = container
-        .read(aiRecapControllerProvider)
-        .projection(key);
-    expect(projection.result?.summary.text, '保留内容');
-    expect(projection.failure?.code, AiRecapFailureCode.timeout);
+    port
+      ..reports = [_result(key, '设置变更后读取')]
+      ..statusValue = const AiRecapProviderStatus(
+        configured: true,
+        defaultModel: AiRecapModel.pro,
+      );
+    container.read(aiCredentialRevisionProvider.notifier).bump();
+
+    final state = container.read(aiRecapControllerProvider);
+    expect(state.results[key]?.summary.text, '设置变更后读取');
+    expect(state.status.defaultModel, AiRecapModel.pro);
+    expect(port.generateCalls, 0);
+  });
+
+  test('generation keeps an old report readable and coalesces calls', () async {
+    final key = _daily(24);
+    final pending = Completer<AiRecapResult>();
+    final port = _FakePort(reports: [_result(key, '旧报告')], pending: pending);
+    final container = _container(port);
+    addTearDown(container.dispose);
+    final controller = container.read(aiRecapControllerProvider.notifier);
+
+    final first = controller.generate(key);
+    final second = controller.generate(key);
+    var projection = container.read(aiRecapControllerProvider).projection(key);
+    expect(projection.result?.summary.text, '旧报告');
+    expect(projection.generating, isTrue);
+    expect(port.generateCalls, 1);
+
+    pending.complete(_result(key, '新报告'));
+    await Future.wait([first, second]);
+    projection = container.read(aiRecapControllerProvider).projection(key);
+    expect(projection.result?.summary.text, '新报告');
     expect(projection.generating, isFalse);
   });
 
   test(
-    'successful local synchronization clears a stale range failure',
+    'typed failure preserves the previous report and is retryable',
     () async {
-      final key = _key(24);
+      final key = _daily(24);
       final port = _FakePort(
-        latestValues: {key: _result(key, '恢复后的本地结果')},
+        reports: [_result(key, '超时前的报告')],
         failure: const AiRecapFailure(
           code: AiRecapFailureCode.timeout,
           retryable: true,
         ),
       );
-      final container = ProviderContainer(
-        overrides: [aiRecapPortProvider.overrideWithValue(port)],
-      );
+      final container = _container(port);
       addTearDown(container.dispose);
-      final controller = container.read(aiRecapControllerProvider.notifier);
 
-      await controller.generate(key);
-      expect(
-        container.read(aiRecapControllerProvider).failures[key],
-        isNotNull,
-      );
-      controller.synchronize(key);
-
+      await container.read(aiRecapControllerProvider.notifier).generate(key);
       final projection = container
           .read(aiRecapControllerProvider)
           .projection(key);
-      expect(projection.result?.summary.text, '恢复后的本地结果');
-      expect(projection.failure, isNull);
+      expect(projection.result?.summary.text, '超时前的报告');
+      expect(projection.failure?.code, AiRecapFailureCode.timeout);
+      expect(projection.failure?.retryable, isTrue);
     },
   );
 
-  test('result cache is bounded to the four most recent ranges', () async {
-    final port = _FakePort();
-    final container = ProviderContainer(
-      overrides: [aiRecapPortProvider.overrideWithValue(port)],
-    );
-    addTearDown(container.dispose);
-    final controller = container.read(aiRecapControllerProvider.notifier);
-
-    for (var day = 20; day <= 24; day++) {
-      await controller.generate(_key(day));
-    }
-
-    final results = container.read(aiRecapControllerProvider).results;
-    expect(results.length, 4);
-    expect(results.containsKey(_key(20)), isFalse);
-    expect(results.containsKey(_key(24)), isTrue);
-  });
-
-  test('failure cache is bounded to the four most recent ranges', () async {
+  test('local synchronization clears failure for a persisted report', () async {
+    final key = _daily(24);
     final port = _FakePort(
       failure: const AiRecapFailure(
         code: AiRecapFailureCode.timeout,
         retryable: true,
       ),
     );
-    final container = ProviderContainer(
-      overrides: [aiRecapPortProvider.overrideWithValue(port)],
-    );
+    final container = _container(port);
     addTearDown(container.dispose);
     final controller = container.read(aiRecapControllerProvider.notifier);
 
-    for (var day = 20; day <= 24; day++) {
-      await controller.generate(_key(day));
-    }
+    await controller.generate(key);
+    expect(container.read(aiRecapControllerProvider).failures[key], isNotNull);
 
-    final failures = container.read(aiRecapControllerProvider).failures;
-    expect(failures.length, 4);
-    expect(failures.containsKey(_key(20)), isFalse);
-    expect(failures.containsKey(_key(24)), isTrue);
+    port
+      ..failure = null
+      ..reports = [_result(key, '磁盘中恢复的报告')];
+    controller.synchronize();
+
+    final projection = container
+        .read(aiRecapControllerProvider)
+        .projection(key);
+    expect(projection.result?.summary.text, '磁盘中恢复的报告');
+    expect(projection.failure, isNull);
+    expect(port.generateCalls, 1);
   });
 
   test(
-    'today and week-to-date remain distinct when Monday dates collide',
+    'successful generation keeps only the newest report of each type',
     () async {
-      final today = _key(24);
-      final week = AiRecapRangeKey(
-        scope: AiRecapScope.weekToDate,
-        startDate: DateTime(2026, 8, 24),
-        endDate: DateTime(2026, 8, 24),
-      );
+      final daily = _daily(24);
+      final weekly = _weekly();
+      final monthly = _monthly();
       final port = _FakePort();
-      final container = ProviderContainer(
-        overrides: [aiRecapPortProvider.overrideWithValue(port)],
-      );
+      final container = _container(port);
       addTearDown(container.dispose);
       final controller = container.read(aiRecapControllerProvider.notifier);
 
-      await controller.generate(today);
-      await controller.generate(week);
+      await controller.generate(daily);
+      await controller.generate(weekly);
+      await controller.generate(monthly);
+      await controller.generate(_daily(23));
 
-      final results = container.read(aiRecapControllerProvider).results;
-      expect(results[today], isNotNull);
-      expect(results[week], isNotNull);
-      expect(results.length, 2);
-      expect(port.generateCalls, 2);
+      final state = container.read(aiRecapControllerProvider);
+      expect(state.results, hasLength(3));
+      expect(state.results.containsKey(daily), isFalse);
+      expect(state.results.containsKey(_daily(23)), isTrue);
+      expect(state.latestReportFor(AiRecapScope.weekly), isNotNull);
+      expect(state.latestReportFor(AiRecapScope.monthly), isNotNull);
     },
   );
 
-  test(
-    'unsupported and malformed logical scopes fail before the bridge',
-    () async {
-      final port = _FakePort();
-      final container = ProviderContainer(
-        overrides: [aiRecapPortProvider.overrideWithValue(port)],
-      );
-      addTearDown(container.dispose);
-      final controller = container.read(aiRecapControllerProvider.notifier);
-      final invalid = [
-        AiRecapRangeKey(
-          scope: AiRecapScope.unsupported,
-          startDate: DateTime(2026, 8, 24),
-          endDate: DateTime(2026, 8, 24),
-        ),
-        AiRecapRangeKey(
-          scope: AiRecapScope.weekToDate,
-          startDate: DateTime(2026, 8, 25),
-          endDate: DateTime(2026, 8, 25),
-        ),
-      ];
+  test('unconfigured and invalid periods fail before generation', () async {
+    final port = _FakePort(
+      statusValue: const AiRecapProviderStatus.unconfigured(),
+    );
+    final container = _container(port);
+    addTearDown(container.dispose);
+    final controller = container.read(aiRecapControllerProvider.notifier);
 
-      for (final key in invalid) {
-        await controller.generate(key);
-        expect(
-          container.read(aiRecapControllerProvider).failures[key]?.code,
-          AiRecapFailureCode.invalidRange,
-        );
-      }
+    final daily = _daily(24);
+    await controller.generate(daily);
+    expect(
+      container.read(aiRecapControllerProvider).failures[daily]?.code,
+      AiRecapFailureCode.notConfigured,
+    );
+
+    port.statusValue = const AiRecapProviderStatus(configured: true);
+    final invalid = AiRecapRangeKey(
+      scope: AiRecapScope.weekly,
+      startDate: DateTime(2026, 8, 25),
+      endDate: DateTime(2026, 8, 25),
+    );
+    await controller.generate(invalid);
+    expect(
+      container.read(aiRecapControllerProvider).failures[invalid]?.code,
+      AiRecapFailureCode.invalidRange,
+    );
+    expect(port.generateCalls, 0);
+  });
+
+  test(
+    'cold build defers status reads and action failures stay redacted',
+    () async {
+      final key = _daily(24);
+      final port = _FakePort(throwOnStatus: true);
+      final container = _container(port);
+      addTearDown(container.dispose);
+
+      final coldState = container.read(aiRecapControllerProvider);
+      expect(coldState.status.serviceAvailable, isTrue);
+      expect(coldState.status.configured, isFalse);
+      expect(port.statusCalls, 0);
+      await container.read(aiRecapControllerProvider.notifier).generate(key);
+
+      final state = container.read(aiRecapControllerProvider);
+      expect(state.status.serviceAvailable, isFalse);
+      expect(state.failures[key]?.code, AiRecapFailureCode.bridgeUnavailable);
+      expect(port.statusCalls, 1);
       expect(port.generateCalls, 0);
     },
   );
 
   test(
-    'generation completion preserves another range failure added while awaiting',
+    'mismatched generated range is rejected without replacing saved data',
     () async {
-      final today = _key(24);
-      final other = _key(23);
-      final pending = Completer<AiRecapResult>();
-      final port = _FakePort(pending: pending, latestFailures: {other});
-      final container = ProviderContainer(
-        overrides: [aiRecapPortProvider.overrideWithValue(port)],
+      final requested = _daily(24);
+      final port = _FakePort(
+        reports: [_result(requested, '原报告')],
+        generated: _result(_daily(23), '错误周期'),
       );
+      final container = _container(port);
       addTearDown(container.dispose);
-      final controller = container.read(aiRecapControllerProvider.notifier);
 
-      final generation = controller.generate(today);
-      controller.synchronize(other);
-      expect(
-        container.read(aiRecapControllerProvider).failures[other],
-        isNotNull,
-      );
-
-      pending.complete(_result(today, '生成完成'));
-      await generation;
-      expect(
-        container.read(aiRecapControllerProvider).failures[other],
-        isNotNull,
-      );
+      await container
+          .read(aiRecapControllerProvider.notifier)
+          .generate(requested);
+      final projection = container
+          .read(aiRecapControllerProvider)
+          .projection(requested);
+      expect(projection.result?.summary.text, '原报告');
+      expect(projection.failure?.code, AiRecapFailureCode.invalidResponse);
     },
   );
 }
 
-AiRecapRangeKey _key(int day) => AiRecapRangeKey(
-  scope: AiRecapScope.today,
+ProviderContainer _container(AiRecapPort port) =>
+    ProviderContainer(overrides: [aiRecapPortProvider.overrideWithValue(port)]);
+
+AiRecapRangeKey _daily(int day) => AiRecapRangeKey(
+  scope: AiRecapScope.daily,
   startDate: DateTime(2026, 8, day),
   endDate: DateTime(2026, 8, day),
 );
 
-AiRecapResult _result(AiRecapRangeKey key, String summary) => AiRecapResult(
+AiRecapRangeKey _weekly() => AiRecapRangeKey(
+  scope: AiRecapScope.weekly,
+  startDate: DateTime(2026, 8, 24),
+  endDate: DateTime(2026, 8, 24),
+);
+
+AiRecapRangeKey _monthly() => AiRecapRangeKey(
+  scope: AiRecapScope.monthly,
+  startDate: DateTime(2026, 8, 1),
+  endDate: DateTime(2026, 8, 24),
+);
+
+AiRecapResult _result(
+  AiRecapRangeKey key,
+  String summary, {
+  int generatedAtMinute = 0,
+}) => AiRecapResult(
   rangeKey: key,
-  generatedAt: DateTime.utc(2026, 8, 24, 1, 30),
+  generatedAt: DateTime.utc(2026, 8, 24, 1, generatedAtMinute),
   model: AiRecapModel.flash,
   summary: _statement(summary),
   highlights: [_statement('保持稳定节奏')],
@@ -273,41 +268,38 @@ AiRecapStatement _statement(String text) => AiRecapStatement(
 
 class _FakePort implements AiRecapPort {
   _FakePort({
-    this.latestValues = const {},
-    this.latestFailures = const {},
+    List<AiRecapResult> reports = const [],
+    this.statusValue = const AiRecapProviderStatus(configured: true),
     this.pending,
     this.failure,
-  });
+    this.generated,
+    this.throwOnStatus = false,
+  }) : reports = List.of(reports);
 
-  final Map<AiRecapRangeKey, AiRecapResult> latestValues;
-  final Set<AiRecapRangeKey> latestFailures;
+  List<AiRecapResult> reports;
+  AiRecapProviderStatus statusValue;
   final Completer<AiRecapResult>? pending;
-  final AiRecapFailure? failure;
+  AiRecapFailure? failure;
+  final AiRecapResult? generated;
+  final bool throwOnStatus;
   int generateCalls = 0;
+  int statusCalls = 0;
 
   @override
-  AiRecapProviderStatus status() =>
-      const AiRecapProviderStatus(configured: true);
-
-  @override
-  AiRecapResult? latest(AiRecapRangeKey key) {
-    if (latestFailures.contains(key)) {
-      throw const AiRecapFailure(
-        code: AiRecapFailureCode.bridgeUnavailable,
-        retryable: true,
-      );
-    }
-    return latestValues[key];
+  AiRecapProviderStatus status() {
+    statusCalls++;
+    if (throwOnStatus) throw StateError('secret-free status failure');
+    return statusValue;
   }
 
   @override
-  Future<AiRecapResult> generate(
-    AiRecapRangeKey key,
-    AiRecapModel model,
-  ) async {
+  List<AiRecapResult> latestReports() => List.unmodifiable(reports);
+
+  @override
+  Future<AiRecapResult> generate(AiRecapRangeKey key) async {
     generateCalls++;
     if (failure case final value?) throw value;
     if (pending case final value?) return value.future;
-    return _result(key, '生成 ${key.startDate.day}');
+    return generated ?? _result(key, '生成的${key.scope.label}');
   }
 }

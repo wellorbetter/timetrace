@@ -5257,6 +5257,7 @@ dependencies = [
  "flutter_rust_bridge",
  "flutter_rust_bridge_codegen",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
@@ -5264,6 +5265,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]

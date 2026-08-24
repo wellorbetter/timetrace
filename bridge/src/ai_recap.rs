@@ -5,28 +5,33 @@
 //! full TimeTrace data store stay behind separate ports so neither Flutter nor
 //! the recap orchestration can accidentally access sensitive records.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{ErrorKind, Read};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
-use chrono::{Datelike, NaiveDate, SecondsFormat, Utc, Weekday};
+use chrono::{Datelike, Local, NaiveDate, SecondsFormat, Utc, Weekday};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use timetrace_core::DataStore;
+use zeroize::Zeroizing;
+
+use crate::ai_credentials::{
+    ApiKeySource, CredentialError, CredentialOrigin, StoredOrEnvironmentApiKeySource,
+};
+use crate::ai_report_store::{AiReportStore, AiReportStoreError};
 
 const API_URL: &str = "https://api.deepseek.com/chat/completions";
+const MODELS_API_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_MODEL: &str = "deepseek-v4-flash";
 const PRO_MODEL: &str = "deepseek-v4-pro";
 const PROVIDER_NAME: &str = "DeepSeek";
-const MAX_LATEST_RESULTS: usize = 4;
 const MAX_APPS_SENT: usize = 12;
 const MAX_APP_NAME_CHARS: usize = 80;
-const MAX_KEY_BYTES: usize = 4096;
 const MAX_REQUEST_BYTES: usize = 24 * 1024;
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const MAX_CONNECTION_RESPONSE_BYTES: usize = 16 * 1024;
 const MAX_CONTENT_CHARS: usize = 12 * 1024;
 const MAX_ITEMS: usize = 3;
 const SPARSE_MIN_TOTAL_SECONDS: i64 = 30 * 60;
@@ -74,26 +79,8 @@ impl AggregateUsageSource for SqliteAggregateUsageSource {
     }
 }
 
-/// Narrow credential port used once for every explicit generation request.
-pub trait ApiKeySource: Send + Sync {
-    /// Returns the current DeepSeek key, or `None` when it is not safely usable.
-    fn read_deepseek_key(&self) -> Option<String>;
-}
-
-/// Process-environment implementation of [`ApiKeySource`].
-pub struct EnvironmentApiKeySource;
-
-impl ApiKeySource for EnvironmentApiKeySource {
-    fn read_deepseek_key(&self) -> Option<String> {
-        std::env::var("DEEPSEEK_API_KEY")
-            .ok()
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty() && value.len() <= MAX_KEY_BYTES)
-    }
-}
-
 /// Redacted transport failures that can cross the service boundary safely.
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
 pub enum RecapFailure {
     /// DNS, TLS, proxy, connection, or response streaming failed.
     #[error("network")]
@@ -119,23 +106,36 @@ pub enum RecapFailure {
 pub trait RecapTransport: Send + Sync {
     /// Sends one completion request without retries or response-body logging.
     fn complete(&self, key: &str, request: &[u8]) -> Result<Vec<u8>, RecapFailure>;
+    /// Performs a credential-only connection test without sending usage data.
+    fn test_connection(&self, key: &str, _model: &str) -> Result<(), RecapFailure> {
+        self.complete(key, &[]).map(|_| ())
+    }
 }
 
 /// Provider configuration state safe to expose to Flutter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiRecapStatusDto {
-    /// Whether a non-empty, bounded `DEEPSEEK_API_KEY` is available.
+    /// Whether the complete local AI report service is available.
+    pub service_available: bool,
+    /// Whether a bounded key is available from an allowed source.
     pub configured: bool,
     /// Human-readable provider name; never contains endpoint or key data.
     pub provider: String,
     /// Model selected when the UI has not chosen another supported model.
     pub default_model: String,
+    /// `secure_store`, `legacy_environment`, `none`, or `unavailable`.
+    pub credential_source: String,
+    /// Whether the operating-system secure credential store is available.
+    pub secure_storage_available: bool,
+    /// Whether a legacy environment key can currently be imported securely.
+    pub environment_migration_available: bool,
 }
 
 /// A complete, validated recap result safe to expose to Flutter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AiRecapDto {
-    /// Logical period selected by the user: `today` or `week_to_date`.
+    /// Logical report type: `daily`, `weekly`, or `monthly`.
     pub scope: String,
     /// Inclusive local-calendar start date in `YYYY-MM-DD` form.
     pub start_date: String,
@@ -151,6 +151,8 @@ pub struct AiRecapDto {
     pub highlights: Vec<AiRecapStatementDto>,
     /// One to three validated Chinese suggestions.
     pub suggestions: Vec<AiRecapStatementDto>,
+    /// Deterministic top application rows computed locally, never by the model.
+    pub top_applications: Vec<AiRecapEvidenceDto>,
     /// Active seconds across every valid aggregate row, including truncated rows.
     pub total_active_seconds: i64,
     /// Number of valid aggregate applications before the top-12 truncation.
@@ -158,7 +160,8 @@ pub struct AiRecapDto {
 }
 
 /// One aggregate usage row cited by an AI recap statement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AiRecapEvidenceDto {
     /// Sanitized application display name sent to the provider.
     pub app_name: String,
@@ -167,7 +170,8 @@ pub struct AiRecapEvidenceDto {
 }
 
 /// One validated Chinese statement and its provider-supplied evidence.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AiRecapStatementDto {
     /// Locally rendered Chinese statement text.
     pub text: String,
@@ -190,6 +194,24 @@ pub struct AiRecapGenerateReplyDto {
     /// Validated recap on success; `None` on failure.
     pub recap: Option<AiRecapDto>,
     /// Redacted typed failure on failure; `None` on success.
+    pub error: Option<AiRecapErrorDto>,
+}
+
+/// Mutually exclusive reply for a settings mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiRecapSettingsReplyDto {
+    /// Refreshed redacted state on success or best-effort state on failure.
+    pub status: AiRecapStatusDto,
+    /// Redacted typed failure, if the mutation failed.
+    pub error: Option<AiRecapErrorDto>,
+}
+
+/// Reply for an explicit, aggregate-free provider connection test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiRecapConnectionReplyDto {
+    /// True only after DeepSeek accepts the configured credential.
+    pub success: bool,
+    /// Redacted typed failure when the test did not succeed.
     pub error: Option<AiRecapErrorDto>,
 }
 
@@ -218,26 +240,54 @@ pub struct AiRecapService {
     usage_source: Arc<dyn AggregateUsageSource>,
     key_source: Arc<dyn ApiKeySource>,
     transport: Arc<dyn RecapTransport>,
+    report_store: Arc<dyn AiReportStore>,
     latest: Mutex<LatestCache>,
+    report_commit: Mutex<()>,
+    default_model: Mutex<&'static str>,
+    data_epoch: AtomicU64,
     in_flight: AtomicBool,
 }
 
 impl AiRecapService {
     /// Creates a production service over an aggregate-only usage source.
-    pub fn new(usage_source: Arc<dyn AggregateUsageSource>) -> Self {
+    pub fn new(
+        usage_source: Arc<dyn AggregateUsageSource>,
+        report_store: Arc<dyn AiReportStore>,
+    ) -> Self {
         Self::with_ports(
             usage_source,
-            Arc::new(EnvironmentApiKeySource),
+            Arc::new(StoredOrEnvironmentApiKeySource::production()),
             Arc::new(DeepSeekTransport::new()),
+            report_store,
         )
     }
 
     /// Reads the current local provider configuration without making a request.
     pub fn status(&self) -> AiRecapStatusDto {
+        if !self.report_store.is_available() {
+            return AiRecapStatusDto {
+                service_available: false,
+                configured: false,
+                provider: PROVIDER_NAME.to_owned(),
+                default_model: self.current_model().to_owned(),
+                credential_source: CredentialOrigin::Unavailable.as_str().to_owned(),
+                secure_storage_available: false,
+                environment_migration_available: false,
+            };
+        }
+        let resolved = self.key_source.resolve_deepseek_key(true);
+        let environment_migration_available = resolved.origin
+            == CredentialOrigin::LegacyEnvironment
+            && resolved.secure_storage_available;
+        let service_available = resolved.origin != CredentialOrigin::Unavailable;
         AiRecapStatusDto {
-            configured: self.key_source.read_deepseek_key().is_some(),
+            service_available,
+            configured: resolved.key.is_some(),
             provider: PROVIDER_NAME.to_owned(),
-            default_model: DEFAULT_MODEL.to_owned(),
+            default_model: self.current_model().to_owned(),
+            credential_source: resolved.origin.as_str().to_owned(),
+            secure_storage_available: resolved.secure_storage_available,
+            environment_migration_available,
         }
     }
 
@@ -245,6 +295,97 @@ impl AiRecapService {
     pub fn latest(&self, scope: &str, start_date: &str, end_date: &str) -> Option<AiRecapDto> {
         let range = parse_range(scope, start_date, end_date).ok()?;
         self.lock_latest().get(&range)
+    }
+
+    /// Returns the latest successful report for every report type, newest first.
+    pub fn latest_reports(&self) -> Vec<AiRecapDto> {
+        self.lock_latest().all()
+    }
+
+    /// Securely creates or replaces the stored DeepSeek API key.
+    pub fn save_api_key(&self, key: String) -> AiRecapSettingsReplyDto {
+        let key = Zeroizing::new(key);
+        let result = self
+            .key_source
+            .save_deepseek_key(key.as_str())
+            .map_err(|error| match error {
+                CredentialError::InvalidData => ServiceFailure::InvalidApiKey,
+                _ => ServiceFailure::CredentialStore,
+            });
+        self.settings_reply(result)
+    }
+
+    /// Explicitly imports the legacy environment key into secure storage.
+    pub fn import_environment_api_key(&self) -> AiRecapSettingsReplyDto {
+        let result = match self.key_source.read_environment_deepseek_key() {
+            Some(key) => self
+                .key_source
+                .save_deepseek_key(key.as_str())
+                .map_err(|_| ServiceFailure::CredentialStore),
+            None => Err(ServiceFailure::NotConfigured),
+        };
+        self.settings_reply(result)
+    }
+
+    /// Removes the secure key. A valid legacy environment key becomes active
+    /// again because secure storage is always preferred over the fallback.
+    pub fn delete_api_key(&self) -> AiRecapSettingsReplyDto {
+        let result = self
+            .key_source
+            .delete_deepseek_key()
+            .map_err(|_| ServiceFailure::CredentialStore);
+        self.settings_reply(result)
+    }
+
+    /// Persists the default DeepSeek model used by future report generations.
+    pub fn set_default_model(&self, model: String) -> AiRecapSettingsReplyDto {
+        let result = validate_model(&model).and_then(|model| {
+            self.report_store
+                .save_default_model(model)
+                .map_err(|_| ServiceFailure::LocalStorage)?;
+            *self.lock_default_model() = model;
+            Ok(())
+        });
+        self.settings_reply(result)
+    }
+
+    /// Tests the configured credential without sending any aggregate usage data.
+    pub fn test_connection(&self) -> AiRecapConnectionReplyDto {
+        let _in_flight = match InFlightGuard::acquire(&self.in_flight) {
+            Ok(guard) => guard,
+            Err(failure) => {
+                return AiRecapConnectionReplyDto {
+                    success: false,
+                    error: Some(failure.into_dto()),
+                };
+            }
+        };
+        let resolved = self.key_source.resolve_deepseek_key(true);
+        if resolved.origin == CredentialOrigin::Unavailable {
+            return AiRecapConnectionReplyDto {
+                success: false,
+                error: Some(ServiceFailure::CredentialStore.into_dto()),
+            };
+        }
+        let Some(key) = resolved.key else {
+            return AiRecapConnectionReplyDto {
+                success: false,
+                error: Some(ServiceFailure::NotConfigured.into_dto()),
+            };
+        };
+        match self
+            .transport
+            .test_connection(key.as_str(), self.current_model())
+        {
+            Ok(()) => AiRecapConnectionReplyDto {
+                success: true,
+                error: None,
+            },
+            Err(failure) => AiRecapConnectionReplyDto {
+                success: false,
+                error: Some(ServiceFailure::Transport(failure).into_dto()),
+            },
+        }
     }
 
     /// Generates one recap after explicit user authorization.
@@ -257,22 +398,22 @@ impl AiRecapService {
         scope: String,
         start_date: String,
         end_date: String,
-        model: String,
     ) -> AiRecapGenerateReplyDto {
+        if !self.report_store.is_available() {
+            return AiRecapGenerateReplyDto::failure(ServiceFailure::LocalStorage);
+        }
         let range = match parse_range(&scope, &start_date, &end_date) {
             Ok(range) => range,
             Err(failure) => return AiRecapGenerateReplyDto::failure(failure),
         };
-        let model = match validate_model(&model) {
-            Ok(model) => model,
-            Err(failure) => return AiRecapGenerateReplyDto::failure(failure),
-        };
+        let model = self.current_model();
         let _in_flight = match InFlightGuard::acquire(&self.in_flight) {
             Ok(guard) => guard,
             Err(failure) => return AiRecapGenerateReplyDto::failure(failure),
         };
 
-        match self.generate_inner(range, model) {
+        let data_epoch = self.data_epoch.load(Ordering::Acquire);
+        match self.generate_inner(range, model, data_epoch) {
             Ok(recap) => AiRecapGenerateReplyDto::success(recap),
             Err(failure) => AiRecapGenerateReplyDto::failure(failure),
         }
@@ -282,12 +423,37 @@ impl AiRecapService {
         usage_source: Arc<dyn AggregateUsageSource>,
         key_source: Arc<dyn ApiKeySource>,
         transport: Arc<dyn RecapTransport>,
+        report_store: Arc<dyn AiReportStore>,
     ) -> Self {
+        let model = report_store
+            .load_default_model()
+            .ok()
+            .flatten()
+            .as_deref()
+            .and_then(|model| validate_model(model).ok())
+            .unwrap_or(DEFAULT_MODEL);
+        let mut latest = LatestCache::default();
+        match report_store.load_latest_reports() {
+            Ok(reports) => {
+                for report in reports {
+                    if let Some(range) = validate_persisted_report(&report) {
+                        latest.insert(range, report);
+                    } else {
+                        tracing::warn!("ignored invalid persisted AI report DTO");
+                    }
+                }
+            }
+            Err(error) => tracing::warn!(error = %error, "failed to load persisted AI reports"),
+        }
         Self {
             usage_source,
             key_source,
             transport,
-            latest: Mutex::new(LatestCache::default()),
+            report_store,
+            latest: Mutex::new(latest),
+            report_commit: Mutex::new(()),
+            default_model: Mutex::new(model),
+            data_epoch: AtomicU64::new(0),
             in_flight: AtomicBool::new(false),
         }
     }
@@ -296,19 +462,30 @@ impl AiRecapService {
         &self,
         range: RangeKey,
         model: &'static str,
+        data_epoch: u64,
     ) -> Result<AiRecapDto, ServiceFailure> {
         let usage = self.usage_source.read(range.start, range.end);
         let prepared = prepare_usage(usage)?;
 
-        let key = self
-            .key_source
-            .read_deepseek_key()
-            .ok_or(ServiceFailure::NotConfigured)?;
+        let resolved = self.key_source.resolve_deepseek_key(true);
+        if resolved.origin == CredentialOrigin::Unavailable {
+            return Err(ServiceFailure::CredentialStore);
+        }
+        let key = resolved.key.ok_or(ServiceFailure::NotConfigured)?;
         let request = build_request(&range, model, &prepared)?;
         let completion = self.transport.complete(&key, &request);
         drop(key);
         let response = completion.map_err(ServiceFailure::Transport)?;
         let parsed = parse_provider_response(&response, &prepared, range.scope)?;
+        let top_applications = prepared
+            .sent
+            .iter()
+            .take(5)
+            .map(|usage| AiRecapEvidenceDto {
+                app_name: usage.app_name.clone(),
+                active_seconds: usage.active_seconds,
+            })
+            .collect();
 
         let recap = AiRecapDto {
             scope: range.scope.as_str().to_owned(),
@@ -319,11 +496,48 @@ impl AiRecapService {
             summary: parsed.summary,
             highlights: parsed.highlights,
             suggestions: parsed.suggestions,
+            top_applications,
             total_active_seconds: prepared.total_seconds,
             application_count: prepared.application_count,
         };
+        // Serialize the epoch check, durable replacement, and cache update
+        // against clear_reports so a just-cleared report cannot reappear.
+        let _commit = self.lock_report_commit();
+        if self.data_epoch.load(Ordering::Acquire) != data_epoch {
+            return Err(ServiceFailure::Busy);
+        }
+        self.report_store
+            .save_latest_report(&recap)
+            .map_err(|_| ServiceFailure::LocalStorage)?;
         self.lock_latest().insert(range, recap.clone());
         Ok(recap)
+    }
+
+    /// Clears persisted and in-process report results while preserving AI settings.
+    pub fn clear_reports(&self) -> Result<(), AiReportStoreError> {
+        self.data_epoch.fetch_add(1, Ordering::AcqRel);
+        let _commit = self.lock_report_commit();
+        self.report_store.clear_latest_reports()?;
+        self.lock_latest().clear();
+        Ok(())
+    }
+
+    fn settings_reply(&self, result: Result<(), ServiceFailure>) -> AiRecapSettingsReplyDto {
+        AiRecapSettingsReplyDto {
+            status: self.status(),
+            error: result.err().map(ServiceFailure::into_dto),
+        }
+    }
+
+    fn current_model(&self) -> &'static str {
+        *self.lock_default_model()
+    }
+
+    fn lock_default_model(&self) -> MutexGuard<'_, &'static str> {
+        match self.default_model.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 
     fn lock_latest(&self) -> MutexGuard<'_, LatestCache> {
@@ -332,42 +546,56 @@ impl AiRecapService {
             Err(poisoned) => poisoned.into_inner(),
         }
     }
+
+    fn lock_report_commit(&self) -> MutexGuard<'_, ()> {
+        match self.report_commit.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum RecapScope {
-    Today,
-    WeekToDate,
+    Daily,
+    Weekly,
+    Monthly,
 }
 
 impl RecapScope {
     fn parse(value: &str) -> Result<Self, ServiceFailure> {
         match value {
-            "today" => Ok(Self::Today),
-            "week_to_date" => Ok(Self::WeekToDate),
+            "daily" => Ok(Self::Daily),
+            "weekly" => Ok(Self::Weekly),
+            "monthly" => Ok(Self::Monthly),
             _ => Err(ServiceFailure::InvalidRange),
         }
     }
 
     fn as_str(self) -> &'static str {
         match self {
-            Self::Today => "today",
-            Self::WeekToDate => "week_to_date",
+            Self::Daily => "daily",
+            Self::Weekly => "weekly",
+            Self::Monthly => "monthly",
         }
     }
 
     fn display_name(self) -> &'static str {
         match self {
-            Self::Today => "今日",
-            Self::WeekToDate => "本周截至今日",
+            Self::Daily => "所选日期",
+            Self::Weekly => "所选周",
+            Self::Monthly => "所选月份",
         }
     }
 
     fn prompt_note(self) -> &'static str {
         match self {
-            Self::Today => "仅代表所选当日。数据较少时必须保持保守，不得外推日常习惯。",
-            Self::WeekToDate => {
-                "仅代表从周一到所选今日的周内累计，并非完整自然周。数据较少时必须保持保守，不得外推整周趋势。"
+            Self::Daily => "仅代表所选自然日。数据较少时必须保持保守，不得外推日常习惯。",
+            Self::Weekly => {
+                "代表所选自然周；若结束日为今天，则仅代表周一到今天的累计，不得伪装成完整周或预测整周。"
+            }
+            Self::Monthly => {
+                "代表所选自然月；若结束日为今天，则仅代表本月一日至今天的累计，不得伪装成完整月或预测整月。"
             }
         }
     }
@@ -382,25 +610,30 @@ struct RangeKey {
 
 #[derive(Default)]
 struct LatestCache {
-    entries: BTreeMap<RangeKey, AiRecapDto>,
-    order: VecDeque<RangeKey>,
+    entries: BTreeMap<RecapScope, AiRecapDto>,
 }
 
 impl LatestCache {
     fn get(&self, range: &RangeKey) -> Option<AiRecapDto> {
-        self.entries.get(range).cloned()
+        self.entries.get(&range.scope).and_then(|report| {
+            (report.start_date == range.start.to_string()
+                && report.end_date == range.end.to_string())
+            .then(|| report.clone())
+        })
     }
 
     fn insert(&mut self, range: RangeKey, recap: AiRecapDto) {
-        self.order.retain(|existing| *existing != range);
-        self.entries.insert(range, recap);
-        self.order.push_back(range);
+        self.entries.insert(range.scope, recap);
+    }
 
-        while self.order.len() > MAX_LATEST_RESULTS {
-            if let Some(expired) = self.order.pop_front() {
-                self.entries.remove(&expired);
-            }
-        }
+    fn all(&self) -> Vec<AiRecapDto> {
+        let mut reports: Vec<_> = self.entries.values().cloned().collect();
+        reports.sort_by(|left, right| right.generated_at_utc.cmp(&left.generated_at_utc));
+        reports
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
     }
 }
 
@@ -425,12 +658,15 @@ impl Drop for InFlightGuard<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ServiceFailure {
     NotConfigured,
+    InvalidApiKey,
     InvalidRange,
     UnsupportedModel,
     NoUsageData,
     RequestTooLarge,
     InvalidResponse,
     Busy,
+    CredentialStore,
+    LocalStorage,
     Transport(RecapFailure),
 }
 
@@ -438,6 +674,7 @@ impl ServiceFailure {
     fn into_dto(self) -> AiRecapErrorDto {
         let (code, retryable) = match self {
             Self::NotConfigured => ("not_configured", false),
+            Self::InvalidApiKey => ("invalid_api_key", false),
             Self::InvalidRange => ("invalid_range", false),
             Self::UnsupportedModel => ("unsupported_model", false),
             Self::NoUsageData => ("no_usage_data", false),
@@ -446,6 +683,8 @@ impl ServiceFailure {
                 ("invalid_response", true)
             }
             Self::Busy => ("busy", true),
+            Self::CredentialStore => ("credential_store", false),
+            Self::LocalStorage => ("local_storage", true),
             Self::Transport(RecapFailure::Network) => ("network", true),
             Self::Transport(RecapFailure::Timeout) => ("timeout", true),
             Self::Transport(RecapFailure::Authentication) => ("authentication", false),
@@ -461,12 +700,14 @@ impl ServiceFailure {
 
 struct DeepSeekTransport {
     client: OnceLock<Option<reqwest::blocking::Client>>,
+    connection_test_client: OnceLock<Option<reqwest::blocking::Client>>,
 }
 
 impl DeepSeekTransport {
     fn new() -> Self {
         Self {
             client: OnceLock::new(),
+            connection_test_client: OnceLock::new(),
         }
     }
 
@@ -486,6 +727,22 @@ impl DeepSeekTransport {
             .user_agent("TimeTrace/0.1 AI-Recap")
             .build()
             .ok()
+    }
+
+    fn connection_test_client(&self) -> Result<&reqwest::blocking::Client, RecapFailure> {
+        self.connection_test_client
+            .get_or_init(|| {
+                reqwest::blocking::Client::builder()
+                    .connect_timeout(Duration::from_secs(4))
+                    .timeout(Duration::from_secs(10))
+                    .redirect(reqwest::redirect::Policy::none())
+                    .retry(reqwest::retry::never())
+                    .user_agent("TimeTrace/0.1 AI-Reports-Connection-Test")
+                    .build()
+                    .ok()
+            })
+            .as_ref()
+            .ok_or(RecapFailure::Network)
     }
 }
 
@@ -507,27 +764,71 @@ impl RecapTransport for DeepSeekTransport {
         if !status.is_success() {
             return Err(classify_http_status(status));
         }
-        if response
-            .content_length()
-            .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)
-        {
-            return Err(RecapFailure::InvalidResponse);
-        }
-
-        let mut bytes = Vec::new();
-        let mut bounded = response.take((MAX_RESPONSE_BYTES + 1) as u64);
-        bounded.read_to_end(&mut bytes).map_err(|error| {
-            if error.kind() == ErrorKind::TimedOut {
-                RecapFailure::Timeout
-            } else {
-                RecapFailure::Network
-            }
-        })?;
-        if bytes.len() > MAX_RESPONSE_BYTES {
-            return Err(RecapFailure::InvalidResponse);
-        }
-        Ok(bytes)
+        read_bounded_response(response, MAX_RESPONSE_BYTES)
     }
+
+    fn test_connection(&self, key: &str, model: &str) -> Result<(), RecapFailure> {
+        let response = self
+            .connection_test_client()?
+            .get(MODELS_API_URL)
+            .bearer_auth(key)
+            .send()
+            .map_err(classify_reqwest_error)?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(classify_http_status(status));
+        }
+        let body = read_bounded_response(response, MAX_CONNECTION_RESPONSE_BYTES)?;
+        validate_models_response(&body, model)
+    }
+}
+
+fn validate_models_response(body: &[u8], model: &str) -> Result<(), RecapFailure> {
+    let models: ModelsResponse =
+        serde_json::from_slice(body).map_err(|_| RecapFailure::InvalidResponse)?;
+    if !models.data.is_empty()
+        && models.data.len() <= 100
+        && models.data.iter().any(|candidate| candidate.id == model)
+    {
+        Ok(())
+    } else {
+        Err(RecapFailure::InvalidResponse)
+    }
+}
+
+#[derive(Deserialize)]
+struct ModelsResponse {
+    data: Vec<ModelRecord>,
+}
+
+#[derive(Deserialize)]
+struct ModelRecord {
+    id: String,
+}
+
+fn read_bounded_response(
+    response: reqwest::blocking::Response,
+    maximum_bytes: usize,
+) -> Result<Vec<u8>, RecapFailure> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > maximum_bytes as u64)
+    {
+        return Err(RecapFailure::InvalidResponse);
+    }
+    let mut bytes = Vec::new();
+    let mut bounded = response.take((maximum_bytes + 1) as u64);
+    bounded.read_to_end(&mut bytes).map_err(|error| {
+        if error.kind() == ErrorKind::TimedOut {
+            RecapFailure::Timeout
+        } else {
+            RecapFailure::Network
+        }
+    })?;
+    if bytes.len() > maximum_bytes {
+        return Err(RecapFailure::InvalidResponse);
+    }
+    Ok(bytes)
 }
 
 fn classify_reqwest_error(error: reqwest::Error) -> RecapFailure {
@@ -680,14 +981,14 @@ fn build_request(
     let prompt_json =
         serde_json::to_string(&prompt_payload).map_err(|_| ServiceFailure::RequestTooLarge)?;
     let user_prompt = format!(
-        "请只依据以下聚合数据选择受限的回顾类型和证据。scope=week_to_date 时，它明确表示周一到今日的未完整自然周；无论 scope，为稀疏数据选择证据时都必须保守。不得输出任何自由文本，不得推断应用类别、窗口内容、文件、账号、健康、人格、绩效或未来趋势：{prompt_json}"
+        "请只依据以下聚合数据选择受限的时间报告类型和证据。weekly 或 monthly 的结束日若为今天，表示尚未完成的当前周期；不得当作完整周期或预测剩余时间。无论 scope，为稀疏数据选择证据时都必须保守。不得输出任何自由文本，不得推断应用类别、窗口内容、文件、账号、健康、人格、工作成果、绩效或未来趋势：{prompt_json}"
     );
     let request = ChatRequest {
         model,
         messages: [
             Message {
                 role: "system",
-                content: "你是受限的时间回顾证据选择器。仅依据给定的聚合应用时长输出 JSON 对象；不得输出解释、自由文本或猜测。scope=week_to_date 表示周一到今日的未完整自然周，禁止当作完整周或预测整周；数据稀疏时必须保守。JSON 必须且只能包含 summary、highlights、suggestions。每个对象必须且只能是 {\"kind\":\"受限类型\",\"evidence\":[{\"app_name\":\"输入中的应用名\",\"active_seconds\":输入中的精确秒数}]}；evidence 必须逐字、逐数匹配 applications 中的行。summary 的 kind 必须为 usage_overview。highlights 每项 kind 只能为 top_application 或 usage_concentration，且不得重复；top_application 必须唯一引用 applications[0]，usage_concentration 必须引用 2 到 3 个不重复应用。suggestions 每项 kind 只能为 review_top_application、protect_time_block 或 set_time_budget，且不得重复；review_top_application 必须唯一引用 applications[0]，其他建议必须唯一引用一个应用。highlights 和 suggestions 各为 1 到 3 项。",
+                content: "你是受限的时间报告证据选择器。仅依据给定的聚合应用时长输出 JSON 对象；不得输出解释、自由文本或猜测。weekly 或 monthly 的结束日若为今天，表示未完成的当前周期，禁止当作完整周期或预测剩余周期；数据稀疏时必须保守。JSON 必须且只能包含 summary、highlights、suggestions。每个对象必须且只能是 {\"kind\":\"受限类型\",\"evidence\":[{\"app_name\":\"输入中的应用名\",\"active_seconds\":输入中的精确秒数}]}；evidence 必须逐字、逐数匹配 applications 中的行。summary 的 kind 必须为 usage_overview。highlights 每项 kind 只能为 top_application 或 usage_concentration，且不得重复；top_application 必须唯一引用 applications[0]，usage_concentration 必须引用 2 到 3 个不重复应用。suggestions 每项 kind 只能为 review_top_application、protect_time_block 或 set_time_budget，且不得重复；review_top_application 必须唯一引用 applications[0]，其他建议必须唯一引用一个应用。highlights 和 suggestions 各为 1 到 3 项。",
             },
             Message {
                 role: "user",
@@ -712,15 +1013,94 @@ fn parse_range(scope: &str, start: &str, end: &str) -> Result<RangeKey, ServiceF
     let scope = RecapScope::parse(scope)?;
     let start = parse_exact_date(start)?;
     let end = parse_exact_date(end)?;
+    let today = Local::now().date_naive();
+    if end > today {
+        return Err(ServiceFailure::InvalidRange);
+    }
     let span = end.signed_duration_since(start).num_days();
     let valid = match scope {
-        RecapScope::Today => span == 0,
-        RecapScope::WeekToDate => start.weekday() == Weekday::Mon && (0..=6).contains(&span),
+        RecapScope::Daily => span == 0,
+        RecapScope::Weekly => {
+            start.weekday() == Weekday::Mon
+                && ((span == 6 && end.weekday() == Weekday::Sun)
+                    || (end == today && (0..=6).contains(&span)))
+        }
+        RecapScope::Monthly => {
+            start.day() == 1
+                && start.year() == end.year()
+                && start.month() == end.month()
+                && (is_last_day_of_month(end) || end == today)
+        }
     };
     if !valid {
         return Err(ServiceFailure::InvalidRange);
     }
     Ok(RangeKey { scope, start, end })
+}
+
+fn is_last_day_of_month(date: NaiveDate) -> bool {
+    date.succ_opt().map(|next| next.day() == 1).unwrap_or(true)
+}
+
+fn validate_persisted_report(report: &AiRecapDto) -> Option<RangeKey> {
+    let range = parse_persisted_range(&report.scope, &report.start_date, &report.end_date).ok()?;
+    validate_model(&report.model).ok()?;
+    chrono::DateTime::parse_from_rfc3339(&report.generated_at_utc).ok()?;
+    if report.total_active_seconds <= 0
+        || report.application_count <= 0
+        || report.top_applications.is_empty()
+        || report.top_applications.len() > 5
+        || report.highlights.is_empty()
+        || report.highlights.len() > MAX_ITEMS
+        || report.suggestions.is_empty()
+        || report.suggestions.len() > MAX_ITEMS
+        || !valid_persisted_statement(&report.summary)
+        || !report.highlights.iter().all(valid_persisted_statement)
+        || !report.suggestions.iter().all(valid_persisted_statement)
+        || !report.top_applications.iter().all(valid_persisted_evidence)
+    {
+        return None;
+    }
+    Some(range)
+}
+
+fn parse_persisted_range(scope: &str, start: &str, end: &str) -> Result<RangeKey, ServiceFailure> {
+    let scope = RecapScope::parse(scope)?;
+    let start = parse_exact_date(start)?;
+    let end = parse_exact_date(end)?;
+    if end > Local::now().date_naive() {
+        return Err(ServiceFailure::InvalidRange);
+    }
+    let span = end.signed_duration_since(start).num_days();
+    let valid = match scope {
+        RecapScope::Daily => span == 0,
+        RecapScope::Weekly => start.weekday() == Weekday::Mon && (0..=6).contains(&span),
+        RecapScope::Monthly => {
+            span >= 0
+                && start.day() == 1
+                && start.year() == end.year()
+                && start.month() == end.month()
+        }
+    };
+    if !valid {
+        return Err(ServiceFailure::InvalidRange);
+    }
+    Ok(RangeKey { scope, start, end })
+}
+
+fn valid_persisted_statement(statement: &AiRecapStatementDto) -> bool {
+    !statement.text.is_empty()
+        && statement.text.chars().count() <= 1024
+        && !statement.evidence.is_empty()
+        && statement.evidence.len() <= MAX_ITEMS
+        && statement.evidence.iter().all(valid_persisted_evidence)
+}
+
+fn valid_persisted_evidence(evidence: &AiRecapEvidenceDto) -> bool {
+    evidence.active_seconds > 0
+        && !evidence.app_name.is_empty()
+        && evidence.app_name.chars().count() <= MAX_APP_NAME_CHARS
+        && sanitize_app_name(&evidence.app_name) == evidence.app_name
 }
 
 fn parse_exact_date(value: &str) -> Result<NaiveDate, ServiceFailure> {
@@ -937,18 +1317,18 @@ fn validate_suggestions(
                         return Err(ServiceFailure::InvalidResponse);
                     }
                     format!(
-                        "{}记录{}，建议回顾这段时间投入是否符合当前计划。",
+                        "{}记录{}，可以考虑回顾这段时间投入是否符合当前计划。",
                         app, duration
                     )
                 }
                 "protect_time_block" => {
                     format!(
-                        "{}记录{}，建议为相关任务预留专注时间并减少不必要切换。",
+                        "{}记录{}，可以考虑为相关任务预留专注时间并减少不必要切换。",
                         app, duration
                     )
                 }
                 "set_time_budget" => format!(
-                    "{}记录{}，建议为相关任务设置明确的时间预算并在结束时复盘。",
+                    "{}记录{}，可以考虑为相关任务设置明确的时间预算并在结束时复盘。",
                     app, duration
                 ),
                 _ => return Err(ServiceFailure::InvalidResponse),
@@ -1017,10 +1397,13 @@ fn format_duration(seconds: i64) -> String {
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::AtomicUsize;
-    use std::sync::{mpsc, Condvar};
+    use std::sync::{Condvar, mpsc};
     use std::thread;
+    use std::time::Instant;
 
     use super::*;
+    use crate::ai_credentials::ResolvedApiKey;
+    use crate::ai_report_store::UnavailableAiReportStore;
 
     struct FakeUsageSource {
         rows: Vec<AggregateUsage>,
@@ -1044,23 +1427,169 @@ mod tests {
     }
 
     struct FakeKeySource {
-        key: Option<String>,
+        key: Mutex<Option<String>>,
+        environment_key: Option<String>,
         reads: AtomicUsize,
     }
 
     impl FakeKeySource {
         fn new(key: Option<&str>) -> Self {
             Self {
-                key: key.map(str::to_owned),
+                key: Mutex::new(key.map(str::to_owned)),
+                environment_key: None,
                 reads: AtomicUsize::new(0),
             }
         }
     }
 
     impl ApiKeySource for FakeKeySource {
-        fn read_deepseek_key(&self) -> Option<String> {
+        fn resolve_deepseek_key(&self, allow_environment: bool) -> ResolvedApiKey {
             self.reads.fetch_add(1, Ordering::Relaxed);
-            self.key.clone()
+            if let Some(key) = self.key.lock().expect("fake key lock").clone() {
+                return ResolvedApiKey {
+                    key: Some(Zeroizing::new(key)),
+                    origin: CredentialOrigin::SecureStore,
+                    secure_storage_available: true,
+                };
+            }
+            if allow_environment {
+                if let Some(key) = self.environment_key.clone() {
+                    return ResolvedApiKey {
+                        key: Some(Zeroizing::new(key)),
+                        origin: CredentialOrigin::LegacyEnvironment,
+                        secure_storage_available: true,
+                    };
+                }
+            }
+            ResolvedApiKey {
+                key: None,
+                origin: CredentialOrigin::None,
+                secure_storage_available: true,
+            }
+        }
+
+        fn read_environment_deepseek_key(&self) -> Option<Zeroizing<String>> {
+            self.environment_key.clone().map(Zeroizing::new)
+        }
+
+        fn save_deepseek_key(&self, key: &str) -> Result<(), CredentialError> {
+            *self.key.lock().expect("fake key lock") = Some(key.to_owned());
+            Ok(())
+        }
+
+        fn delete_deepseek_key(&self) -> Result<(), CredentialError> {
+            *self.key.lock().expect("fake key lock") = None;
+            Ok(())
+        }
+    }
+
+    struct FakeReportStore {
+        reports: Mutex<BTreeMap<String, AiRecapDto>>,
+        model: Mutex<Option<String>>,
+        fail_report_saves: AtomicBool,
+        fail_report_clears: AtomicBool,
+    }
+
+    impl FakeReportStore {
+        fn new() -> Self {
+            Self {
+                reports: Mutex::new(BTreeMap::new()),
+                model: Mutex::new(None),
+                fail_report_saves: AtomicBool::new(false),
+                fail_report_clears: AtomicBool::new(false),
+            }
+        }
+    }
+
+    impl AiReportStore for FakeReportStore {
+        fn load_latest_reports(&self) -> Result<Vec<AiRecapDto>, AiReportStoreError> {
+            Ok(self
+                .reports
+                .lock()
+                .expect("fake reports lock")
+                .values()
+                .cloned()
+                .collect())
+        }
+
+        fn save_latest_report(&self, report: &AiRecapDto) -> Result<(), AiReportStoreError> {
+            if self.fail_report_saves.load(Ordering::Relaxed) {
+                return Err(AiReportStoreError::InvalidReport);
+            }
+            self.reports
+                .lock()
+                .expect("fake reports lock")
+                .insert(report.scope.clone(), report.clone());
+            Ok(())
+        }
+
+        fn clear_latest_reports(&self) -> Result<(), AiReportStoreError> {
+            if self.fail_report_clears.load(Ordering::Relaxed) {
+                return Err(AiReportStoreError::Unavailable);
+            }
+            self.reports.lock().expect("fake reports lock").clear();
+            Ok(())
+        }
+
+        fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
+            Ok(self.model.lock().expect("fake model lock").clone())
+        }
+
+        fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError> {
+            *self.model.lock().expect("fake model lock") = Some(model.to_owned());
+            Ok(())
+        }
+    }
+
+    struct BlockingReportStore {
+        inner: FakeReportStore,
+        save_entered: Mutex<Option<mpsc::Sender<()>>>,
+        save_released: (Mutex<bool>, Condvar),
+    }
+
+    impl BlockingReportStore {
+        fn new(save_entered: mpsc::Sender<()>) -> Self {
+            Self {
+                inner: FakeReportStore::new(),
+                save_entered: Mutex::new(Some(save_entered)),
+                save_released: (Mutex::new(false), Condvar::new()),
+            }
+        }
+
+        fn release_save(&self) {
+            let (lock, ready) = &self.save_released;
+            *lock.lock().expect("save release lock") = true;
+            ready.notify_all();
+        }
+    }
+
+    impl AiReportStore for BlockingReportStore {
+        fn load_latest_reports(&self) -> Result<Vec<AiRecapDto>, AiReportStoreError> {
+            self.inner.load_latest_reports()
+        }
+
+        fn save_latest_report(&self, report: &AiRecapDto) -> Result<(), AiReportStoreError> {
+            if let Some(sender) = self.save_entered.lock().expect("save entered lock").take() {
+                sender.send(()).expect("notify save entered");
+            }
+            let (lock, ready) = &self.save_released;
+            let mut released = lock.lock().expect("save release lock");
+            while !*released {
+                released = ready.wait(released).expect("wait for save release");
+            }
+            self.inner.save_latest_report(report)
+        }
+
+        fn clear_latest_reports(&self) -> Result<(), AiReportStoreError> {
+            self.inner.clear_latest_reports()
+        }
+
+        fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
+            self.inner.load_default_model()
+        }
+
+        fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError> {
+            self.inner.save_default_model(model)
         }
     }
 
@@ -1205,16 +1734,12 @@ mod tests {
             Arc::new(FakeUsageSource::new(rows)),
             Arc::new(FakeKeySource::new(key)),
             transport,
+            Arc::new(FakeReportStore::new()),
         )
     }
 
     fn generate(service: &AiRecapService, date: &str) -> AiRecapGenerateReplyDto {
-        service.generate(
-            "today".to_owned(),
-            date.to_owned(),
-            date.to_owned(),
-            DEFAULT_MODEL.to_owned(),
-        )
+        service.generate("daily".to_owned(), date.to_owned(), date.to_owned())
     }
 
     fn error_code(reply: &AiRecapGenerateReplyDto) -> &str {
@@ -1234,18 +1759,173 @@ mod tests {
             Arc::new(FakeUsageSource::new(usage())),
             key.clone(),
             transport.clone(),
+            Arc::new(FakeReportStore::new()),
         );
 
         assert_eq!(
             service.status(),
             AiRecapStatusDto {
+                service_available: true,
                 configured: true,
                 provider: "DeepSeek".to_owned(),
                 default_model: DEFAULT_MODEL.to_owned(),
+                credential_source: "secure_store".to_owned(),
+                secure_storage_available: true,
+                environment_migration_available: false,
             }
         );
         assert_eq!(key.reads.load(Ordering::Relaxed), 1);
         assert_eq!(transport.call_count(), 0);
+    }
+
+    #[test]
+    fn unavailable_report_store_degrades_only_ai_and_never_calls_dependencies() {
+        let usage = Arc::new(FakeUsageSource::new(usage()));
+        let key = Arc::new(FakeKeySource::new(Some("secret")));
+        let transport = Arc::new(FakeTransport::successful());
+        let service = AiRecapService::with_ports(
+            usage.clone(),
+            key.clone(),
+            transport.clone(),
+            Arc::new(UnavailableAiReportStore),
+        );
+
+        let status = service.status();
+        assert!(!status.service_available);
+        assert!(!status.configured);
+        assert_eq!(status.credential_source, "unavailable");
+
+        let reply = generate(&service, "2026-08-24");
+        assert_eq!(error_code(&reply), "local_storage");
+        assert_eq!(usage.reads.load(Ordering::Relaxed), 0);
+        assert_eq!(key.reads.load(Ordering::Relaxed), 0);
+        assert_eq!(transport.call_count(), 0);
+    }
+
+    #[test]
+    fn settings_mutations_are_redacted_and_delete_restores_environment_fallback() {
+        let key = Arc::new(FakeKeySource {
+            key: Mutex::new(None),
+            environment_key: Some("legacy-secret".to_owned()),
+            reads: AtomicUsize::new(0),
+        });
+        let store = Arc::new(FakeReportStore::new());
+        let service = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            key.clone(),
+            Arc::new(FakeTransport::successful()),
+            store.clone(),
+        );
+        let initial = service.status();
+        assert_eq!(initial.credential_source, "legacy_environment");
+        assert!(initial.environment_migration_available);
+
+        let saved = service.save_api_key(" new-stored-secret ".to_owned());
+        assert!(saved.error.is_none());
+        assert_eq!(saved.status.credential_source, "secure_store");
+        assert!(!format!("{saved:?}").contains("new-stored-secret"));
+
+        let model = service.set_default_model(PRO_MODEL.to_owned());
+        assert!(model.error.is_none());
+        assert_eq!(model.status.default_model, PRO_MODEL);
+        assert_eq!(
+            store.model.lock().expect("fake model lock").as_deref(),
+            Some(PRO_MODEL)
+        );
+
+        let deleted = service.delete_api_key();
+        assert!(deleted.error.is_none());
+        assert_eq!(deleted.status.credential_source, "legacy_environment");
+        assert!(deleted.status.configured);
+        assert!(deleted.status.environment_migration_available);
+    }
+
+    #[test]
+    fn explicit_connection_test_reads_no_usage_and_sends_no_aggregate_request() {
+        let usage = Arc::new(FakeUsageSource::new(usage()));
+        let transport = Arc::new(FakeTransport::successful());
+        let service = AiRecapService::with_ports(
+            usage.clone(),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            transport.clone(),
+            Arc::new(FakeReportStore::new()),
+        );
+
+        let reply = service.test_connection();
+
+        assert!(reply.success);
+        assert!(reply.error.is_none());
+        assert_eq!(usage.reads.load(Ordering::Relaxed), 0);
+        assert_eq!(transport.call_count(), 1);
+        assert_eq!(
+            transport.requests.lock().expect("requests lock").as_slice(),
+            &[Vec::<u8>::new()]
+        );
+        assert!(service.latest_reports().is_empty());
+    }
+
+    #[test]
+    fn models_connection_response_requires_the_configured_model() {
+        let valid = br#"{"data":[{"id":"deepseek-v4-flash"},{"id":"deepseek-v4-pro"}]}"#;
+        assert_eq!(validate_models_response(valid, DEFAULT_MODEL), Ok(()));
+        assert_eq!(
+            validate_models_response(br#"{"data":[{"id":"another-model"}]}"#, DEFAULT_MODEL),
+            Err(RecapFailure::InvalidResponse)
+        );
+        assert_eq!(
+            validate_models_response(br#"{"unexpected":[]}"#, DEFAULT_MODEL),
+            Err(RecapFailure::InvalidResponse)
+        );
+        assert_eq!(
+            validate_models_response(b"not-json", DEFAULT_MODEL),
+            Err(RecapFailure::InvalidResponse)
+        );
+    }
+
+    #[test]
+    fn persisted_latest_reports_and_default_model_load_without_network_after_restart() {
+        let store = Arc::new(FakeReportStore::new());
+        let first_transport = Arc::new(FakeTransport::successful());
+        let first = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            first_transport,
+            store.clone(),
+        );
+        assert!(
+            first
+                .set_default_model(PRO_MODEL.to_owned())
+                .error
+                .is_none()
+        );
+        let generated = generate(&first, "2026-08-24")
+            .recap
+            .expect("persisted report");
+
+        let restarted_transport = Arc::new(FakeTransport::successful());
+        let restarted = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            restarted_transport.clone(),
+            store.clone(),
+        );
+
+        assert_eq!(restarted.status().default_model, PRO_MODEL);
+        assert_eq!(restarted.latest_reports(), vec![generated.clone()]);
+        assert_eq!(
+            restarted.latest("daily", "2026-08-24", "2026-08-24"),
+            Some(generated)
+        );
+        assert_eq!(restarted_transport.call_count(), 0);
+
+        restarted.clear_reports().expect("clear reports");
+        assert!(restarted.latest_reports().is_empty());
+        assert!(
+            store
+                .load_latest_reports()
+                .expect("load cleared store")
+                .is_empty()
+        );
     }
 
     #[test]
@@ -1258,15 +1938,14 @@ mod tests {
     }
 
     #[test]
-    fn invalid_scope_range_and_model_return_mutually_exclusive_typed_errors() {
+    fn invalid_scope_range_and_default_model_return_typed_errors() {
         let transport = Arc::new(FakeTransport::successful());
         let service = service(usage(), Some("secret"), transport.clone());
 
         let invalid_range = service.generate(
-            "today".to_owned(),
+            "daily".to_owned(),
             "2026-08-24".to_owned(),
             "2026-08-17".to_owned(),
-            DEFAULT_MODEL.to_owned(),
         );
         assert!(invalid_range.recap.is_none());
         assert_eq!(error_code(&invalid_range), "invalid_range");
@@ -1277,14 +1956,17 @@ mod tests {
             assert_eq!(error_code(&reply), "invalid_range");
         }
 
-        assert!(parse_range("today", "2026-08-24", "2026-08-24").is_ok());
-        assert!(parse_range("week_to_date", "2026-08-24", "2026-08-24").is_ok());
+        assert!(parse_range("daily", "2026-08-24", "2026-08-24").is_ok());
+        assert!(parse_range("weekly", "2026-08-24", "2026-08-24").is_ok());
+        assert!(parse_range("monthly", "2026-08-01", "2026-08-24").is_ok());
         for (scope, start, end) in [
             ("unknown", "2026-08-24", "2026-08-24"),
-            ("today", "2026-08-24", "2026-08-25"),
-            ("week_to_date", "2026-08-25", "2026-08-25"),
-            ("week_to_date", "2026-08-24", "2026-08-31"),
-            ("week_to_date", "2026-08-24", "2026-08-23"),
+            ("daily", "2026-08-24", "2026-08-25"),
+            ("weekly", "2026-08-25", "2026-08-25"),
+            ("weekly", "2026-08-24", "2026-08-31"),
+            ("weekly", "2026-08-24", "2026-08-23"),
+            ("monthly", "2026-08-02", "2026-08-24"),
+            ("monthly", "2026-07-01", "2026-07-30"),
         ] {
             assert_eq!(
                 parse_range(scope, start, end),
@@ -1292,14 +1974,19 @@ mod tests {
                 "{scope} {start}..{end} must be rejected"
             );
         }
+        assert!(parse_range("weekly", "2026-08-17", "2026-08-18").is_err());
+        assert!(parse_persisted_range("weekly", "2026-08-17", "2026-08-18").is_ok());
+        assert!(parse_range("monthly", "2026-07-01", "2026-07-18").is_err());
+        assert!(parse_persisted_range("monthly", "2026-07-01", "2026-07-18").is_ok());
 
-        let invalid_model = service.generate(
-            "today".to_owned(),
-            "2026-08-24".to_owned(),
-            "2026-08-24".to_owned(),
-            "deepseek-unknown".to_owned(),
+        let invalid_model = service.set_default_model("deepseek-unknown".to_owned());
+        assert_eq!(
+            invalid_model
+                .error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("unsupported_model")
         );
-        assert_eq!(error_code(&invalid_model), "unsupported_model");
         assert_eq!(transport.call_count(), 0);
     }
 
@@ -1314,6 +2001,7 @@ mod tests {
             }])),
             key.clone(),
             transport.clone(),
+            Arc::new(FakeReportStore::new()),
         );
 
         let reply = generate(&service, "2026-08-24");
@@ -1407,10 +2095,12 @@ mod tests {
         assert_eq!(payload["applications_sent"], MAX_APPS_SENT);
         assert_eq!(payload["truncated"], true);
         assert_eq!(payload["total_active_seconds"], expected_total);
-        assert_eq!(payload["scope"], "today");
-        assert!(payload["scope_note"]
-            .as_str()
-            .is_some_and(|note| note.contains("不得外推")));
+        assert_eq!(payload["scope"], "daily");
+        assert!(
+            payload["scope_note"]
+                .as_str()
+                .is_some_and(|note| note.contains("不得外推"))
+        );
         assert!(applications.iter().all(|item| {
             item["app_name"]
                 .as_str()
@@ -1473,7 +2163,7 @@ mod tests {
     }
 
     #[test]
-    fn successful_results_are_keyed_by_range_and_cache_is_bounded() {
+    fn successful_results_keep_only_the_latest_range_per_report_type() {
         let service = service(
             usage(),
             Some("secret"),
@@ -1485,53 +2175,50 @@ mod tests {
             let reply = generate(&service, &date);
             assert!(reply.error.is_none());
             assert_eq!(
-                service.latest("today", &date, &date),
+                service.latest("daily", &date, &date),
                 reply.recap,
                 "latest result must be keyed by the exact range"
             );
         }
 
-        assert!(service
-            .latest("today", "2026-08-01", "2026-08-01")
-            .is_none());
-        assert!(service
-            .latest("today", "2026-08-02", "2026-08-02")
-            .is_some());
-        assert!(service
-            .latest("today", "not-a-date", "2026-08-02")
-            .is_none());
+        assert!(
+            service
+                .latest("daily", "2026-08-01", "2026-08-01")
+                .is_none()
+        );
+        assert!(
+            service
+                .latest("daily", "2026-08-05", "2026-08-05")
+                .is_some()
+        );
+        assert!(
+            service
+                .latest("daily", "not-a-date", "2026-08-02")
+                .is_none()
+        );
+        assert_eq!(service.latest_reports().len(), 1);
     }
 
     #[test]
-    fn monday_today_and_week_to_date_use_distinct_cache_entries() {
+    fn monday_daily_and_weekly_reports_use_distinct_scope_entries() {
         let transport = Arc::new(FakeTransport::successful());
         let service = service(usage(), Some("secret"), transport.clone());
         let monday = "2026-08-24";
 
         let today = service
-            .generate(
-                "today".to_owned(),
-                monday.to_owned(),
-                monday.to_owned(),
-                DEFAULT_MODEL.to_owned(),
-            )
+            .generate("daily".to_owned(), monday.to_owned(), monday.to_owned())
             .recap
             .expect("today recap");
         let week = service
-            .generate(
-                "week_to_date".to_owned(),
-                monday.to_owned(),
-                monday.to_owned(),
-                DEFAULT_MODEL.to_owned(),
-            )
+            .generate("weekly".to_owned(), monday.to_owned(), monday.to_owned())
             .recap
             .expect("Monday week-to-date recap");
 
-        assert_eq!(today.scope, "today");
-        assert_eq!(week.scope, "week_to_date");
+        assert_eq!(today.scope, "daily");
+        assert_eq!(week.scope, "weekly");
         assert_eq!(
             week.summary.text,
-            "本周截至今日共记录15分钟活动，覆盖1个应用。 当前数据较少，结论仅供参考。"
+            "所选周共记录15分钟活动，覆盖1个应用。 当前数据较少，结论仅供参考。"
         );
         assert_eq!(transport.call_count(), 2);
         let week_request = transport.requests.lock().expect("requests lock")[1].clone();
@@ -1543,16 +2230,16 @@ mod tests {
         let user_prompt = week_request["messages"][1]["content"]
             .as_str()
             .expect("user prompt");
-        assert!(system_prompt.contains("未完整自然周"));
+        assert!(system_prompt.contains("未完成的当前周期"));
         assert!(user_prompt.contains("稀疏数据"));
-        assert!(user_prompt.contains("\"scope\":\"week_to_date\""));
+        assert!(user_prompt.contains("\"scope\":\"weekly\""));
         assert_eq!(
-            service.latest("today", monday, monday),
+            service.latest("daily", monday, monday),
             Some(today),
             "today cache entry must survive the same-date week recap"
         );
         assert_eq!(
-            service.latest("week_to_date", monday, monday),
+            service.latest("weekly", monday, monday),
             Some(week),
             "week cache entry must not alias today's entry"
         );
@@ -1588,8 +2275,58 @@ mod tests {
 
         assert_eq!(error_code(&failed), "timeout");
         assert_eq!(
-            service.latest("today", "2026-08-24", "2026-08-24"),
+            service.latest("daily", "2026-08-24", "2026-08-24"),
             Some(first)
+        );
+    }
+
+    #[test]
+    fn local_storage_failure_preserves_the_previous_successful_report() {
+        let store = Arc::new(FakeReportStore::new());
+        let service = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            Arc::new(FakeTransport::successful()),
+            store.clone(),
+        );
+        let first = generate(&service, "2026-08-24")
+            .recap
+            .expect("first persisted report");
+        store.fail_report_saves.store(true, Ordering::Relaxed);
+
+        let failed = generate(&service, "2026-08-24");
+
+        assert_eq!(error_code(&failed), "local_storage");
+        assert_eq!(
+            service.latest("daily", "2026-08-24", "2026-08-24"),
+            Some(first)
+        );
+    }
+
+    #[test]
+    fn failed_clear_keeps_the_durable_and_cached_report_visible() {
+        let store = Arc::new(FakeReportStore::new());
+        let service = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            Arc::new(FakeTransport::successful()),
+            store.clone(),
+        );
+        let first = generate(&service, "2026-08-24")
+            .recap
+            .expect("persisted report");
+        store.fail_report_clears.store(true, Ordering::Relaxed);
+
+        let error = service.clear_reports().expect_err("clear must fail closed");
+
+        assert!(matches!(error, AiReportStoreError::Unavailable));
+        assert_eq!(
+            service.latest("daily", "2026-08-24", "2026-08-24"),
+            Some(first.clone())
+        );
+        assert_eq!(
+            store.load_latest_reports().expect("durable report remains"),
+            vec![first]
         );
     }
 
@@ -1611,11 +2348,88 @@ mod tests {
     }
 
     #[test]
+    fn clearing_data_during_generation_prevents_a_report_from_reappearing() {
+        let (entered_sender, entered_receiver) = mpsc::channel();
+        let transport = Arc::new(BlockingTransport::new(entered_sender));
+        let store = Arc::new(FakeReportStore::new());
+        let service = Arc::new(AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            transport.clone(),
+            store.clone(),
+        ));
+        let worker_service = service.clone();
+        let worker = thread::spawn(move || generate(&worker_service, "2026-08-24"));
+
+        entered_receiver
+            .recv()
+            .expect("generation entered transport");
+        service.clear_reports().expect("clear reports");
+        transport.release();
+        let reply = worker.join().expect("worker joined");
+
+        assert_eq!(error_code(&reply), "busy");
+        assert!(service.latest_reports().is_empty());
+        assert!(
+            store
+                .load_latest_reports()
+                .expect("load report store")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn clear_waits_for_a_report_commit_then_removes_its_durable_and_cached_result() {
+        let (save_entered_sender, save_entered_receiver) = mpsc::channel();
+        let store = Arc::new(BlockingReportStore::new(save_entered_sender));
+        let service = Arc::new(AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            Arc::new(FakeTransport::successful()),
+            store.clone(),
+        ));
+        let generation_service = service.clone();
+        let generation = thread::spawn(move || generate(&generation_service, "2026-08-24"));
+
+        save_entered_receiver
+            .recv()
+            .expect("generation entered durable save");
+        let clear_service = service.clone();
+        let clear = thread::spawn(move || clear_service.clear_reports());
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while service.data_epoch.load(Ordering::Acquire) == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "clear did not invalidate generation"
+            );
+            thread::yield_now();
+        }
+
+        store.release_save();
+        assert!(
+            generation
+                .join()
+                .expect("generation joined")
+                .error
+                .is_none()
+        );
+        clear.join().expect("clear joined").expect("clear reports");
+
+        assert!(service.latest_reports().is_empty());
+        assert!(
+            store
+                .load_latest_reports()
+                .expect("load report store")
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn invalid_or_oversized_provider_content_is_rejected_atomically() {
         let prepared = prepared_standard_usage();
         let oversized = vec![b'x'; MAX_RESPONSE_BYTES + 1];
         assert_eq!(
-            parse_provider_response(&oversized, &prepared, RecapScope::Today),
+            parse_provider_response(&oversized, &prepared, RecapScope::Daily),
             Err(ServiceFailure::InvalidResponse)
         );
 
@@ -1629,7 +2443,7 @@ mod tests {
             parse_provider_response(
                 &provider_response(extra_field),
                 &prepared,
-                RecapScope::Today,
+                RecapScope::Daily,
             ),
             Err(ServiceFailure::InvalidResponse)
         );
@@ -1648,7 +2462,7 @@ mod tests {
             parse_provider_response(
                 &provider_response(too_many_items),
                 &prepared,
-                RecapScope::Today,
+                RecapScope::Daily,
             ),
             Err(ServiceFailure::InvalidResponse)
         );
@@ -1679,7 +2493,7 @@ mod tests {
                 "suggestions": [statement("review_top_application")]
             });
             assert_eq!(
-                parse_provider_response(&provider_response(content), &prepared, RecapScope::Today,),
+                parse_provider_response(&provider_response(content), &prepared, RecapScope::Daily,),
                 Err(ServiceFailure::InvalidResponse)
             );
         }
@@ -1698,7 +2512,7 @@ mod tests {
             "suggestions": [statement("review_top_application")]
         });
         assert_eq!(
-            parse_provider_response(&provider_response(content), &prepared, RecapScope::Today,),
+            parse_provider_response(&provider_response(content), &prepared, RecapScope::Daily,),
             Err(ServiceFailure::InvalidResponse)
         );
     }
@@ -1714,10 +2528,10 @@ mod tests {
             .recap
             .expect("grounded recap");
 
-        assert_eq!(recap.scope, "today");
+        assert_eq!(recap.scope, "daily");
         assert_eq!(
             recap.summary.text,
-            "今日共记录15分钟活动，覆盖1个应用。 当前数据较少，结论仅供参考。"
+            "所选日期共记录15分钟活动，覆盖1个应用。 当前数据较少，结论仅供参考。"
         );
         assert_eq!(
             recap.summary.evidence,
@@ -1728,6 +2542,7 @@ mod tests {
         );
         assert_eq!(recap.highlights[0].evidence, recap.summary.evidence);
         assert_eq!(recap.suggestions[0].evidence, recap.summary.evidence);
+        assert_eq!(recap.top_applications, recap.summary.evidence);
     }
 
     #[test]
@@ -1746,28 +2561,31 @@ mod tests {
             ]
         });
         let recap =
-            parse_provider_response(&provider_response(content), &prepared, RecapScope::Today)
+            parse_provider_response(&provider_response(content), &prepared, RecapScope::Daily)
                 .expect("closed kinds");
-        assert_eq!(recap.summary.text, "今日共记录30分钟活动，覆盖3个应用。");
+        assert_eq!(
+            recap.summary.text,
+            "所选日期共记录30分钟活动，覆盖3个应用。"
+        );
         assert_eq!(
             recap.highlights[0].text,
-            "编辑器是今日使用时长最高的应用，共15分钟。"
+            "编辑器是所选日期使用时长最高的应用，共15分钟。"
         );
         assert_eq!(
             recap.highlights[1].text,
-            "编辑器、浏览器在今日合计25分钟，占总活动时长83%。"
+            "编辑器、浏览器在所选日期合计25分钟，占总活动时长83%。"
         );
         assert_eq!(
             recap.suggestions[0].text,
-            "编辑器记录15分钟，建议回顾这段时间投入是否符合当前计划。"
+            "编辑器记录15分钟，可以考虑回顾这段时间投入是否符合当前计划。"
         );
         assert_eq!(
             recap.suggestions[1].text,
-            "浏览器记录10分钟，建议为相关任务预留专注时间并减少不必要切换。"
+            "浏览器记录10分钟，可以考虑为相关任务预留专注时间并减少不必要切换。"
         );
         assert_eq!(
             recap.suggestions[2].text,
-            "终端记录5分钟，建议为相关任务设置明确的时间预算并在结束时复盘。"
+            "终端记录5分钟，可以考虑为相关任务设置明确的时间预算并在结束时复盘。"
         );
     }
 
@@ -1835,7 +2653,7 @@ mod tests {
         ];
         for content in cases {
             assert_eq!(
-                parse_provider_response(&provider_response(content), &prepared, RecapScope::Today,),
+                parse_provider_response(&provider_response(content), &prepared, RecapScope::Daily,),
                 Err(ServiceFailure::InvalidResponse)
             );
         }
@@ -1844,29 +2662,33 @@ mod tests {
     #[test]
     #[ignore = "requires DEEPSEEK_API_KEY and makes a live request with synthetic aggregates"]
     fn live_deepseek_smoke_uses_only_synthetic_aggregate_rows() {
-        let service = AiRecapService::new(Arc::new(FakeUsageSource::new(vec![
-            AggregateUsage {
-                app_name: "合成编辑器".to_owned(),
-                active_seconds: 5_400,
-            },
-            AggregateUsage {
-                app_name: "合成浏览器".to_owned(),
-                active_seconds: 2_700,
-            },
-            AggregateUsage {
-                app_name: "合成终端".to_owned(),
-                active_seconds: 1_800,
-            },
-        ])));
+        let service = AiRecapService::new(
+            Arc::new(FakeUsageSource::new(vec![
+                AggregateUsage {
+                    app_name: "合成编辑器".to_owned(),
+                    active_seconds: 5_400,
+                },
+                AggregateUsage {
+                    app_name: "合成浏览器".to_owned(),
+                    active_seconds: 2_700,
+                },
+                AggregateUsage {
+                    app_name: "合成终端".to_owned(),
+                    active_seconds: 1_800,
+                },
+            ])),
+            Arc::new(FakeReportStore::new()),
+        );
 
         assert!(service.status().configured, "live smoke requires a key");
 
         for model in [DEFAULT_MODEL, PRO_MODEL] {
+            let settings = service.set_default_model(model.to_owned());
+            assert!(settings.error.is_none());
             let reply = service.generate(
-                "week_to_date".to_owned(),
+                "weekly".to_owned(),
                 "2026-08-24".to_owned(),
                 "2026-08-24".to_owned(),
-                model.to_owned(),
             );
             assert_eq!(
                 reply.error.as_ref().map(|error| error.code.as_str()),
@@ -1875,11 +2697,11 @@ mod tests {
                 reply.error
             );
             let recap = reply.recap.expect("live provider returned a recap");
-            assert_eq!(recap.scope, "week_to_date");
+            assert_eq!(recap.scope, "weekly");
             assert_eq!(recap.total_active_seconds, 9_900);
             assert_eq!(recap.application_count, 3);
             assert_eq!(recap.model, model);
-            assert!(recap.summary.text.contains("本周截至今日"));
+            assert!(recap.summary.text.contains("所选周"));
         }
     }
 

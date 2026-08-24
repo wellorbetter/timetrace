@@ -11,6 +11,8 @@ import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
+import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_settings_section.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
@@ -221,6 +223,10 @@ class SettingsScreen extends ConsumerWidget {
                       TextStyle(color: Theme.of(context).colorScheme.error)),
               onTap: () => _confirmClear(context, ref, l),
             ),
+            const Divider(),
+
+            // ── AI 服务 ──
+            const AiRecapSettingsSection(),
             const Divider(),
 
             // ── 保存 ──
@@ -459,13 +465,23 @@ class SettingsScreen extends ConsumerWidget {
             onPressed: () {
               Navigator.pop(ctx);
               try {
-                ref.read(apiProvider).clearData();
+                final cleared = ref.read(apiProvider).clearData();
                 ref.invalidate(settingsProvider);
                 ref.invalidate(dashboardProvider);
-                AppLogger.log('data cleared via settings');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.saved)),
-                );
+                ref.read(aiRecapControllerProvider.notifier).synchronize();
+                if (cleared) {
+                  AppLogger.log('data cleared via settings');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l.saved)),
+                  );
+                } else {
+                  AppLogger.log('data clear incomplete: AI report storage');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('使用记录已清除，但 AI 报告未能清除，请稍后重试。'),
+                    ),
+                  );
+                }
               } catch (e) {
                 AppLogger.log('clear data failed: $e');
               }

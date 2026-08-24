@@ -33,12 +33,28 @@ project(timetrace_app LANGUAGES CXX)
 
 # ── Build the Rust bridge (timetrace_bridge.dll) ──
 set(TT_RUST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-set(TT_BRIDGE_DLL "${TT_RUST_ROOT}/target/release/timetrace_bridge.dll")
+if(DEFINED ENV{CARGO_TARGET_DIR} AND NOT "$ENV{CARGO_TARGET_DIR}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{CARGO_TARGET_DIR}" TT_RUST_TARGET_DIR)
+else()
+  set(TT_RUST_TARGET_DIR "${TT_RUST_ROOT}/target")
+endif()
+set(TT_BRIDGE_DLL "${TT_RUST_TARGET_DIR}/release/timetrace_bridge.dll")
+file(GLOB_RECURSE TT_RUST_BRIDGE_SOURCES CONFIGURE_DEPENDS
+  "${TT_RUST_ROOT}/bridge/src/*.rs"
+  "${TT_RUST_ROOT}/crates/core/src/*.rs"
+)
 
 add_custom_command(
   OUTPUT "${TT_BRIDGE_DLL}"
-  COMMAND cargo build -p timetrace-bridge --release
+  COMMAND ${CMAKE_COMMAND} -E env "CARGO_TARGET_DIR=${TT_RUST_TARGET_DIR}"
+          cargo build -p timetrace-bridge --release
   WORKING_DIRECTORY "${TT_RUST_ROOT}"
+  DEPENDS
+    ${TT_RUST_BRIDGE_SOURCES}
+    "${TT_RUST_ROOT}/Cargo.toml"
+    "${TT_RUST_ROOT}/Cargo.lock"
+    "${TT_RUST_ROOT}/bridge/Cargo.toml"
+    "${TT_RUST_ROOT}/crates/core/Cargo.toml"
   COMMENT "Building timetrace_bridge.dll (Rust)"
 )
 

@@ -13,126 +13,169 @@ import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 void main() {
+  testWidgets('opening and navigating all report periods never generates', (
+    tester,
+  ) async {
+    final port = _FakePort();
+    await _pumpScreen(tester, port);
+
+    expect(find.text('AI 时间报告'), findsOneWidget);
+    expect(find.text('日报'), findsOneWidget);
+    expect(find.text('周报'), findsWidgets);
+    expect(find.text('月报'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const Key('ai-recap-model-selector')), findsNothing);
+    expect(find.text('2026年8月24日'), findsOneWidget);
+    expect(port.generateCalls, 0);
+
+    final next = tester.widget<IconButton>(
+      find.byKey(const Key('ai-report-next-period')),
+    );
+    expect(next.onPressed, isNull);
+
+    await tester.tap(find.byKey(const Key('ai-report-previous-period')));
+    await tester.pump();
+    expect(find.text('2026年8月23日'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('ai-report-next-period')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.text('月报'));
+    await tester.pump();
+    expect(find.textContaining('2026年8月1日—2026年8月24日'), findsOneWidget);
+    expect(port.generateCalls, 0);
+  });
+
   testWidgets(
-    'opening detail and switching model produce zero generation calls',
+    'explicit click renders the four report sections and usage bars',
     (tester) async {
-      final port = _FakeAiRecapPort();
+      final port = _FakePort(
+        generated: _result(
+          _daily(24),
+          summary: '今日主要时间投入在编辑器与浏览器。',
+          highlights: const ['上午的使用节奏更集中'],
+          suggestions: const ['下周预留一次无打扰时段'],
+        ),
+      );
       await _pumpScreen(tester, port);
 
-      expect(find.text('AI 使用回顾'), findsWidgets);
-      expect(find.text('今日'), findsOneWidget);
-      expect(find.text('本周'), findsOneWidget);
-      expect(port.generateCalls, 0);
+      await tester.tap(find.byKey(const Key('ai-recap-generate')));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('本周'));
-      await tester.pump();
-      expect(port.generateCalls, 0);
-
-      await tester.tap(find.text('Pro'));
-      await tester.pump();
-      expect(port.generateCalls, 0);
+      expect(find.text('本期概览'), findsOneWidget);
+      expect(find.text('主要投入'), findsOneWidget);
+      expect(find.text('使用观察'), findsOneWidget);
+      expect(find.text('下期建议'), findsOneWidget);
+      expect(find.text('今日主要时间投入在编辑器与浏览器。'), findsOneWidget);
+      expect(find.text('上午的使用节奏更集中'), findsOneWidget);
+      expect(find.text('下周预留一次无打扰时段'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsWidgets);
+      expect(find.textContaining('不代表工作成果或绩效评价'), findsOneWidget);
+      expect(find.textContaining('仅发送应用名称与聚合时长'), findsOneWidget);
+      expect(port.generateCalls, 1);
+      expect(port.lastKey, _daily(24));
     },
   );
 
-  testWidgets('explicit click renders summary, highlights and suggestions', (
-    tester,
-  ) async {
-    final port = _FakeAiRecapPort(
-      generated: _result(
-        _todayKey,
-        summary: '今天的专注时间主要集中在编辑器。',
-        highlights: const ['完成了两个连续专注时段'],
-        suggestions: const ['下午预留一次短休息'],
-      ),
-    );
-    await _pumpScreen(tester, port);
-
-    await tester.tap(find.byKey(const Key('ai-recap-generate')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('今天的专注时间主要集中在编辑器。'), findsOneWidget);
-    expect(find.text('完成了两个连续专注时段'), findsOneWidget);
-    expect(find.text('下午预留一次短休息'), findsOneWidget);
-    expect(find.textContaining('今日 · 2026年8月24日'), findsOneWidget);
-    expect(find.textContaining('仅发送最多 12 个应用名称'), findsOneWidget);
-    expect(port.generateCalls, 1);
-    expect(port.lastKey, _todayKey);
-  });
-
-  testWidgets('old result remains readable while regeneration is pending', (
+  testWidgets('saved content stays readable while regeneration is pending', (
     tester,
   ) async {
     final pending = Completer<AiRecapResult>();
-    final port = _FakeAiRecapPort(
-      latestResult: _result(_todayKey, summary: '旧回顾仍然可读。'),
+    final port = _FakePort(
+      reports: [_result(_currentWeek, summary: '旧周报仍然可读。')],
       pending: pending,
     );
     await _pumpScreen(tester, port);
+    await tester.tap(find.text('周报').first);
+    await tester.pump();
 
     await tester.tap(find.byKey(const Key('ai-recap-generate')));
     await tester.pump();
 
-    expect(find.text('旧回顾仍然可读。'), findsOneWidget);
+    expect(find.text('旧周报仍然可读。'), findsOneWidget);
     expect(find.byKey(const Key('ai-recap-inline-progress')), findsOneWidget);
+    expect(port.generateCalls, 1);
 
-    pending.complete(_result(_todayKey, summary: '更新后的回顾。'));
+    await tester.tap(find.text('日报'));
+    await tester.pump();
+    expect(port.generateCalls, 1);
+
+    pending.complete(_result(_currentWeek, summary: '更新后的周报。'));
     await tester.pumpAndSettle();
-    expect(find.text('更新后的回顾。'), findsOneWidget);
+    await tester.tap(find.text('周报').first);
+    await tester.pump();
+    expect(find.text('更新后的周报。'), findsOneWidget);
   });
 
-  testWidgets('typed failure preserves old content and offers retry', (
+  testWidgets('failure keeps the latest saved report of that type visible', (
     tester,
   ) async {
-    final port = _FakeAiRecapPort(
-      latestResult: _result(_todayKey, summary: '超时前的回顾。'),
+    final previousWeek = AiRecapRangeKey(
+      scope: AiRecapScope.weekly,
+      startDate: DateTime(2026, 8, 17),
+      endDate: DateTime(2026, 8, 23),
+    );
+    final port = _FakePort(
+      reports: [_result(previousWeek, summary: '上一份周报。')],
       failure: const AiRecapFailure(
         code: AiRecapFailureCode.timeout,
         retryable: true,
       ),
     );
     await _pumpScreen(tester, port);
+    await tester.tap(find.text('周报').first);
+    await tester.pump();
 
+    expect(find.byKey(const Key('ai-report-saved-fallback')), findsNothing);
+    expect(find.text('上一份周报。'), findsNothing);
     await tester.tap(find.byKey(const Key('ai-recap-generate')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('ai-recap-error')), findsOneWidget);
-    expect(find.text('超时前的回顾。'), findsOneWidget);
+    expect(find.byKey(const Key('ai-report-saved-fallback')), findsOneWidget);
+    expect(find.text('上一份周报。'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
   });
 
-  testWidgets('missing key and unsupported range are stable local states', (
+  testWidgets('missing key is an actionable local state with generation off', (
     tester,
   ) async {
-    final unconfigured = _FakeAiRecapPort(configured: false);
-    await _pumpScreen(tester, unconfigured);
-    expect(find.byKey(const Key('ai-recap-not-configured')), findsOneWidget);
-    expect(find.textContaining('DEEPSEEK_API_KEY'), findsOneWidget);
-    expect(unconfigured.generateCalls, 0);
-
-    await _pumpScreen(
-      tester,
-      _FakeAiRecapPort(),
-      bounds: const DateRangeBounds(
-        start: '2026-08-01',
-        end: '2026-08-24',
-        label: '本月',
-        supportedByAiRecap: false,
-      ),
+    final port = _FakePort(
+      statusValue: const AiRecapProviderStatus.unconfigured(),
     );
-    expect(find.byKey(const Key('ai-recap-unsupported-range')), findsOneWidget);
+    await _pumpScreen(tester, port);
+
+    expect(find.byKey(const Key('ai-recap-not-configured')), findsOneWidget);
+    expect(find.textContaining('在设置中配置 AI 服务'), findsOneWidget);
+    expect(find.text('去设置'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const Key('ai-recap-generate')))
           .onPressed,
       isNull,
     );
+    expect(port.generateCalls, 0);
   });
 
-  testWidgets('dashboard card projects local result without generating', (
+  testWidgets('dashboard always shows the newest saved report across types', (
     tester,
   ) async {
-    final port = _FakeAiRecapPort(
-      latestResult: _result(_todayKey, summary: '两行以内的仪表盘摘要。'),
+    final port = _FakePort(
+      reports: [
+        _result(
+          _daily(24),
+          summary: '较早的日报。',
+          generatedAt: DateTime.utc(2026, 8, 24, 1),
+        ),
+        _result(
+          _currentMonth,
+          summary: '最新保存的月报。',
+          generatedAt: DateTime.utc(2026, 8, 24, 2),
+        ),
+      ],
     );
     await _pumpWidget(
       tester,
@@ -140,51 +183,33 @@ void main() {
         body: ListView(padding: EdgeInsets.all(12), children: [AiRecapCard()]),
       ),
       port,
+      dashboardBounds: const DateRangeBounds(
+        start: '2026-08-23',
+        end: '2026-08-23',
+        label: '昨天',
+        supportedByAiRecap: false,
+      ),
     );
-    await tester.pump();
 
-    expect(find.byKey(const Key('ai-recap-dashboard-card')), findsOneWidget);
-    expect(find.text('两行以内的仪表盘摘要。'), findsOneWidget);
+    expect(find.text('最新保存的月报。'), findsOneWidget);
+    expect(find.text('月报'), findsOneWidget);
+    expect(find.text('较早的日报。'), findsNothing);
     expect(find.byKey(const Key('ai-recap-card-metadata')), findsOneWidget);
-    expect(find.textContaining('Flash · 生成于'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('ai-recap-dashboard-card'))).height,
-      inInclusiveRange(112, 152),
+      inInclusiveRange(116, 160),
     );
     expect(port.generateCalls, 0);
   });
 
-  testWidgets('evidence durations keep exact seconds instead of truncating', (
+  testWidgets('report actions are keyboard reachable and card is semantic', (
     tester,
   ) async {
-    final port = _FakeAiRecapPort(
-      latestResult: _result(
-        _todayKey,
-        summary: '短时活动。',
-        summaryEvidence: const [
-          AiRecapEvidence(appName: '终端', activeSeconds: 30),
-          AiRecapEvidence(appName: '编辑器', activeSeconds: 90),
-          AiRecapEvidence(appName: '浏览器', activeSeconds: 3599),
-          AiRecapEvidence(appName: 'IDE', activeSeconds: 3661),
-        ],
-      ),
-    );
-    await _pumpScreen(tester, port);
-
-    expect(find.textContaining('终端 30 秒'), findsOneWidget);
-    expect(find.textContaining('编辑器 1 分钟 30 秒'), findsOneWidget);
-    expect(find.textContaining('浏览器 59 分钟 59 秒'), findsOneWidget);
-    expect(find.textContaining('IDE 1 小时 1 分钟 1 秒'), findsOneWidget);
-  });
-
-  testWidgets('generate action is keyboard reachable and card is semantic', (
-    tester,
-  ) async {
-    final port = _FakeAiRecapPort();
+    final port = _FakePort();
     await _pumpScreen(tester, port);
 
     final generate = find.byKey(const Key('ai-recap-generate'));
-    for (var attempt = 0; attempt < 12; attempt++) {
+    for (var attempt = 0; attempt < 14; attempt++) {
       if (_focusIsInside(tester, generate)) break;
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
@@ -195,33 +220,29 @@ void main() {
     expect(port.generateCalls, 1);
 
     await _pumpWidget(tester, const AiRecapCard(), port);
-    expect(find.bySemanticsLabel(RegExp('AI 使用回顾，今日')), findsOneWidget);
+    final semantics = tester.ensureSemantics();
+    expect(find.bySemanticsLabel(RegExp('AI 时间报告')), findsOneWidget);
+    semantics.dispose();
   });
 
-  testWidgets('detail remains usable in a narrow desktop window', (
+  testWidgets('report page remains usable at 420 logical pixels', (
     tester,
   ) async {
-    final port = _FakeAiRecapPort();
-    await _pumpWidget(
-      tester,
-      const AiRecapScreen(),
-      port,
-      surfaceSize: const Size(420, 560),
-    );
+    final port = _FakePort(generated: _result(_daily(24), summary: '窄窗口报告内容。'));
+    await _pumpScreen(tester, port, surfaceSize: const Size(420, 620));
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const Key('ai-recap-range-selector')), findsOneWidget);
-    expect(find.byKey(const Key('ai-recap-model-selector')), findsOneWidget);
-
     final generate = find.byKey(const Key('ai-recap-generate'));
     await tester.ensureVisible(generate);
+    await tester.tap(generate);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    await tester.tap(generate);
+    final boundary = find.textContaining('不代表工作成果或绩效评价');
+    await tester.ensureVisible(boundary);
     await tester.pumpAndSettle();
-    expect(port.generateCalls, 1);
-    expect(find.byKey(const Key('ai-recap-result')), findsOneWidget);
+    expect(boundary, findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -238,30 +259,42 @@ bool _focusIsInside(WidgetTester tester, Finder target) {
   return found;
 }
 
-final AiRecapRangeKey _todayKey = AiRecapRangeKey(
-  scope: AiRecapScope.today,
+final DateTime _today = DateTime(2026, 8, 24); // Monday.
+
+final AiRecapRangeKey _currentWeek = AiRecapRangeKey(
+  scope: AiRecapScope.weekly,
   startDate: DateTime(2026, 8, 24),
   endDate: DateTime(2026, 8, 24),
 );
 
-const DateRangeBounds _todayBounds = DateRangeBounds(
-  start: '2026-08-24',
-  end: '2026-08-24',
-  label: '今日',
-  supportedByAiRecap: true,
+final AiRecapRangeKey _currentMonth = AiRecapRangeKey(
+  scope: AiRecapScope.monthly,
+  startDate: DateTime(2026, 8, 1),
+  endDate: DateTime(2026, 8, 24),
+);
+
+AiRecapRangeKey _daily(int day) => AiRecapRangeKey(
+  scope: AiRecapScope.daily,
+  startDate: DateTime(2026, 8, day),
+  endDate: DateTime(2026, 8, day),
 );
 
 Future<void> _pumpScreen(
   WidgetTester tester,
   AiRecapPort port, {
-  DateRangeBounds bounds = _todayBounds,
-}) => _pumpWidget(tester, const AiRecapScreen(), port, bounds: bounds);
+  Size surfaceSize = const Size(1100, 820),
+}) => _pumpWidget(
+  tester,
+  AiRecapScreen(now: _today),
+  port,
+  surfaceSize: surfaceSize,
+);
 
 Future<void> _pumpWidget(
   WidgetTester tester,
   Widget child,
   AiRecapPort port, {
-  DateRangeBounds bounds = _todayBounds,
+  DateRangeBounds? dashboardBounds,
   Size surfaceSize = const Size(1100, 820),
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
@@ -270,7 +303,8 @@ Future<void> _pumpWidget(
     ProviderScope(
       overrides: [
         aiRecapPortProvider.overrideWithValue(port),
-        dashboardRangeBoundsProvider.overrideWithValue(bounds),
+        if (dashboardBounds != null)
+          dashboardRangeBoundsProvider.overrideWithValue(dashboardBounds),
       ],
       child: MaterialApp(home: child),
     ),
@@ -281,41 +315,40 @@ Future<void> _pumpWidget(
 AiRecapResult _result(
   AiRecapRangeKey key, {
   required String summary,
-  List<AiRecapEvidence>? summaryEvidence,
+  DateTime? generatedAt,
   List<String> highlights = const ['保持了稳定节奏'],
   List<String> suggestions = const ['安排一次专注复盘'],
 }) => AiRecapResult(
   rangeKey: key,
-  generatedAt: DateTime.utc(2026, 8, 24, 1, 30),
+  generatedAt: generatedAt ?? DateTime.utc(2026, 8, 24, 1, 30),
   model: AiRecapModel.flash,
-  summary: AiRecapStatement(
-    text: summary,
-    evidence:
-        summaryEvidence ??
-        const [AiRecapEvidence(appName: 'Editor', activeSeconds: 3600)],
-  ),
+  summary: _statement(summary),
   highlights: highlights.map(_statement).toList(growable: false),
   suggestions: suggestions.map(_statement).toList(growable: false),
   totalActiveSeconds: 7200,
   applicationCount: 3,
+  topApplications: const [
+    AiRecapEvidence(appName: '编辑器', activeSeconds: 4200),
+    AiRecapEvidence(appName: '浏览器', activeSeconds: 2100),
+  ],
 );
 
 AiRecapStatement _statement(String text) => AiRecapStatement(
   text: text,
-  evidence: const [AiRecapEvidence(appName: 'Editor', activeSeconds: 3600)],
+  evidence: const [AiRecapEvidence(appName: '编辑器', activeSeconds: 4200)],
 );
 
-class _FakeAiRecapPort implements AiRecapPort {
-  _FakeAiRecapPort({
-    this.configured = true,
-    this.latestResult,
+class _FakePort implements AiRecapPort {
+  _FakePort({
+    List<AiRecapResult> reports = const [],
+    this.statusValue = const AiRecapProviderStatus(configured: true),
     this.generated,
     this.pending,
     this.failure,
-  });
+  }) : reports = List.unmodifiable(reports);
 
-  final bool configured;
-  final AiRecapResult? latestResult;
+  final List<AiRecapResult> reports;
+  final AiRecapProviderStatus statusValue;
   final AiRecapResult? generated;
   final Completer<AiRecapResult>? pending;
   final AiRecapFailure? failure;
@@ -323,21 +356,17 @@ class _FakeAiRecapPort implements AiRecapPort {
   AiRecapRangeKey? lastKey;
 
   @override
-  AiRecapProviderStatus status() =>
-      AiRecapProviderStatus(configured: configured);
+  AiRecapProviderStatus status() => statusValue;
 
   @override
-  AiRecapResult? latest(AiRecapRangeKey key) => latestResult;
+  List<AiRecapResult> latestReports() => reports;
 
   @override
-  Future<AiRecapResult> generate(
-    AiRecapRangeKey key,
-    AiRecapModel model,
-  ) async {
+  Future<AiRecapResult> generate(AiRecapRangeKey key) async {
     generateCalls++;
     lastKey = key;
     if (failure case final value?) throw value;
     if (pending case final value?) return value.future;
-    return generated ?? _result(key, summary: '新生成的回顾。');
+    return generated ?? _result(key, summary: '新生成的${key.scope.label}。');
   }
 }

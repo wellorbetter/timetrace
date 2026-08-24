@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
-/// Exact local-calendar bounds used to identify one recap.
+/// Exact local-calendar bounds used to identify one time report.
 ///
 /// Time-of-day information is deliberately discarded. Logical scope remains
-/// part of identity so "today" and "week to date" do not collide on Monday.
+/// part of identity so a daily and weekly report do not collide on Monday.
 @immutable
 class AiRecapRangeKey {
   AiRecapRangeKey({
@@ -32,10 +32,14 @@ class AiRecapRangeKey {
   bool get isValid {
     if (endDate.isBefore(startDate)) return false;
     return switch (scope) {
-      AiRecapScope.today => _sameDate(startDate, endDate),
-      AiRecapScope.weekToDate =>
+      AiRecapScope.daily => _sameDate(startDate, endDate),
+      AiRecapScope.weekly =>
         startDate.weekday == DateTime.monday &&
-            endDate.difference(startDate).inDays <= 6,
+            _calendarDayDifference(startDate, endDate) <= 6,
+      AiRecapScope.monthly =>
+        startDate.day == 1 &&
+            startDate.year == endDate.year &&
+            startDate.month == endDate.month,
       AiRecapScope.unsupported => false,
     };
   }
@@ -65,24 +69,36 @@ class AiRecapRangeKey {
       left.day == right.day;
 }
 
-/// Logical recap scope kept separate even when two scopes share date bounds.
+/// Closed report type kept separate even when two periods share date bounds.
 enum AiRecapScope {
-  today('today'),
-  weekToDate('week_to_date'),
+  daily('daily', '日报'),
+  weekly('weekly', '周报'),
+  monthly('monthly', '月报'),
   unsupported('unsupported');
 
-  const AiRecapScope(this.id);
+  const AiRecapScope(this.id, [this.label = '']);
 
   final String id;
+  final String label;
 
   bool get isSupported => this != unsupported;
 
   static AiRecapScope fromId(String value) => switch (value) {
-    'today' => today,
-    'week_to_date' => weekToDate,
+    'daily' => daily,
+    'weekly' => weekly,
+    'monthly' => monthly,
     _ => throw const FormatException('Unsupported AI recap scope'),
   };
 }
+
+int _calendarDayDifference(DateTime start, DateTime end) => DateTime.utc(
+  end.year,
+  end.month,
+  end.day,
+).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
+
+/// Redacted source of the credential currently used by the native service.
+enum AiCredentialSource { secureStore, legacyEnvironment, none, unavailable }
 
 /// DeepSeek models intentionally exposed by the built-in recap feature.
 enum AiRecapModel {
@@ -110,24 +126,36 @@ class AiRecapProviderStatus {
     this.serviceAvailable = true,
     this.providerName = 'DeepSeek',
     this.defaultModel = AiRecapModel.flash,
+    this.credentialSource = AiCredentialSource.none,
+    this.secureStorageAvailable = true,
+    this.environmentMigrationAvailable = false,
   });
 
   const AiRecapProviderStatus.unconfigured()
     : configured = false,
       serviceAvailable = true,
       providerName = 'DeepSeek',
-      defaultModel = AiRecapModel.flash;
+      defaultModel = AiRecapModel.flash,
+      credentialSource = AiCredentialSource.none,
+      secureStorageAvailable = true,
+      environmentMigrationAvailable = false;
 
   const AiRecapProviderStatus.unavailable()
     : configured = false,
       serviceAvailable = false,
       providerName = 'DeepSeek',
-      defaultModel = AiRecapModel.flash;
+      defaultModel = AiRecapModel.flash,
+      credentialSource = AiCredentialSource.unavailable,
+      secureStorageAvailable = false,
+      environmentMigrationAvailable = false;
 
   final bool configured;
   final bool serviceAvailable;
   final String providerName;
   final AiRecapModel defaultModel;
+  final AiCredentialSource credentialSource;
+  final bool secureStorageAvailable;
+  final bool environmentMigrationAvailable;
 
   @override
   bool operator ==(Object other) =>
@@ -136,11 +164,21 @@ class AiRecapProviderStatus {
           configured == other.configured &&
           serviceAvailable == other.serviceAvailable &&
           providerName == other.providerName &&
-          defaultModel == other.defaultModel;
+          defaultModel == other.defaultModel &&
+          credentialSource == other.credentialSource &&
+          secureStorageAvailable == other.secureStorageAvailable &&
+          environmentMigrationAvailable == other.environmentMigrationAvailable;
 
   @override
-  int get hashCode =>
-      Object.hash(configured, serviceAvailable, providerName, defaultModel);
+  int get hashCode => Object.hash(
+    configured,
+    serviceAvailable,
+    providerName,
+    defaultModel,
+    credentialSource,
+    secureStorageAvailable,
+    environmentMigrationAvailable,
+  );
 }
 
 /// One complete, validated recap returned by the native service.
@@ -155,6 +193,7 @@ class AiRecapResult {
     required this.suggestions,
     required this.totalActiveSeconds,
     required this.applicationCount,
+    this.topApplications = const [],
   });
 
   final AiRecapRangeKey rangeKey;
@@ -165,6 +204,7 @@ class AiRecapResult {
   final List<AiRecapStatement> suggestions;
   final int totalActiveSeconds;
   final int applicationCount;
+  final List<AiRecapEvidence> topApplications;
 }
 
 /// One exact aggregate row cited by a generated statement.
@@ -197,6 +237,8 @@ enum AiRecapFailureCode {
   authentication,
   rateLimited,
   providerUnavailable,
+  credentialStoreUnavailable,
+  localStorageUnavailable,
   invalidResponse,
   busy,
   bridgeUnavailable,

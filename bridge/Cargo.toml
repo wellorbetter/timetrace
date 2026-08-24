@@ -12,6 +12,8 @@ flutter_rust_bridge = "=2.12.0"
 anyhow = "1"
 chrono = "0.4"
 windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
@@ -23,6 +25,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+rusqlite.workspace = true
+zeroize = "1"
 
 [dev-dependencies]
 flutter_rust_bridge_codegen = "2"

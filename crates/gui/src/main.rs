@@ -574,14 +574,42 @@ fn extract_exe_path(cmd: &str) -> Option<String> {
         .unwrap_or(0);
     if start > end { return None; }
     let path = &cmd[start..end];
-    if path.starts_with('%') { Some(expand_env(path)) } else { Some(path.to_string()) }
+    if path.starts_with('%') { expand_allowed_env(path) } else { Some(path.to_string()) }
 }
 
-/// Expand %VAR% in a path using std::env::var.
-fn expand_env(path: &str) -> String {
-    let mut result = path.to_string();
-    for (k, v) in std::env::vars() {
-        result = result.replace(&format!("%{}%", k), &v);
+/// Expand only non-secret Windows path variables used by startup entries.
+/// Unknown variables fail closed instead of exposing arbitrary process state.
+fn expand_allowed_env(path: &str) -> Option<String> {
+    const ALLOWED: [&str; 9] = [
+        "SystemRoot", "windir", "ProgramFiles", "ProgramFiles(x86)",
+        "ProgramData", "SystemDrive", "LOCALAPPDATA", "APPDATA", "USERPROFILE",
+    ];
+    for name in ALLOWED {
+        let marker = format!("%{name}%");
+        if path.get(..marker.len()).is_some_and(|prefix| prefix.eq_ignore_ascii_case(&marker)) {
+            let value = std::env::var(name).ok()?;
+            return Some(format!("{value}{}", &path[marker.len()..]));
+        }
     }
-    result
+    None
+}
+
+#[cfg(test)]
+mod path_security_tests {
+    use super::extract_exe_path;
+
+    #[test]
+    fn startup_path_does_not_expand_arbitrary_environment_variables() {
+        assert_eq!(extract_exe_path(r"%DEEPSEEK_API_KEY%\secret.exe"), None);
+    }
+
+    #[test]
+    fn startup_path_expands_an_allowed_windows_path_variable() {
+        if let Ok(root) = std::env::var("SystemRoot") {
+            assert_eq!(
+                extract_exe_path(r"%SystemRoot%\System32\notepad.exe"),
+                Some(format!(r"{root}\System32\notepad.exe")),
+            );
+        }
+    }
 }

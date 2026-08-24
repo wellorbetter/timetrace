@@ -11,14 +11,14 @@ void main() {
       final port = BridgeAiRecapPort(api);
 
       expect(port.status().configured, isTrue);
-      expect(port.latest(_key)?.summary.text, '安全摘要');
-      final generated = await port.generate(_key, AiRecapModel.flash);
+      expect(port.latestReports().single.summary.text, '安全摘要');
+      final generated = await port.generate(_key);
 
       expect(generated.rangeKey, _key);
       expect(generated.totalActiveSeconds, 3600);
       expect(api.lastStart, '2026-08-24');
       expect(api.lastEnd, '2026-08-24');
-      expect(api.lastScope, 'today');
+      expect(api.lastScope, 'daily');
     },
   );
 
@@ -33,7 +33,7 @@ void main() {
         );
 
         await expectLater(
-          port.generate(_key, AiRecapModel.flash),
+          port.generate(_key),
           throwsA(
             isA<AiRecapFailure>().having(
               (failure) => failure.code,
@@ -49,7 +49,7 @@ void main() {
   test('rejects malformed replies and mismatched ranges', () async {
     final malformed = BridgeAiRecapPort(_FakeBridgeApi(emptyReply: true));
     await expectLater(
-      malformed.generate(_key, AiRecapModel.flash),
+      malformed.generate(_key),
       throwsA(
         isA<AiRecapFailure>().having(
           (failure) => failure.code,
@@ -62,7 +62,7 @@ void main() {
     final mismatched = BridgeAiRecapPort(
       _FakeBridgeApi(recap: _wireRecap(start: '2026-08-23')),
     );
-    expect(() => mismatched.latest(_key), throwsA(isA<AiRecapFailure>()));
+    expect(() => mismatched.latestReports(), throwsA(isA<AiRecapFailure>()));
 
     for (final invalidDate in [
       '2026-02-30',
@@ -73,7 +73,7 @@ void main() {
         _FakeBridgeApi(recap: _wireRecap(start: invalidDate)),
       );
       expect(
-        () => invalid.latest(_key),
+        () => invalid.latestReports(),
         throwsA(
           isA<AiRecapFailure>().having(
             (failure) => failure.code,
@@ -95,7 +95,7 @@ void main() {
 }
 
 final AiRecapRangeKey _key = AiRecapRangeKey(
-  scope: AiRecapScope.today,
+  scope: AiRecapScope.daily,
   startDate: DateTime(2026, 8, 24),
   endDate: DateTime(2026, 8, 24),
 );
@@ -116,7 +116,7 @@ const Map<String, AiRecapFailureCode> _errorCodes = {
 };
 
 wire.AiRecapDto _wireRecap({String start = '2026-08-24'}) => wire.AiRecapDto(
-  scope: 'today',
+  scope: 'daily',
   startDate: start,
   endDate: '2026-08-24',
   generatedAtUtc: '2026-08-24T01:30:00Z',
@@ -124,6 +124,9 @@ wire.AiRecapDto _wireRecap({String start = '2026-08-24'}) => wire.AiRecapDto(
   summary: _wireStatement('安全摘要'),
   highlights: [_wireStatement('亮点')],
   suggestions: [_wireStatement('建议')],
+  topApplications: const [
+    wire.AiRecapEvidenceDto(appName: 'Editor', activeSeconds: 3600),
+  ],
   totalActiveSeconds: 3600,
   applicationCount: 2,
 );
@@ -156,30 +159,24 @@ class _FakeBridgeApi implements AiRecapBridgeApi {
   wire.AiRecapStatusDto status() {
     if (throwOnStatus) throw StateError('bridge unavailable');
     return const wire.AiRecapStatusDto(
+      serviceAvailable: true,
       configured: true,
       provider: 'DeepSeek',
       defaultModel: 'deepseek-v4-flash',
+      credentialSource: 'secure_store',
+      secureStorageAvailable: true,
+      environmentMigrationAvailable: false,
     );
   }
 
   @override
-  wire.AiRecapDto? latest({
-    required String scope,
-    required String start,
-    required String end,
-  }) {
-    lastScope = scope;
-    lastStart = start;
-    lastEnd = end;
-    return recap;
-  }
+  List<wire.AiRecapDto> latestReports() => [?recap];
 
   @override
   Future<wire.AiRecapGenerateReplyDto> generate({
     required String scope,
     required String start,
     required String end,
-    required String model,
   }) async {
     lastScope = scope;
     lastStart = start;

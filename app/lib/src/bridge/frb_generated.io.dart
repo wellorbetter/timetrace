@@ -48,6 +48,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AiRecapConnectionReplyDto dco_decode_ai_recap_connection_reply_dto(
+    dynamic raw,
+  );
+
+  @protected
   AiRecapDto dco_decode_ai_recap_dto(dynamic raw);
 
   @protected
@@ -58,6 +63,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AiRecapGenerateReplyDto dco_decode_ai_recap_generate_reply_dto(dynamic raw);
+
+  @protected
+  AiRecapSettingsReplyDto dco_decode_ai_recap_settings_reply_dto(dynamic raw);
 
   @protected
   AiRecapStatementDto dco_decode_ai_recap_statement_dto(dynamic raw);
@@ -109,6 +117,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AiRecapDto> dco_decode_list_ai_recap_dto(dynamic raw);
 
   @protected
   List<AiRecapEvidenceDto> dco_decode_list_ai_recap_evidence_dto(dynamic raw);
@@ -218,6 +229,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AiRecapConnectionReplyDto sse_decode_ai_recap_connection_reply_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AiRecapDto sse_decode_ai_recap_dto(SseDeserializer deserializer);
 
   @protected
@@ -230,6 +246,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AiRecapGenerateReplyDto sse_decode_ai_recap_generate_reply_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AiRecapSettingsReplyDto sse_decode_ai_recap_settings_reply_dto(
     SseDeserializer deserializer,
   );
 
@@ -287,6 +308,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AiRecapDto> sse_decode_list_ai_recap_dto(SseDeserializer deserializer);
 
   @protected
   List<AiRecapEvidenceDto> sse_decode_list_ai_recap_evidence_dto(
@@ -427,6 +451,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ai_recap_connection_reply_dto(
+    AiRecapConnectionReplyDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ai_recap_dto(AiRecapDto self, SseSerializer serializer);
 
   @protected
@@ -444,6 +474,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ai_recap_generate_reply_dto(
     AiRecapGenerateReplyDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ai_recap_settings_reply_dto(
+    AiRecapSettingsReplyDto self,
     SseSerializer serializer,
   );
 
@@ -518,6 +554,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_ai_recap_dto(
+    List<AiRecapDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ai_recap_evidence_dto(
