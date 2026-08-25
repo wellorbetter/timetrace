@@ -167,6 +167,7 @@ void main() {
     );
 
     port.statusValue = const AiRecapProviderStatus(configured: true);
+    controller.synchronize();
     final invalid = AiRecapRangeKey(
       scope: AiRecapScope.weekly,
       startDate: DateTime(2026, 8, 25),
@@ -181,7 +182,47 @@ void main() {
   });
 
   test(
-    'cold build defers status reads and action failures stay redacted',
+    'free local provider generates without credential configuration',
+    () async {
+      final key = _weekly();
+      final port = _FakePort(
+        statusValue: const AiRecapProviderStatus(
+          ready: true,
+          selectedProvider: AiRecapProviderId.localSummary,
+          selectedModel: AiRecapModel.localSummary,
+          credentialSource: AiCredentialSource.notRequired,
+          secureStorageAvailable: false,
+        ),
+        generated: _result(
+          key,
+          '本地周报',
+          providerId: AiRecapProviderId.localSummary,
+          model: AiRecapModel.localSummary,
+        ),
+      );
+      final container = _container(port);
+      addTearDown(container.dispose);
+
+      final initial = container.read(aiRecapControllerProvider);
+      expect(initial.status.ready, isTrue);
+      expect(initial.status.requiresApiKey, isFalse);
+
+      await container.read(aiRecapControllerProvider.notifier).generate(key);
+
+      expect(port.generateCalls, 1);
+      expect(
+        container
+            .read(aiRecapControllerProvider)
+            .projection(key)
+            .result
+            ?.providerId,
+        AiRecapProviderId.localSummary,
+      );
+    },
+  );
+
+  test(
+    'cold build reads local status and action failures stay redacted',
     () async {
       final key = _daily(24);
       final port = _FakePort(throwOnStatus: true);
@@ -189,9 +230,9 @@ void main() {
       addTearDown(container.dispose);
 
       final coldState = container.read(aiRecapControllerProvider);
-      expect(coldState.status.serviceAvailable, isTrue);
-      expect(coldState.status.configured, isFalse);
-      expect(port.statusCalls, 0);
+      expect(coldState.status.serviceAvailable, isFalse);
+      expect(coldState.status.ready, isFalse);
+      expect(port.statusCalls, 1);
       await container.read(aiRecapControllerProvider.notifier).generate(key);
 
       final state = container.read(aiRecapControllerProvider);
@@ -250,10 +291,13 @@ AiRecapResult _result(
   AiRecapRangeKey key,
   String summary, {
   int generatedAtMinute = 0,
+  AiRecapProviderId providerId = AiRecapProviderId.deepSeek,
+  AiRecapModel model = AiRecapModel.flash,
 }) => AiRecapResult(
   rangeKey: key,
   generatedAt: DateTime.utc(2026, 8, 24, 1, generatedAtMinute),
-  model: AiRecapModel.flash,
+  providerId: providerId,
+  model: model,
   summary: _statement(summary),
   highlights: [_statement('保持稳定节奏')],
   suggestions: [_statement('安排一次复盘')],

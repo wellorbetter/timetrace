@@ -12,6 +12,11 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::ai_recap::AiRecapDto;
 
 const MAX_REPORT_JSON_BYTES: usize = 64 * 1024;
+const LOCAL_PROVIDER_ID: &str = "local_summary";
+const LOCAL_MODEL_ID: &str = "local-summary-v1";
+const DEEPSEEK_PROVIDER_ID: &str = "deepseek";
+const DEEPSEEK_DEFAULT_MODEL_ID: &str = "deepseek-v4-flash";
+const DEEPSEEK_PRO_MODEL_ID: &str = "deepseek-v4-pro";
 const CREATE_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS ai_report_settings (
     setting_key TEXT PRIMARY KEY NOT NULL,
@@ -40,6 +45,18 @@ pub enum AiReportStoreError {
     /// A report could not be serialized within the feature bound.
     #[error("AI report payload is invalid")]
     InvalidReport,
+    /// A provider/model preference was outside the feature allowlist.
+    #[error("AI report provider selection is invalid")]
+    InvalidSelection,
+}
+
+/// Persisted, non-secret provider/model selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiProviderSelectionRecord {
+    /// Closed provider identifier.
+    pub provider_id: String,
+    /// Closed model identifier belonging to the provider.
+    pub model_id: String,
 }
 
 /// Narrow persistence port for at most one report per report type.
@@ -54,10 +71,14 @@ pub trait AiReportStore: Send + Sync {
     fn save_latest_report(&self, report: &AiRecapDto) -> Result<(), AiReportStoreError>;
     /// Clears all persisted report results but preserves settings.
     fn clear_latest_reports(&self) -> Result<(), AiReportStoreError>;
-    /// Loads the persisted default model, if present.
-    fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError>;
-    /// Persists the validated default model.
-    fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError>;
+    /// Loads the atomically persisted provider/model selection.
+    fn load_provider_selection(&self) -> Result<AiProviderSelectionRecord, AiReportStoreError>;
+    /// Atomically persists one validated provider/model pair.
+    fn save_provider_selection(
+        &self,
+        provider_id: &str,
+        model_id: &str,
+    ) -> Result<(), AiReportStoreError>;
 }
 
 /// Fail-closed store used when AI tables cannot be initialized.
@@ -83,11 +104,15 @@ impl AiReportStore for UnavailableAiReportStore {
         Err(AiReportStoreError::Unavailable)
     }
 
-    fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
+    fn load_provider_selection(&self) -> Result<AiProviderSelectionRecord, AiReportStoreError> {
         Err(AiReportStoreError::Unavailable)
     }
 
-    fn save_default_model(&self, _model: &str) -> Result<(), AiReportStoreError> {
+    fn save_provider_selection(
+        &self,
+        _provider_id: &str,
+        _model_id: &str,
+    ) -> Result<(), AiReportStoreError> {
         Err(AiReportStoreError::Unavailable)
     }
 }
@@ -104,7 +129,7 @@ impl SqliteAiReportStore {
         Self::from_connection(connection)
     }
 
-    fn from_connection(connection: Connection) -> Result<Self, AiReportStoreError> {
+    fn from_connection(mut connection: Connection) -> Result<Self, AiReportStoreError> {
         connection.busy_timeout(Duration::from_millis(500))?;
         connection.pragma_update(None, "synchronous", "NORMAL")?;
         connection.pragma_update(None, "cache_size", -256_i64)?;
@@ -123,13 +148,9 @@ impl SqliteAiReportStore {
                 [],
             )?;
         }
-        // Remove the pre-release setting that could suppress the documented
-        // secure-store -> environment fallback. P0 intentionally persists only
-        // the non-secret default model in this table.
-        connection.execute(
-            "DELETE FROM ai_report_settings WHERE setting_key = 'environment_fallback_enabled'",
-            [],
-        )?;
+        if provider_settings_need_migration(&connection)? {
+            migrate_provider_settings(&mut connection)?;
+        }
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -152,16 +173,77 @@ impl SqliteAiReportStore {
             .optional()
             .map_err(Into::into)
     }
+}
 
-    fn save_setting(&self, key: &str, value: &str) -> Result<(), AiReportStoreError> {
-        let connection = self.lock()?;
-        connection.execute(
-            "INSERT INTO ai_report_settings (setting_key, setting_value) VALUES (?1, ?2) \
-             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value",
+fn provider_settings_need_migration(connection: &Connection) -> Result<bool, AiReportStoreError> {
+    let (current_settings, legacy_settings) = connection.query_row(
+        "SELECT \
+           COALESCE(SUM(CASE WHEN setting_key IN \
+             ('selected_provider', 'model.local_summary', 'model.deepseek') \
+             THEN 1 ELSE 0 END), 0), \
+           COALESCE(SUM(CASE WHEN setting_key IN \
+             ('default_model', 'environment_fallback_enabled') \
+             THEN 1 ELSE 0 END), 0) \
+         FROM ai_report_settings",
+        [],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+    )?;
+    Ok(current_settings != 3 || legacy_settings != 0)
+}
+
+fn migrate_provider_settings(connection: &mut Connection) -> Result<(), AiReportStoreError> {
+    let transaction = connection.transaction()?;
+    let selected_provider = transaction
+        .query_row(
+            "SELECT setting_value FROM ai_report_settings WHERE setting_key = 'selected_provider'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let legacy_model = transaction
+        .query_row(
+            "SELECT setting_value FROM ai_report_settings WHERE setting_key = 'default_model'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let has_legacy_report = transaction.query_row(
+        "SELECT EXISTS(SELECT 1 FROM ai_latest_reports WHERE schema_version = 1 LIMIT 1)",
+        [],
+        |row| row.get::<_, bool>(0),
+    )?;
+    let deepseek_model = match legacy_model.as_deref() {
+        Some(DEEPSEEK_PRO_MODEL_ID) => DEEPSEEK_PRO_MODEL_ID,
+        _ => DEEPSEEK_DEFAULT_MODEL_ID,
+    };
+    let selected_provider =
+        selected_provider
+            .as_deref()
+            .unwrap_or(if legacy_model.is_some() || has_legacy_report {
+                DEEPSEEK_PROVIDER_ID
+            } else {
+                LOCAL_PROVIDER_ID
+            });
+
+    for (key, value) in [
+        ("selected_provider", selected_provider),
+        ("model.local_summary", LOCAL_MODEL_ID),
+        ("model.deepseek", deepseek_model),
+    ] {
+        transaction.execute(
+            "INSERT OR IGNORE INTO ai_report_settings (setting_key, setting_value) VALUES (?1, ?2)",
             params![key, value],
         )?;
-        Ok(())
     }
+    // Remove pre-release compatibility rows after their values have been
+    // migrated. This also makes the steady-state startup path read-only.
+    transaction.execute(
+        "DELETE FROM ai_report_settings WHERE setting_key IN \
+         ('default_model', 'environment_fallback_enabled')",
+        [],
+    )?;
+    transaction.commit()?;
+    Ok(())
 }
 
 impl AiReportStore for SqliteAiReportStore {
@@ -219,17 +301,59 @@ impl AiReportStore for SqliteAiReportStore {
         Ok(())
     }
 
-    fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
-        self.load_setting("default_model")
+    fn load_provider_selection(&self) -> Result<AiProviderSelectionRecord, AiReportStoreError> {
+        let provider_id = self
+            .load_setting("selected_provider")?
+            .ok_or(AiReportStoreError::InvalidSelection)?;
+        let model_key = match provider_id.as_str() {
+            LOCAL_PROVIDER_ID => "model.local_summary",
+            DEEPSEEK_PROVIDER_ID => "model.deepseek",
+            _ => {
+                return Ok(AiProviderSelectionRecord {
+                    provider_id,
+                    model_id: String::new(),
+                });
+            }
+        };
+        let model_id = self
+            .load_setting(model_key)?
+            .ok_or(AiReportStoreError::InvalidSelection)?;
+        Ok(AiProviderSelectionRecord {
+            provider_id,
+            model_id,
+        })
     }
 
-    fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError> {
-        self.save_setting("default_model", model)
+    fn save_provider_selection(
+        &self,
+        provider_id: &str,
+        model_id: &str,
+    ) -> Result<(), AiReportStoreError> {
+        let model_key = match (provider_id, model_id) {
+            (LOCAL_PROVIDER_ID, LOCAL_MODEL_ID) => "model.local_summary",
+            (DEEPSEEK_PROVIDER_ID, DEEPSEEK_DEFAULT_MODEL_ID | DEEPSEEK_PRO_MODEL_ID) => {
+                "model.deepseek"
+            }
+            _ => return Err(AiReportStoreError::InvalidSelection),
+        };
+        let mut connection = self.lock()?;
+        let transaction = connection.transaction()?;
+        for (key, value) in [("selected_provider", provider_id), (model_key, model_id)] {
+            transaction.execute(
+                "INSERT INTO ai_report_settings (setting_key, setting_value) VALUES (?1, ?2) \
+                 ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value",
+                params![key, value],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use rusqlite::{Connection, params};
 
     use super::{AiReportStore, AiReportStoreError, MAX_REPORT_JSON_BYTES, SqliteAiReportStore};
@@ -244,6 +368,7 @@ mod tests {
             }],
         };
         AiRecapDto {
+            provider_id: "deepseek".to_owned(),
             scope: scope.to_owned(),
             start_date: "2026-08-24".to_owned(),
             end_date: "2026-08-24".to_owned(),
@@ -268,10 +393,16 @@ mod tests {
         )
         .expect("create report store");
 
-        assert_eq!(store.load_default_model().expect("load model"), None);
+        assert_eq!(
+            store.load_provider_selection().expect("load selection"),
+            super::AiProviderSelectionRecord {
+                provider_id: "local_summary".to_owned(),
+                model_id: "local-summary-v1".to_owned(),
+            }
+        );
         store
-            .save_default_model("deepseek-v4-pro")
-            .expect("save model");
+            .save_provider_selection("deepseek", "deepseek-v4-pro")
+            .expect("save selection");
         store
             .save_latest_report(&report("daily", "2026-08-24T10:00:00Z"))
             .expect("save daily report");
@@ -280,8 +411,11 @@ mod tests {
             .expect("replace daily report");
 
         assert_eq!(
-            store.load_default_model().expect("reload model").as_deref(),
-            Some("deepseek-v4-pro")
+            store.load_provider_selection().expect("reload selection"),
+            super::AiProviderSelectionRecord {
+                provider_id: "deepseek".to_owned(),
+                model_id: "deepseek-v4-pro".to_owned(),
+            }
         );
         let reports = store.load_latest_reports().expect("load reports");
         assert_eq!(reports.len(), 1);
@@ -295,12 +429,65 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(
-            store
-                .load_default_model()
-                .expect("settings preserved")
-                .as_deref(),
-            Some("deepseek-v4-pro")
+            store.load_provider_selection().expect("settings preserved"),
+            super::AiProviderSelectionRecord {
+                provider_id: "deepseek".to_owned(),
+                model_id: "deepseek-v4-pro".to_owned(),
+            }
         );
+    }
+
+    #[test]
+    fn reports_and_selection_survive_real_file_close_and_reopen() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "timetrace-ai-report-{}-{nonce}.sqlite",
+            std::process::id()
+        ));
+
+        {
+            let store = SqliteAiReportStore::open(path.clone()).expect("create file store");
+            store
+                .save_provider_selection("deepseek", "deepseek-v4-pro")
+                .expect("save provider selection");
+            store
+                .save_latest_report(&report("monthly", "2026-08-24T12:00:00Z"))
+                .expect("save monthly report");
+        }
+
+        {
+            let reopened = SqliteAiReportStore::open(path.clone()).expect("reopen file store");
+            assert_eq!(
+                reopened
+                    .load_provider_selection()
+                    .expect("load provider selection"),
+                super::AiProviderSelectionRecord {
+                    provider_id: "deepseek".to_owned(),
+                    model_id: "deepseek-v4-pro".to_owned(),
+                }
+            );
+            let reports = reopened.load_latest_reports().expect("load reports");
+            assert_eq!(reports.len(), 1);
+            assert_eq!(reports[0].scope, "monthly");
+        }
+
+        let _ = std::fs::remove_file(path.with_extension("sqlite-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite-shm"));
+        std::fs::remove_file(path).expect("remove temporary report store");
+    }
+
+    #[test]
+    fn initialized_provider_settings_need_no_steady_state_migration() {
+        let store = SqliteAiReportStore::from_connection(
+            Connection::open_in_memory().expect("in-memory database"),
+        )
+        .expect("create report store");
+        let connection = store.lock().expect("report store lock");
+
+        assert!(!super::provider_settings_need_migration(&connection).expect("migration check"));
     }
 
     #[test]
@@ -323,6 +510,86 @@ mod tests {
             .expect("query legacy setting");
 
         assert_eq!(legacy_setting, None);
+    }
+
+    #[test]
+    fn legacy_default_model_migrates_to_deepseek_selection() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        connection
+            .execute_batch(
+                "CREATE TABLE ai_report_settings (\
+                   setting_key TEXT PRIMARY KEY NOT NULL,\
+                   setting_value TEXT NOT NULL\
+                 );\
+                 INSERT INTO ai_report_settings (setting_key, setting_value)\
+                 VALUES ('default_model', 'deepseek-v4-pro');",
+            )
+            .expect("seed legacy model");
+
+        let store = SqliteAiReportStore::from_connection(connection).expect("migrate store");
+
+        assert_eq!(
+            store.load_provider_selection().expect("migrated selection"),
+            super::AiProviderSelectionRecord {
+                provider_id: "deepseek".to_owned(),
+                model_id: "deepseek-v4-pro".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn legacy_report_without_provider_migrates_and_loads_as_deepseek() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        connection
+            .execute_batch(super::CREATE_SCHEMA)
+            .expect("create legacy-compatible schema");
+        let mut legacy_json = serde_json::to_value(report("weekly", "2026-08-24T11:00:00Z"))
+            .expect("serialize report");
+        legacy_json
+            .as_object_mut()
+            .expect("report object")
+            .remove("provider_id");
+        connection
+            .execute(
+                "INSERT INTO ai_latest_reports \
+                 (scope, schema_version, generated_at_utc, report_json) \
+                 VALUES ('weekly', 1, '2026-08-24T11:00:00Z', ?1)",
+                [legacy_json.to_string()],
+            )
+            .expect("seed legacy report");
+
+        let store = SqliteAiReportStore::from_connection(connection).expect("migrate store");
+
+        assert_eq!(
+            store.load_provider_selection().expect("migrated selection"),
+            super::AiProviderSelectionRecord {
+                provider_id: "deepseek".to_owned(),
+                model_id: "deepseek-v4-flash".to_owned(),
+            }
+        );
+        let reports = store.load_latest_reports().expect("load legacy report");
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].provider_id, "deepseek");
+    }
+
+    #[test]
+    fn invalid_provider_model_pair_is_rejected_atomically() {
+        let store = SqliteAiReportStore::from_connection(
+            Connection::open_in_memory().expect("in-memory database"),
+        )
+        .expect("create report store");
+        let original = store.load_provider_selection().expect("initial selection");
+
+        assert!(matches!(
+            store.save_provider_selection("deepseek", "local-summary-v1"),
+            Err(AiReportStoreError::InvalidSelection)
+        ));
+        assert_eq!(
+            store
+                .load_provider_selection()
+                .expect("preserved selection"),
+            original
+        );
     }
 
     #[test]

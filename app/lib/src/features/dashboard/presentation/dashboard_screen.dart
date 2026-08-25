@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
+import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_card.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection.dart';
@@ -16,10 +17,72 @@ import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_p
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
 
+@visibleForTesting
+AiRecapRangeKey dashboardReportRangeKey(
+  DateRangeSelection selection,
+  DateRangeBounds bounds,
+) {
+  final scope = bounds.supportedByAiRecap
+      ? switch (selection.range) {
+          DateRange.week => AiRecapScope.weekly,
+          DateRange.month => AiRecapScope.monthly,
+          DateRange.today ||
+          DateRange.yesterday ||
+          DateRange.custom => AiRecapScope.daily,
+        }
+      : AiRecapScope.unsupported;
+  return AiRecapRangeKey.fromIsoDates(bounds.start, bounds.end, scope: scope);
+}
+
+/// Number of physical pages used by the bounded dashboard carousel.
+///
+/// Two sentinel pages make the first/last transition a one-page animation:
+/// `[last, first, ..., last, first]`. A single logical page needs no sentinel.
+@visibleForTesting
+int dashboardCarouselItemCount(int logicalPageCount) {
+  assert(logicalPageCount >= 0);
+  return logicalPageCount <= 1 ? logicalPageCount : logicalPageCount + 2;
+}
+
+/// Maps a bounded carousel page (including sentinels) to its logical page.
+@visibleForTesting
+int dashboardCarouselLogicalPage(int physicalPage, int logicalPageCount) {
+  assert(logicalPageCount > 0);
+  assert(
+    physicalPage >= 0 &&
+        physicalPage < dashboardCarouselItemCount(logicalPageCount),
+  );
+  if (logicalPageCount == 1) return 0;
+  if (physicalPage == 0) return logicalPageCount - 1;
+  if (physicalPage == logicalPageCount + 1) return 0;
+  return physicalPage - 1;
+}
+
+/// Returns the non-sentinel physical page for a logical page.
+@visibleForTesting
+int dashboardCarouselPhysicalPage(int logicalPage, int logicalPageCount) {
+  assert(logicalPageCount > 0);
+  assert(logicalPage >= 0 && logicalPage < logicalPageCount);
+  return logicalPageCount == 1 ? 0 : logicalPage + 1;
+}
+
+/// Re-centres a sentinel on the equivalent real page without changing content.
+@visibleForTesting
+int dashboardCarouselCanonicalPage(int physicalPage, int logicalPageCount) {
+  assert(logicalPageCount > 0);
+  assert(
+    physicalPage >= 0 &&
+        physicalPage < dashboardCarouselItemCount(logicalPageCount),
+  );
+  if (logicalPageCount == 1) return 0;
+  if (physicalPage == 0) return logicalPageCount;
+  if (physicalPage == logicalPageCount + 1) return 1;
+  return physicalPage;
+}
+
 /// Single-page dashboard (概览 + 日历日记 merged):
-/// stats → data carousel (柱状图/饼图/汇总) → calendar → app list → journal.
-/// The carousel holds three DATA DISPLAYS; the calendar is a permanent
-/// element (day selection drives 汇总 + 日记).
+/// stats → carousel (时间报告/图表/汇总/应用) + calendar → journal.
+/// The top range is the single source for both statistics and reports.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -84,12 +147,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   List<AppUsageItem> _visibleApps = const [];
 
   /// Carousel state + shared calendar day.
-  /// Infinite paging: the controller starts at a large aligned page so
-  /// wrap-around (last → first) is a normal one-page step, no sweep.
-  static const int _kCarouselBase = 200000;
-  late final int _carouselInit;
+  ///
+  /// The controller owns only the finite real pages plus two wrap sentinels.
+  /// It never creates a new controller or retains repeated logical pages.
   late final PageController _carouselCtrl;
-  int _carouselAbs = 0;
+  int _carouselPage = 0;
   int _carouselIndex = 0;
 
   /// 页码圆点指示器：切页只更新它，不重建整页。
@@ -104,9 +166,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     super.initState();
     final order = ref.read(dashboardOrderProvider);
     final pageCount = order.isEmpty ? 1 : order.length;
-    _carouselInit = (_kCarouselBase ~/ pageCount) * pageCount;
-    _carouselCtrl = PageController(initialPage: _carouselInit);
-    _carouselAbs = _carouselInit;
+    _carouselPage = dashboardCarouselPhysicalPage(0, pageCount);
+    _carouselCtrl = PageController(initialPage: _carouselPage);
     // Calendar heatmap → 时段分布 page: jump there and select the hour.
     ref.listenManual(hourlyFocusProvider, (prev, next) {
       if (next == null) return;
@@ -123,15 +184,33 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     super.dispose();
   }
 
-  /// Jump to a real carousel page using the shortest direction.
+  /// Jump to a real carousel page without animating across intermediate pages.
+  /// Adjacent logical pages still animate by exactly one physical page.
   void _goToReal(int realIdx, {bool animate = false}) {
     final order = ref.read(dashboardOrderProvider);
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
-    final delta = (realIdx - _carouselIndex + pageCount) % pageCount;
-    final target = _carouselAbs + delta;
-    if (target == _carouselAbs) return;
-    if (animate) {
+    if (realIdx == _carouselIndex) return;
+
+    final forward = (realIdx - _carouselIndex + pageCount) % pageCount;
+    final backward = (_carouselIndex - realIdx + pageCount) % pageCount;
+    final isAdjacent = forward == 1 || backward == 1;
+    var target = dashboardCarouselPhysicalPage(realIdx, pageCount);
+    var animateOnePage = animate && isAdjacent;
+    if (animateOnePage) {
+      final direction = forward == 1 ? 1 : -1;
+      target = _carouselPage + direction;
+      final lastPhysical = dashboardCarouselItemCount(pageCount) - 1;
+      if (target < 0 || target > lastPhysical) {
+        target =
+            dashboardCarouselCanonicalPage(_carouselPage, pageCount) +
+            direction;
+        animateOnePage = false;
+      }
+    }
+
+    if (!_carouselCtrl.hasClients) return;
+    if (animateOnePage) {
       _carouselCtrl.animateToPage(
         target,
         duration: const Duration(milliseconds: 200),
@@ -140,6 +219,57 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     } else {
       _carouselCtrl.jumpToPage(target);
     }
+  }
+
+  /// Move one physical page. Sentinels make both wrap directions adjacent.
+  void _stepCarousel(int direction, int pageCount) {
+    assert(direction == -1 || direction == 1);
+    if (pageCount <= 1 || !_carouselCtrl.hasClients) return;
+
+    var target = _carouselPage + direction;
+    final lastPhysical = dashboardCarouselItemCount(pageCount) - 1;
+    var animateOnePage = true;
+    if (target < 0 || target > lastPhysical) {
+      target =
+          dashboardCarouselCanonicalPage(_carouselPage, pageCount) + direction;
+      animateOnePage = false;
+    }
+    if (!animateOnePage) {
+      _carouselCtrl.jumpToPage(target);
+      return;
+    }
+    _carouselCtrl.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onCarouselPageChanged(int physicalPage, int pageCount) {
+    final logicalPage = dashboardCarouselLogicalPage(physicalPage, pageCount);
+    _carouselPage = physicalPage;
+    _carouselIndex = logicalPage;
+    _carouselDot.value = logicalPage;
+  }
+
+  void _settleCarousel(int pageCount) {
+    final physicalPage = _carouselPage;
+    final canonicalPage = dashboardCarouselCanonicalPage(
+      physicalPage,
+      pageCount,
+    );
+    if (canonicalPage == physicalPage) return;
+
+    // Wait until the swipe/arrow transition has painted the sentinel, then
+    // replace it with the identical real page without another animation.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_carouselCtrl.hasClients ||
+          _carouselPage != physicalPage) {
+        return;
+      }
+      _carouselCtrl.jumpToPage(canonicalPage);
+    });
   }
 
   /// Select/deselect an app and load its page breakdown. `fromAppsPage`
@@ -244,10 +374,19 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget _buildPage(
     String key, {
     required DateTime day,
+    required DateRangeSelection selection,
+    required DateRangeBounds bounds,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
     final Widget page = switch (key) {
+      'ai_report' => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: AiRecapCard(
+          rangeKey: dashboardReportRangeKey(selection, bounds),
+          rangeLabel: bounds.label,
+        ),
+      ),
       'bar' => apps.isEmpty
           ? _placeholder('暂无使用数据')
           : AppChartSection(
@@ -339,7 +478,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         .where((a) => a.totalSeconds > 0)
         .toList(growable: false);
     final sel = ref.watch(dashboardRangeProvider);
-    final calDay = ref.watch(dashboardRangeBoundsProvider).endDate;
+    final bounds = ref.watch(dashboardRangeBoundsProvider);
+    final calDay = bounds.endDate;
     _visibleApps = apps;
     _measureCalendar();
 
@@ -392,8 +532,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                const AiRecapCard(),
                 // First-launch hint when the current range has no data yet
                 if (apps.isEmpty)
                   Card(
@@ -442,34 +580,60 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                     color: scheme.primary,
                                   ),
                                   tooltip: '上一个视图',
-                                  // 无缝轮播：永远只移动一页，首尾互切不再横扫。
-                                  onPressed: () => _carouselCtrl.previousPage(
-                                    duration: const Duration(
-                                      milliseconds: 200,
-                                    ),
-                                    curve: Curves.easeOut,
-                                  ),
+                                  onPressed: pageCount > 1
+                                      ? () => _stepCarousel(-1, pageCount)
+                                      : null,
                                 ),
                                 Expanded(
-                                  child: PageView.builder(
-                                    controller: _carouselCtrl,
-                                    onPageChanged: (i) {
-                                      _carouselAbs = i;
-                                      _carouselIndex = i % pageCount;
-                                      _carouselDot.value = _carouselIndex;
+                                  child: NotificationListener<
+                                      ScrollEndNotification>(
+                                    onNotification: (notification) {
+                                      if (notification.metrics.axis ==
+                                          Axis.horizontal) {
+                                        _settleCarousel(pageCount);
+                                      }
+                                      return false;
                                     },
-                                    itemCount: _carouselInit * 2,
-                                    itemBuilder: (context, i) =>
-                                        _KeepAlivePage(
-                                      // 每页独立绘制层，切页滑动时只移动已缓存的画布，避免重绘卡顿。
-                                      child: RepaintBoundary(
-                                        child: _buildPage(
-                                          order[i % pageCount],
-                                          day: calDay,
-                                          order: order,
-                                          apps: apps,
-                                        ),
+                                    child: PageView.builder(
+                                      controller: _carouselCtrl,
+                                      onPageChanged: (i) =>
+                                          _onCarouselPageChanged(i, pageCount),
+                                      itemCount: dashboardCarouselItemCount(
+                                        pageCount,
                                       ),
+                                      itemBuilder: (context, physicalPage) {
+                                        final logicalPage =
+                                            dashboardCarouselLogicalPage(
+                                          physicalPage,
+                                          pageCount,
+                                        );
+                                        final viewKey = order[logicalPage];
+                                        return KeyedSubtree(
+                                          key: ValueKey(
+                                            'dashboard-carousel-'
+                                            '$physicalPage-$viewKey',
+                                          ),
+                                          child: KeyedSubtree(
+                                            // Sentinel and canonical copies
+                                            // share the logical page's scroll
+                                            // state; the outer key stays
+                                            // physically unique.
+                                            key: PageStorageKey<String>(
+                                              'dashboard-carousel-$viewKey',
+                                            ),
+                                            child: RepaintBoundary(
+                                              child: _buildPage(
+                                                viewKey,
+                                                day: calDay,
+                                                selection: sel,
+                                                bounds: bounds,
+                                                order: order,
+                                                apps: apps,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
@@ -481,13 +645,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                     color: scheme.primary,
                                   ),
                                   tooltip: '下一个视图',
-                                  // Wrap-around: last page goes to first
-                                  onPressed: () => _carouselCtrl.nextPage(
-                                    duration: const Duration(
-                                      milliseconds: 200,
-                                    ),
-                                    curve: Curves.easeOut,
-                                  ),
+                                  onPressed: pageCount > 1
+                                      ? () => _stepCarousel(1, pageCount)
+                                      : null,
                                 ),
                               ],
                             ),
@@ -628,29 +788,5 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         );
       },
     );
-  }
-}
-
-/// Keeps a carousel page alive so swiping back doesn't rebuild heavy
-/// charts. Pages still update via didUpdateWidget when the range/day
-/// changes, so data stays fresh.
-class _KeepAlivePage extends StatefulWidget {
-  const _KeepAlivePage({required this.child});
-
-  final Widget child;
-
-  @override
-  State<_KeepAlivePage> createState() => _KeepAlivePageState();
-}
-
-class _KeepAlivePageState extends State<_KeepAlivePage>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return widget.child;
   }
 }

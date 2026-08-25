@@ -2,6 +2,7 @@ import 'package:timetrace_app/src/bridge/ai_recap.dart' as wire;
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_recap_port.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
+import 'package:timetrace_app/src/features/ai_recap/infrastructure/bridge_ai_credential_port.dart';
 
 /// Small seam around generated FRB methods so mapping is testable without FFI.
 abstract interface class AiRecapBridgeApi {
@@ -45,16 +46,7 @@ class BridgeAiRecapPort implements AiRecapPort {
   @override
   AiRecapProviderStatus status() {
     try {
-      final value = _api.status();
-      return AiRecapProviderStatus(
-        configured: value.configured,
-        serviceAvailable: value.serviceAvailable,
-        providerName: value.provider,
-        defaultModel: AiRecapModel.fromId(value.defaultModel),
-        credentialSource: _credentialSource(value.credentialSource),
-        secureStorageAvailable: value.secureStorageAvailable,
-        environmentMigrationAvailable: value.environmentMigrationAvailable,
-      );
+      return mapAiRecapStatus(_api.status());
     } catch (_) {
       return const AiRecapProviderStatus.unavailable();
     }
@@ -120,13 +112,19 @@ AiRecapResult _mapRecap(wire.AiRecapDto value, {AiRecapRangeKey? expectedKey}) {
       scope: AiRecapScope.fromId(value.scope),
     );
     final generatedAt = DateTime.parse(value.generatedAtUtc).toUtc();
+    final provider = AiRecapProviderId.fromId(value.providerId);
+    final model = AiRecapModel.fromId(value.model);
     if (!key.isValid || (expectedKey != null && key != expectedKey)) {
       throw const FormatException('Mismatched recap range');
+    }
+    if (model.providerId != provider) {
+      throw const FormatException('Mismatched recap provider and model');
     }
     return AiRecapResult(
       rangeKey: key,
       generatedAt: generatedAt,
-      model: AiRecapModel.fromId(value.model),
+      providerId: provider,
+      model: model,
       summary: _mapStatement(value.summary),
       highlights: List.unmodifiable(value.highlights.map(_mapStatement)),
       suggestions: List.unmodifiable(value.suggestions.map(_mapStatement)),
@@ -173,19 +171,15 @@ AiRecapStatement _mapStatement(wire.AiRecapStatementDto value) {
   );
 }
 
-AiCredentialSource _credentialSource(String value) => switch (value) {
-  'secure_store' => AiCredentialSource.secureStore,
-  'legacy_environment' => AiCredentialSource.legacyEnvironment,
-  'none' => AiCredentialSource.none,
-  'unavailable' => AiCredentialSource.unavailable,
-  _ => throw const FormatException('Unknown credential source'),
-};
-
 AiRecapFailure _mapFailure(wire.AiRecapErrorDto value) {
   final code = switch (value.code) {
     'not_configured' => AiRecapFailureCode.notConfigured,
     'invalid_range' => AiRecapFailureCode.invalidRange,
+    'unsupported_provider' => AiRecapFailureCode.unsupportedProvider,
     'unsupported_model' => AiRecapFailureCode.unsupportedModel,
+    'provider_not_ready' => AiRecapFailureCode.providerNotReady,
+    'connection_test_not_supported' =>
+      AiRecapFailureCode.connectionTestNotSupported,
     'no_usage_data' => AiRecapFailureCode.noUsageData,
     'request_too_large' => AiRecapFailureCode.requestTooLarge,
     'network' => AiRecapFailureCode.network,

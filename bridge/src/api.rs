@@ -235,7 +235,7 @@ impl TimeTraceApi {
         }
     }
 
-    /// Redacted DeepSeek configuration state; never exposes credential data.
+    /// Redacted report-provider state; never exposes credential data.
     #[frb(sync)]
     pub fn ai_recap_status(&self) -> AiRecapStatusDto {
         self.ai_recap.status()
@@ -258,27 +258,35 @@ impl TimeTraceApi {
         self.ai_recap.latest_reports()
     }
 
-    /// Securely creates or replaces the DeepSeek API key.
-    pub fn save_ai_recap_api_key(&self, api_key: String) -> AiRecapSettingsReplyDto {
-        self.ai_recap.save_api_key(api_key)
+    /// Securely creates or replaces a credential for one closed provider.
+    pub fn save_ai_recap_api_key(
+        &self,
+        provider_id: String,
+        api_key: String,
+    ) -> AiRecapSettingsReplyDto {
+        self.ai_recap.save_api_key(provider_id, api_key)
     }
 
-    /// Explicitly imports the legacy environment key into secure storage.
-    pub fn import_ai_recap_environment_key(&self) -> AiRecapSettingsReplyDto {
-        self.ai_recap.import_environment_api_key()
+    /// Explicitly imports a provider's legacy environment key into secure storage.
+    pub fn import_ai_recap_environment_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
+        self.ai_recap.import_environment_api_key(provider_id)
     }
 
-    /// Removes the secure API key; a legacy environment key may become active again.
-    pub fn delete_ai_recap_api_key(&self) -> AiRecapSettingsReplyDto {
-        self.ai_recap.delete_api_key()
+    /// Removes one provider's secure key; its environment fallback may become active.
+    pub fn delete_ai_recap_api_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
+        self.ai_recap.delete_api_key(provider_id)
     }
 
-    /// Saves the default DeepSeek model used by subsequent report generation.
-    pub fn set_ai_recap_default_model(&self, model: String) -> AiRecapSettingsReplyDto {
-        self.ai_recap.set_default_model(model)
+    /// Atomically saves a validated provider/model selection.
+    pub fn set_ai_recap_provider_selection(
+        &self,
+        provider_id: String,
+        model_id: String,
+    ) -> AiRecapSettingsReplyDto {
+        self.ai_recap.set_provider_selection(provider_id, model_id)
     }
 
-    /// Explicitly tests DeepSeek credentials without sending usage aggregates.
+    /// Explicitly tests the selected provider without sending usage aggregates.
     pub fn test_ai_recap_connection(&self) -> AiRecapConnectionReplyDto {
         self.ai_recap.test_connection()
     }

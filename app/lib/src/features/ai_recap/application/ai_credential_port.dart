@@ -1,6 +1,6 @@
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 
-/// A deliberately narrow boundary for managing the DeepSeek credential.
+/// A deliberately narrow boundary for report-provider selection and secrets.
 ///
 /// Implementations must never return, log, or otherwise expose credential
 /// material. The only observable credential information is the redacted
@@ -8,12 +8,23 @@ import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart'
 abstract interface class AiCredentialPort {
   AiRecapProviderStatus status();
 
-  Future<AiRecapProviderStatus> saveApiKey(String apiKey);
+  Future<AiRecapProviderStatus> saveApiKey(
+    String apiKey, {
+    AiRecapProviderId? provider,
+  });
 
-  Future<AiRecapProviderStatus> removeApiKey();
+  Future<AiRecapProviderStatus> removeApiKey({AiRecapProviderId? provider});
 
-  Future<AiRecapProviderStatus> importEnvironmentApiKey();
+  Future<AiRecapProviderStatus> importEnvironmentApiKey({
+    AiRecapProviderId? provider,
+  });
 
+  Future<AiRecapProviderStatus> setProviderSelection(
+    AiRecapProviderId provider,
+    AiRecapModel model,
+  );
+
+  /// Compatibility entry point that selects the provider owning [model].
   Future<AiRecapProviderStatus> setDefaultModel(AiRecapModel model);
 
   /// Tests only provider authentication and availability.
@@ -26,7 +37,10 @@ abstract interface class AiCredentialPort {
 enum AiCredentialFailureCode {
   notConfigured,
   invalidKey,
+  unsupportedProvider,
   unsupportedModel,
+  providerNotReady,
+  connectionTestNotSupported,
   secureStorageUnavailable,
   localStorageUnavailable,
   authentication,
@@ -56,13 +70,25 @@ class UnavailableAiCredentialPort implements AiCredentialPort {
   AiRecapProviderStatus status() => const AiRecapProviderStatus.unavailable();
 
   @override
-  Future<AiRecapProviderStatus> importEnvironmentApiKey() => _unavailable();
+  Future<AiRecapProviderStatus> importEnvironmentApiKey({
+    AiRecapProviderId? provider,
+  }) => _unavailable();
 
   @override
-  Future<AiRecapProviderStatus> removeApiKey() => _unavailable();
+  Future<AiRecapProviderStatus> removeApiKey({AiRecapProviderId? provider}) =>
+      _unavailable();
 
   @override
-  Future<AiRecapProviderStatus> saveApiKey(String apiKey) => _unavailable();
+  Future<AiRecapProviderStatus> saveApiKey(
+    String apiKey, {
+    AiRecapProviderId? provider,
+  }) => _unavailable();
+
+  @override
+  Future<AiRecapProviderStatus> setProviderSelection(
+    AiRecapProviderId provider,
+    AiRecapModel model,
+  ) => _unavailable();
 
   @override
   Future<AiRecapProviderStatus> setDefaultModel(AiRecapModel model) =>

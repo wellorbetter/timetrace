@@ -50,6 +50,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AiModelOptionDto dco_decode_ai_model_option_dto(dynamic raw);
+
+  @protected
+  AiProviderOptionDto dco_decode_ai_provider_option_dto(dynamic raw);
+
+  @protected
   AiRecapConnectionReplyDto dco_decode_ai_recap_connection_reply_dto(
     dynamic raw,
   );
@@ -119,6 +125,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AiModelOptionDto> dco_decode_list_ai_model_option_dto(dynamic raw);
+
+  @protected
+  List<AiProviderOptionDto> dco_decode_list_ai_provider_option_dto(dynamic raw);
 
   @protected
   List<AiRecapDto> dco_decode_list_ai_recap_dto(dynamic raw);
@@ -231,6 +243,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AiModelOptionDto sse_decode_ai_model_option_dto(SseDeserializer deserializer);
+
+  @protected
+  AiProviderOptionDto sse_decode_ai_provider_option_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AiRecapConnectionReplyDto sse_decode_ai_recap_connection_reply_dto(
     SseDeserializer deserializer,
   );
@@ -310,6 +330,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AiModelOptionDto> sse_decode_list_ai_model_option_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AiProviderOptionDto> sse_decode_list_ai_provider_option_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<AiRecapDto> sse_decode_list_ai_recap_dto(SseDeserializer deserializer);
@@ -453,6 +483,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ai_model_option_dto(
+    AiModelOptionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ai_provider_option_dto(
+    AiProviderOptionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ai_recap_connection_reply_dto(
     AiRecapConnectionReplyDto self,
     SseSerializer serializer,
@@ -556,6 +598,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_ai_model_option_dto(
+    List<AiModelOptionDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ai_provider_option_dto(
+    List<AiProviderOptionDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ai_recap_dto(

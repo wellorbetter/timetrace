@@ -29,7 +29,7 @@ enum AiCredentialOperation {
   save,
   remove,
   importEnvironment,
-  updateModel,
+  updateSelection,
   testConnection,
 }
 
@@ -89,7 +89,7 @@ class AiCredentialController extends Notifier<AiCredentialState> {
     );
   }
 
-  Future<bool> saveApiKey(String value) async {
+  Future<bool> saveApiKey(String value, {AiRecapProviderId? provider}) async {
     if (state.busy) return false;
     final apiKey = value.trim();
     if (apiKey.isEmpty) {
@@ -101,28 +101,52 @@ class AiCredentialController extends Notifier<AiCredentialState> {
     }
     return _runStatusOperation(
       AiCredentialOperation.save,
-      () => _port.saveApiKey(apiKey),
+      () => _port.saveApiKey(apiKey, provider: provider),
     );
   }
 
-  Future<bool> removeApiKey() =>
-      _runStatusOperation(AiCredentialOperation.remove, _port.removeApiKey);
+  Future<bool> removeApiKey({AiRecapProviderId? provider}) =>
+      _runStatusOperation(
+        AiCredentialOperation.remove,
+        () => _port.removeApiKey(provider: provider),
+      );
 
-  Future<bool> importEnvironmentApiKey() => _runStatusOperation(
-    AiCredentialOperation.importEnvironment,
-    _port.importEnvironmentApiKey,
-  );
+  Future<bool> importEnvironmentApiKey({AiRecapProviderId? provider}) =>
+      _runStatusOperation(
+        AiCredentialOperation.importEnvironment,
+        () => _port.importEnvironmentApiKey(provider: provider),
+      );
 
-  Future<bool> setDefaultModel(AiRecapModel model) async {
-    if (state.status.defaultModel == model) return true;
+  Future<bool> setProviderSelection(
+    AiRecapProviderId provider,
+    AiRecapModel model,
+  ) async {
+    if (model.providerId != provider) {
+      state = state.copyWith(
+        failure: AiCredentialFailureCode.unsupportedModel,
+        connectionTestSucceeded: null,
+      );
+      return false;
+    }
+    if (state.status.selectedProvider == provider &&
+        state.status.selectedModel == model) {
+      return true;
+    }
     return _runStatusOperation(
-      AiCredentialOperation.updateModel,
-      () => _port.setDefaultModel(model),
+      AiCredentialOperation.updateSelection,
+      () => _port.setProviderSelection(provider, model),
     );
   }
+
+  Future<bool> setDefaultModel(AiRecapModel model) =>
+      setProviderSelection(model.providerId, model);
 
   Future<bool> testConnection() async {
-    if (state.busy || !state.status.configured) return false;
+    if (state.busy ||
+        !state.status.ready ||
+        !state.status.supportsConnectionTest) {
+      return false;
+    }
     state = state.copyWith(
       operation: AiCredentialOperation.testConnection,
       failure: null,

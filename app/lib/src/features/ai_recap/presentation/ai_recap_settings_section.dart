@@ -27,6 +27,7 @@ class _AiRecapSettingsSectionState
   Widget build(BuildContext context) {
     final state = ref.watch(aiCredentialControllerProvider);
     final colors = Theme.of(context).colorScheme;
+    final selectedProvider = state.status.selectedProviderOption;
 
     return Column(
       key: const ValueKey('ai-service-section'),
@@ -43,7 +44,7 @@ class _AiRecapSettingsSectionState
               ),
               const SizedBox(width: 8),
               Text(
-                'AI 服务',
+                'AI 与报告',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -51,92 +52,80 @@ class _AiRecapSettingsSectionState
             ],
           ),
         ),
-        Card(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          color: colors.surface.withValues(alpha: 0.72),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colors.outlineVariant),
+        _ProviderRow(
+          status: state.status,
+          enabled: !state.busy && state.status.serviceAvailable,
+          onSelected: _setProvider,
+        ),
+        const Divider(indent: 12, endIndent: 12),
+        if ((selectedProvider?.models.length ?? 0) == 1)
+          ListTile(
+            key: const ValueKey('ai-fixed-model'),
+            leading: const Icon(Icons.memory_outlined),
+            title: const Text('生成器版本'),
+            subtitle: Text(state.status.selectedModel.description),
+            trailing: Text(selectedProvider!.models.single.displayName),
+          )
+        else ...[
+          ListTile(
+            leading: const Icon(Icons.tune_outlined),
+            title: const Text('默认模型'),
+            subtitle: Text(state.status.selectedModel.description),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ProviderRow(status: state.status),
-                const SizedBox(height: 16),
-                Divider(height: 1, color: colors.outlineVariant),
-                const SizedBox(height: 16),
-                _CredentialEditor(
-                  controller: _apiKeyController,
-                  state: state,
-                  onSave: _saveApiKey,
-                  onImport: _importEnvironmentApiKey,
-                  onRemove: _confirmRemoveApiKey,
+          Column(
+            key: const ValueKey('ai-default-model-selector'),
+            children: [
+              for (final model in selectedProvider?.models ?? const [])
+                _ModelTile(
+                  option: model,
+                  selected: state.status.selectedModel == model.model,
+                  enabled: !state.busy && state.status.serviceAvailable,
+                  onSelected: _setDefaultModel,
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  '默认模型',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                SegmentedButton<AiRecapModel>(
-                  key: const ValueKey('ai-default-model-selector'),
-                  segments: const [
-                    ButtonSegment(
-                      value: AiRecapModel.flash,
-                      label: Text('快速（Flash）'),
-                      icon: Icon(Icons.bolt_outlined),
-                    ),
-                    ButtonSegment(
-                      value: AiRecapModel.pro,
-                      label: Text('深度（Pro）'),
-                      icon: Icon(Icons.psychology_outlined),
-                    ),
-                  ],
-                  selected: {state.status.defaultModel},
-                  showSelectedIcon: false,
-                  expandedInsets: EdgeInsets.zero,
-                  onSelectionChanged:
-                      state.busy || !state.status.serviceAvailable
-                      ? null
-                      : (selection) async {
-                          await _setDefaultModel(selection.first);
-                        },
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  state.status.defaultModel == AiRecapModel.flash
-                      ? 'Flash 适合快速生成日报；可随时在这里切换默认模型。'
-                      : 'Pro 适合需要更深入观察的周报和月报。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _ConnectionTest(state: state, onTest: _testConnection),
-                if (state.failure != null) ...[
-                  const SizedBox(height: 12),
-                  _InlineMessage(
-                    icon: Icons.error_outline,
-                    color: colors.error,
-                    text: _failureMessage(state.failure!),
-                  ),
-                ] else if (state.connectionTestSucceeded == true) ...[
-                  const SizedBox(height: 12),
-                  _InlineMessage(
-                    icon: Icons.check_circle_outline,
-                    color: colors.primary,
-                    text: '连接成功，可以生成报告。',
-                  ),
-                ],
-              ],
+            ],
+          ),
+        ],
+        if (state.status.requiresApiKey) ...[
+          const Divider(indent: 12, endIndent: 12),
+          ListTile(
+            leading: const Icon(Icons.key_outlined),
+            title: const Text('API Key'),
+            subtitle: Text(_statusDescription(state.status)),
+            trailing: _StatusBadge(status: state.status),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            child: _CredentialEditor(
+              controller: _apiKeyController,
+              state: state,
+              onSave: _saveApiKey,
+              onImport: _importEnvironmentApiKey,
+              onRemove: _confirmRemoveApiKey,
             ),
           ),
-        ),
+        ],
+        if (state.status.supportsConnectionTest) ...[
+          const Divider(indent: 12, endIndent: 12),
+          _ConnectionTest(state: state, onTest: _testConnection),
+        ],
+        if (state.failure != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: _InlineMessage(
+              icon: Icons.error_outline,
+              color: colors.error,
+              text: _failureMessage(state.failure!),
+            ),
+          )
+        else if (state.connectionTestSucceeded == true)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: _InlineMessage(
+              icon: Icons.check_circle_outline,
+              color: colors.primary,
+              text: '连接成功，可以生成报告。',
+            ),
+          ),
       ],
     );
   }
@@ -204,9 +193,24 @@ class _AiRecapSettingsSectionState
   Future<void> _setDefaultModel(AiRecapModel model) async {
     final updated = await ref
         .read(aiCredentialControllerProvider.notifier)
-        .setDefaultModel(model);
+        .setProviderSelection(
+          ref.read(aiCredentialControllerProvider).status.selectedProvider,
+          model,
+        );
     if (!mounted) return;
     if (updated) _showMessage('默认模型已更新');
+  }
+
+  Future<void> _setProvider(AiRecapProviderId provider) async {
+    final status = ref.read(aiCredentialControllerProvider).status;
+    final option = status.providers
+        .where((candidate) => candidate.id == provider)
+        .firstOrNull;
+    final model = option?.models.firstOrNull?.model;
+    if (model == null) return;
+    await ref
+        .read(aiCredentialControllerProvider.notifier)
+        .setProviderSelection(provider, model);
   }
 
   Future<void> _testConnection() async {
@@ -221,43 +225,82 @@ class _AiRecapSettingsSectionState
 }
 
 class _ProviderRow extends StatelessWidget {
-  const _ProviderRow({required this.status});
+  const _ProviderRow({
+    required this.status,
+    required this.enabled,
+    required this.onSelected,
+  });
 
   final AiRecapProviderStatus status;
+  final bool enabled;
+  final ValueChanged<AiRecapProviderId> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.cloud_outlined, color: colors.onSurfaceVariant),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'DeepSeek',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+    return ListTile(
+      leading: const Icon(Icons.cloud_outlined),
+      title: const Text('服务提供方'),
+      subtitle: Text(
+        status.selectedProviderOption?.description ?? '选择报告的生成方式。',
+      ),
+      trailing: DropdownButtonHideUnderline(
+        child: DropdownButton<AiRecapProviderId>(
+          key: const ValueKey('ai-provider-selector'),
+          value: status.selectedProvider,
+          items: [
+            for (final provider in status.providers)
+              DropdownMenuItem(
+                value: provider.id,
+                child: Text(provider.displayName),
               ),
-              const SizedBox(height: 2),
-              Text(
-                _statusDescription(status),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-              ),
-            ],
-          ),
+          ],
+          onChanged: enabled
+              ? (provider) {
+                  if (provider != null && provider != status.selectedProvider) {
+                    onSelected(provider);
+                  }
+                }
+              : null,
         ),
-        const SizedBox(width: 8),
-        _StatusBadge(status: status),
-      ],
+      ),
     );
   }
+}
+
+class _ModelTile extends StatelessWidget {
+  const _ModelTile({
+    required this.option,
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final AiRecapModelOption option;
+  final bool selected;
+  final bool enabled;
+  final ValueChanged<AiRecapModel> onSelected;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    dense: true,
+    contentPadding: const EdgeInsets.only(left: 52, right: 12),
+    leading: Icon(
+      option.model == AiRecapModel.flash
+          ? Icons.bolt_outlined
+          : option.model == AiRecapModel.pro
+          ? Icons.psychology_outlined
+          : Icons.computer_outlined,
+    ),
+    title: Text(option.displayName),
+    subtitle: Text(option.model.description),
+    trailing: Icon(
+      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+      color: selected ? Theme.of(context).colorScheme.primary : null,
+    ),
+    enabled: enabled,
+    selected: selected,
+    onTap: enabled ? () => onSelected(option.model) : null,
+  );
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -291,6 +334,12 @@ class _StatusBadge extends StatelessWidget {
         '未配置',
         colors.surfaceContainerHighest,
         colors.onSurfaceVariant,
+      ),
+      AiCredentialSource.notRequired => (
+        Icons.offline_bolt_outlined,
+        '无需密钥',
+        colors.primaryContainer,
+        colors.onPrimaryContainer,
       ),
       AiCredentialSource.unavailable => (
         Icons.cloud_off_outlined,
@@ -348,22 +397,6 @@ class _CredentialEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'API Key',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          hasStoredKey
-              ? '密钥已安全保存在本机。输入新密钥可直接替换；已保存内容不会重新显示。'
-              : '密钥将安全保存在本机，不会写入普通配置、日志或报告。',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
             final field = TextField(
@@ -458,26 +491,18 @@ class _ConnectionTest extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final testing = state.operation == AiCredentialOperation.testConnection;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        OutlinedButton.icon(
-          key: const ValueKey('ai-test-connection-button'),
-          onPressed: state.status.configured && !state.busy ? onTest : null,
-          icon: testing
-              ? _ButtonProgress(color: colors.primary)
-              : const Icon(Icons.wifi_tethering_outlined),
-          label: Text(testing ? '正在测试连接…' : '测试连接'),
-        ),
-        Text(
-          '测试只验证服务连接，不会发送任何使用数据。',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-        ),
-      ],
+    return ListTile(
+      leading: const Icon(Icons.wifi_tethering_outlined),
+      title: const Text('连接检查'),
+      subtitle: const Text('只验证服务连接，不会发送任何使用数据。'),
+      trailing: OutlinedButton.icon(
+        key: const ValueKey('ai-test-connection-button'),
+        onPressed: state.status.ready && !state.busy ? onTest : null,
+        icon: testing
+            ? _ButtonProgress(color: colors.primary)
+            : const Icon(Icons.wifi_tethering_outlined),
+        label: Text(testing ? '正在测试连接…' : '测试连接'),
+      ),
     );
   }
 }
@@ -527,14 +552,18 @@ String _statusDescription(AiRecapProviderStatus status) {
     AiCredentialSource.secureStore => 'API Key 已保存在本机安全凭据中，TimeTrace 不会显示或记录它。',
     AiCredentialSource.legacyEnvironment => '当前使用系统环境变量中的 API Key，可主动导入到应用设置。',
     AiCredentialSource.none => '还未配置 API Key，配置后才能手动生成时间报告。',
-    AiCredentialSource.unavailable => 'AI 服务暂时不可用；TimeTrace 的记录与统计不受影响。',
+    AiCredentialSource.notRequired => '本地生成无需 API Key，数据不会离开设备。',
+    AiCredentialSource.unavailable => '报告生成暂时不可用；TimeTrace 的记录与统计不受影响。',
   };
 }
 
 String _failureMessage(AiCredentialFailureCode code) => switch (code) {
   AiCredentialFailureCode.notConfigured => '还未配置 DeepSeek API Key，请先保存或导入密钥。',
   AiCredentialFailureCode.invalidKey => '请输入有效的 DeepSeek API Key。',
+  AiCredentialFailureCode.unsupportedProvider => '所选生成方式暂不受支持，请重新选择。',
   AiCredentialFailureCode.unsupportedModel => '所选模型暂不受支持，请重新选择 Flash 或 Pro。',
+  AiCredentialFailureCode.providerNotReady => '所选生成方式尚未配置完成。',
+  AiCredentialFailureCode.connectionTestNotSupported => '当前生成方式不需要测试连接。',
   AiCredentialFailureCode.secureStorageUnavailable => '无法访问本机安全凭据存储，请稍后重试。',
   AiCredentialFailureCode.localStorageUnavailable => '无法保存 AI 设置，请检查本机存储后重试。',
   AiCredentialFailureCode.authentication => 'DeepSeek 未接受此 API Key，请检查后重新保存。',
@@ -544,6 +573,5 @@ String _failureMessage(AiCredentialFailureCode code) => switch (code) {
   AiCredentialFailureCode.providerUnavailable => 'DeepSeek 服务暂时不可用，请稍后重试。',
   AiCredentialFailureCode.invalidResponse => 'DeepSeek 返回了无法识别的结果，请稍后重试。',
   AiCredentialFailureCode.busy => '已有 AI 操作正在进行，请稍后再试。',
-  AiCredentialFailureCode.bridgeUnavailable =>
-    'AI 服务组件暂时不可用，请重启 TimeTrace 后重试。',
+  AiCredentialFailureCode.bridgeUnavailable => '报告生成组件暂时不可用，请重启 TimeTrace 后重试。',
 };

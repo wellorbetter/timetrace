@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_screen.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
@@ -109,8 +108,8 @@ GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
       builder: (context, state, child) => AppShell(child: child),
       routes: [
         GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
-        GoRoute(path: '/reports', builder: (_, _) => const AiRecapScreen()),
-        GoRoute(path: '/ai-recap', redirect: (_, _) => '/reports'),
+        GoRoute(path: '/reports', redirect: (_, _) => '/dashboard'),
+        GoRoute(path: '/ai-recap', redirect: (_, _) => '/dashboard'),
         GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       ],
     ),

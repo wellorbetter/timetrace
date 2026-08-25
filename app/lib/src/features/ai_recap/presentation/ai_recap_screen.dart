@@ -7,21 +7,45 @@ import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart'
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_report_period.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
 
-/// Manual daily, weekly and monthly time reports.
+/// Legacy full-page host kept for isolated previews and widget tests.
 ///
-/// Opening the page, changing report type and navigating periods are local.
-/// DeepSeek is contacted only after the user presses the generate button.
-class AiRecapScreen extends ConsumerStatefulWidget {
+/// Product navigation never instantiates this host; the dashboard renders
+/// [AiRecapLinkedSection]. This wrapper remains only as an isolated test seam.
+class AiRecapScreen extends StatelessWidget {
   const AiRecapScreen({super.key, this.now});
+
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('时间报告')),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980),
+          child: AiRecapSection(now: now),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Legacy selectable report host retained only for isolated range tests.
+///
+/// Opening the dashboard, changing report type and navigating periods are
+/// local. A cloud provider is contacted only after the user presses generate.
+class AiRecapSection extends ConsumerStatefulWidget {
+  const AiRecapSection({super.key, this.now});
 
   /// Test seam for deterministic local-calendar periods.
   final DateTime? now;
 
   @override
-  ConsumerState<AiRecapScreen> createState() => _AiRecapScreenState();
+  ConsumerState<AiRecapSection> createState() => _AiRecapSectionState();
 }
 
-class _AiRecapScreenState extends ConsumerState<AiRecapScreen> {
+class _AiRecapSectionState extends ConsumerState<AiRecapSection> {
   late AiReportPeriod _period;
   Timer? _midnightTimer;
 
@@ -30,10 +54,6 @@ class _AiRecapScreenState extends ConsumerState<AiRecapScreen> {
     super.initState();
     _period = AiReportPeriod.current(AiRecapScope.daily, now: widget.now);
     _scheduleMidnightRefresh();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(aiRecapControllerProvider.notifier).synchronize();
-    });
   }
 
   @override
@@ -74,107 +94,346 @@ class _AiRecapScreenState extends ConsumerState<AiRecapScreen> {
         displayedResult != null && displayedResult.rangeKey != selectedKey;
     final controller = ref.read(aiRecapControllerProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/dashboard');
-            }
-          },
+    return Column(
+      key: const Key('ai-recap-dashboard-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ReportControls(
+          period: _period,
+          generating: projection.generating,
+          busy: state.pendingKey != null,
+          ready: state.status.ready,
+          serviceAvailable: state.status.serviceAvailable,
+          providerName: state.status.providerName,
+          hasReport: projection.result != null,
+          onScopeChanged: (scope) => setState(() {
+            _period = AiReportPeriod.current(scope, now: widget.now);
+          }),
+          onPrevious: () => setState(() {
+            _period = _period.previous();
+          }),
+          onNext: _period.canGoNext
+              ? () => setState(() {
+                  _period = _period.next();
+                })
+              : null,
+          onGenerate:
+              state.status.ready &&
+                  state.status.serviceAvailable &&
+                  state.pendingKey == null
+              ? () => controller.generate(selectedKey)
+              : null,
         ),
-        title: const Text('AI 时间报告'),
+        if (!state.status.serviceAvailable) ...[
+          const SizedBox(height: 12),
+          const _Notice(
+            key: Key('ai-recap-service-unavailable'),
+            icon: Icons.sync_problem_outlined,
+            message: 'AI 报告本地服务暂不可用，请重启 TimeTrace。时间统计不受影响。',
+          ),
+        ] else if (!state.status.ready) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('ai-recap-not-configured'),
+            icon: Icons.key_off_outlined,
+            message: '${state.status.providerName} 还未配置完成，请前往设置。',
+            actionLabel: '去设置',
+            onAction: () => context.push('/settings'),
+          ),
+        ],
+        if (projection.failure case final failure?) ...[
+          const SizedBox(height: 12),
+          _ErrorNotice(
+            failure: failure,
+            onRetry:
+                failure.retryable &&
+                    state.status.ready &&
+                    state.status.serviceAvailable &&
+                    state.pendingKey == null
+                ? () => controller.generate(selectedKey)
+                : null,
+          ),
+        ],
+        if (showingSavedReport) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('ai-report-saved-fallback'),
+            icon: Icons.history_outlined,
+            message: projection.generating
+                ? '正在生成所选${_period.scope.label}，下方继续显示上一份已保存报告。'
+                : '所选周期尚无报告，下方显示最近保存的${_period.scope.label}：'
+                      '${_formatRange(displayedResult.rangeKey)}。',
+          ),
+        ],
+        const SizedBox(height: 20),
+        if (displayedResult case final result?)
+          _ReportResult(result: result, generating: projection.generating)
+        else
+          _EmptyReport(period: _period, generating: projection.generating),
+      ],
+    );
+  }
+}
+
+/// AI report content whose range is owned by the dashboard.
+///
+/// Unlike [AiRecapSection], this widget has no local range state. Every
+/// projection and generation action uses the latest [rangeKey] received from
+/// the dashboard.
+class AiRecapLinkedSection extends ConsumerWidget {
+  const AiRecapLinkedSection({
+    super.key,
+    required this.rangeKey,
+    required this.rangeLabel,
+  });
+
+  final AiRecapRangeKey rangeKey;
+  final String rangeLabel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(aiRecapControllerProvider);
+    final rangeIsFuture = _isFutureRange(rangeKey, DateTime.now());
+    final rangeCanGenerate = rangeKey.isValid && !rangeIsFuture;
+    final projection = state.projection(rangeKey);
+    final latestOfType = state.latestReportFor(rangeKey.scope);
+    final canShowLatestOfType =
+        projection.result == null &&
+        (projection.generating || projection.failure != null);
+    final displayedResult =
+        projection.result ?? (canShowLatestOfType ? latestOfType : null);
+    final showingSavedReport =
+        displayedResult != null && displayedResult.rangeKey != rangeKey;
+    final controller = ref.read(aiRecapControllerProvider.notifier);
+
+    return Column(
+      key: const Key('ai-recap-dashboard-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _LinkedReportControls(
+          rangeKey: rangeKey,
+          rangeLabel: rangeLabel,
+          generating: projection.generating,
+          busy: state.pendingKey != null,
+          ready: state.status.ready,
+          serviceAvailable: state.status.serviceAvailable,
+          providerName: state.status.providerName,
+          hasReport: projection.result != null,
+          onGenerate:
+              rangeCanGenerate &&
+                  state.status.ready &&
+                  state.status.serviceAvailable &&
+                  state.pendingKey == null
+              ? () => controller.generate(rangeKey)
+              : null,
+        ),
+        if (!rangeCanGenerate) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('ai-recap-invalid-range'),
+            icon: Icons.event_busy_outlined,
+            message: rangeIsFuture || rangeKey.scope == AiRecapScope.unsupported
+                ? '未来日期不能生成报告，请在顶部选择今天或过去日期。'
+                : '当前日期范围不能生成报告，请在顶部重新选择。',
+          ),
+        ] else if (!state.status.serviceAvailable) ...[
+          const SizedBox(height: 12),
+          const _Notice(
+            key: Key('ai-recap-service-unavailable'),
+            icon: Icons.sync_problem_outlined,
+            message: 'AI 报告本地服务暂不可用，请重启 TimeTrace。时间统计不受影响。',
+          ),
+        ] else if (!state.status.ready) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('ai-recap-not-configured'),
+            icon: Icons.key_off_outlined,
+            message: '${state.status.providerName} 还未配置完成，请前往设置。',
+            actionLabel: '去设置',
+            onAction: () => context.push('/settings'),
+          ),
+        ],
+        if (projection.failure case final failure?) ...[
+          const SizedBox(height: 12),
+          _ErrorNotice(
+            failure: failure,
+            onRetry:
+                failure.retryable &&
+                    rangeCanGenerate &&
+                    state.status.ready &&
+                    state.status.serviceAvailable &&
+                    state.pendingKey == null
+                ? () => controller.generate(rangeKey)
+                : null,
+          ),
+        ],
+        if (showingSavedReport) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('ai-report-saved-fallback'),
+            icon: Icons.history_outlined,
+            message: projection.generating
+                ? '正在生成当前范围报告，下方继续显示上一份已保存报告。'
+                : '当前范围尚无报告，下方显示最近保存的${rangeKey.scope.label}：'
+                      '${_formatRange(displayedResult.rangeKey)}。',
+          ),
+        ],
+        const SizedBox(height: 20),
+        if (displayedResult case final result?)
+          _ReportResult(result: result, generating: projection.generating)
+        else
+          _LinkedEmptyReport(
+            generating: projection.generating,
+            canGenerate: rangeCanGenerate,
+          ),
+      ],
+    );
+  }
+}
+
+class _LinkedReportControls extends StatelessWidget {
+  const _LinkedReportControls({
+    required this.rangeKey,
+    required this.rangeLabel,
+    required this.generating,
+    required this.busy,
+    required this.ready,
+    required this.serviceAvailable,
+    required this.providerName,
+    required this.hasReport,
+    required this.onGenerate,
+  });
+
+  final AiRecapRangeKey rangeKey;
+  final String rangeLabel;
+  final bool generating;
+  final bool busy;
+  final bool ready;
+  final bool serviceAvailable;
+  final String providerName;
+  final bool hasReport;
+  final VoidCallback? onGenerate;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final rangeSummary = Semantics(
+      key: const Key('ai-recap-linked-range'),
+      liveRegion: true,
+      label: '当前报告范围：$rangeLabel，${_formatRange(rangeKey)}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rangeLabel,
+            key: const Key('ai-report-period-label'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatRange(rangeKey),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 980),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    );
+    final generateButton = FilledButton.icon(
+      key: const Key('ai-recap-generate'),
+      onPressed: onGenerate,
+      icon: busy
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.auto_awesome, size: 18),
+      label: Text(
+        generating
+            ? '正在生成…'
+            : busy
+            ? '其他报告正在生成…'
+            : hasReport
+            ? '重新生成报告'
+            : '生成报告',
+      ),
+    );
+
+    return Card(
+      key: const Key('ai-recap-linked-controls'),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                _ReportControls(
-                  period: _period,
-                  generating: projection.generating,
-                  busy: state.pendingKey != null,
-                  configured: state.status.configured,
-                  serviceAvailable: state.status.serviceAvailable,
-                  hasReport: projection.result != null,
-                  onScopeChanged: (scope) => setState(() {
-                    _period = AiReportPeriod.current(scope, now: widget.now);
-                  }),
-                  onPrevious: () => setState(() {
-                    _period = _period.previous();
-                  }),
-                  onNext: _period.canGoNext
-                      ? () => setState(() {
-                          _period = _period.next();
-                        })
-                      : null,
-                  onGenerate:
-                      state.status.configured &&
-                          state.status.serviceAvailable &&
-                          state.pendingKey == null
-                      ? () => controller.generate(selectedKey)
-                      : null,
+                Icon(Icons.auto_awesome_outlined, color: colors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  '时间报告',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
-                if (!state.status.serviceAvailable) ...[
-                  const SizedBox(height: 12),
-                  const _Notice(
-                    key: Key('ai-recap-service-unavailable'),
-                    icon: Icons.sync_problem_outlined,
-                    message: 'AI 报告本地服务暂不可用，请重启 TimeTrace。时间统计不受影响。',
-                  ),
-                ] else if (!state.status.configured) ...[
-                  const SizedBox(height: 12),
-                  _Notice(
-                    key: const Key('ai-recap-not-configured'),
-                    icon: Icons.key_off_outlined,
-                    message: '还未配置 DeepSeek API Key，配置后才能生成报告。',
-                    actionLabel: '去设置',
-                    onAction: () => context.push('/settings'),
-                  ),
-                ],
-                if (projection.failure case final failure?) ...[
-                  const SizedBox(height: 12),
-                  _ErrorNotice(
-                    failure: failure,
-                    onRetry:
-                        failure.retryable &&
-                            state.status.configured &&
-                            state.status.serviceAvailable &&
-                            state.pendingKey == null
-                        ? () => controller.generate(selectedKey)
-                        : null,
-                  ),
-                ],
-                if (showingSavedReport) ...[
-                  const SizedBox(height: 12),
-                  _Notice(
-                    key: const Key('ai-report-saved-fallback'),
-                    icon: Icons.history_outlined,
-                    message: projection.generating
-                        ? '正在生成所选${_period.scope.label}，下方继续显示上一份已保存报告。'
-                        : '所选周期尚无报告，下方显示最近保存的${_period.scope.label}：'
-                              '${_formatRange(displayedResult.rangeKey)}。',
-                  ),
-                ],
-                const SizedBox(height: 20),
-                if (displayedResult case final result?)
-                  _ReportResult(
-                    result: result,
-                    generating: projection.generating,
-                  )
-                else
-                  _EmptyReport(
-                    period: _period,
-                    generating: projection.generating,
-                  ),
               ],
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              _linkedProviderDescription(providerName),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 520) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      rangeSummary,
+                      const SizedBox(height: 12),
+                      generateButton,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: rangeSummary),
+                    const SizedBox(width: 16),
+                    generateButton,
+                  ],
+                );
+              },
+            ),
+            const Divider(height: 25),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.shield_outlined, size: 19, color: colors.primary),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    providerName.contains('本地')
+                        ? '完全在本机生成，不会发送任何使用数据。切换顶部范围也不会联网。'
+                        : '仅发送应用名称与聚合时长；不会发送窗口标题、按键、文件路径、'
+                              '可执行路径或日记。切换顶部范围不会联网。',
+                  ),
+                ),
+              ],
+            ),
+            if (!ready || !serviceAvailable) ...[
+              const SizedBox(height: 8),
+              Text(
+                !serviceAvailable ? '报告生成服务不可用。' : '请先在设置中完成报告生成配置。',
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -186,8 +445,9 @@ class _ReportControls extends StatelessWidget {
     required this.period,
     required this.generating,
     required this.busy,
-    required this.configured,
+    required this.ready,
     required this.serviceAvailable,
+    required this.providerName,
     required this.hasReport,
     required this.onScopeChanged,
     required this.onPrevious,
@@ -198,8 +458,9 @@ class _ReportControls extends StatelessWidget {
   final AiReportPeriod period;
   final bool generating;
   final bool busy;
-  final bool configured;
+  final bool ready;
   final bool serviceAvailable;
+  final String providerName;
   final bool hasReport;
   final ValueChanged<AiRecapScope> onScopeChanged;
   final VoidCallback onPrevious;
@@ -246,14 +507,14 @@ class _ReportControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '按周期回看时间投入',
+              '时间报告',
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 4),
             Text(
-              '选择日报、周报或月报。只有点击生成时才会连接 DeepSeek。',
+              _providerDescription(providerName),
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
@@ -323,18 +584,20 @@ class _ReportControls extends StatelessWidget {
               children: [
                 Icon(Icons.shield_outlined, size: 19, color: colors.primary),
                 const SizedBox(width: 9),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    '仅发送应用名称与聚合时长；不会发送窗口标题、按键、文件路径、'
-                    '可执行路径或日记。打开页面、切换周期都不会联网。',
+                    providerName.contains('本地')
+                        ? '完全在本机生成，不会发送任何使用数据。切换报告类型和周期也不会联网。'
+                        : '仅发送应用名称与聚合时长；不会发送窗口标题、按键、文件路径、'
+                              '可执行路径或日记。切换报告类型和周期不会联网。',
                   ),
                 ),
               ],
             ),
-            if (!configured || !serviceAvailable) ...[
+            if (!ready || !serviceAvailable) ...[
               const SizedBox(height: 8),
               Text(
-                !serviceAvailable ? '本地 AI 服务不可用。' : '请先在设置中配置 AI 服务。',
+                !serviceAvailable ? '报告生成服务不可用。' : '请先在设置中完成报告生成配置。',
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
             ],
@@ -362,7 +625,7 @@ class _ReportResult extends StatelessWidget {
           if (generating) ...[
             Semantics(
               liveRegion: true,
-              label: '正在生成新的 AI 时间报告，已保存内容仍可阅读',
+              label: '正在生成新的时间报告，已保存内容仍可阅读',
               child: const LinearProgressIndicator(
                 key: Key('ai-recap-inline-progress'),
               ),
@@ -621,7 +884,8 @@ class _CapabilityBoundary extends StatelessWidget {
               child: Text(
                 '报告只解释应用使用时长，不代表工作成果或绩效评价。\n'
                 '${result.rangeKey.scope.label} · '
-                '${_formatRange(result.rangeKey)} · ${result.model.label} · '
+                '${_formatRange(result.rangeKey)} · '
+                '${_providerLabel(result.providerId)} · ${result.model.label} · '
                 '${_formatTime(result.generatedAt)} 生成',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
@@ -634,6 +898,59 @@ class _CapabilityBoundary extends StatelessWidget {
       ),
     );
   }
+}
+
+String _providerLabel(AiRecapProviderId provider) => switch (provider) {
+  AiRecapProviderId.localSummary => '本地总结（免费）',
+  AiRecapProviderId.deepSeek => 'DeepSeek',
+};
+
+class _LinkedEmptyReport extends StatelessWidget {
+  const _LinkedEmptyReport({
+    required this.generating,
+    required this.canGenerate,
+  });
+
+  final bool generating;
+  final bool canGenerate;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    key: const Key('ai-recap-empty'),
+    margin: EdgeInsets.zero,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: Column(
+        children: [
+          if (generating)
+            const SizedBox.square(
+              dimension: 36,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            )
+          else
+            Icon(
+              Icons.summarize_outlined,
+              size: 36,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          const SizedBox(height: 12),
+          Text(
+            generating ? '正在生成报告' : '当前范围还没有报告',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 5),
+          Text(
+            generating
+                ? '完成后会自动显示并保存。'
+                : canGenerate
+                ? '点击上方“生成报告”手动生成；切换顶部范围不会自动联网。'
+                : '请先在顶部选择今天或过去日期。',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _EmptyReport extends StatelessWidget {
@@ -777,14 +1094,17 @@ List<AiRecapEvidence> _topApplications(AiRecapResult result) {
 String _failureMessage(AiRecapFailureCode code) => switch (code) {
   AiRecapFailureCode.notConfigured => '还未配置 DeepSeek API Key，请前往设置。',
   AiRecapFailureCode.invalidRange => '报告周期无效，请重新选择。',
+  AiRecapFailureCode.unsupportedProvider => '所选生成方式暂不受支持，请前往设置重新选择。',
   AiRecapFailureCode.unsupportedModel => '设置中的默认模型暂不受支持。',
+  AiRecapFailureCode.providerNotReady => '所选生成方式尚未配置完成，请前往设置。',
+  AiRecapFailureCode.connectionTestNotSupported => '当前生成方式不需要连接测试。',
   AiRecapFailureCode.noUsageData => '这个周期还没有可用的活动时长。',
   AiRecapFailureCode.requestTooLarge => '聚合数据超出安全上限，本次未发送。',
-  AiRecapFailureCode.network => '暂时无法连接 DeepSeek，请检查网络后重试。',
+  AiRecapFailureCode.network => '暂时无法连接报告服务，请检查网络后重试。',
   AiRecapFailureCode.timeout => '请求超时，已有报告已保留。',
   AiRecapFailureCode.authentication => 'DeepSeek 未接受当前 API Key，请在设置中更新。',
   AiRecapFailureCode.rateLimited => 'DeepSeek 请求过于频繁，请稍后手动重试。',
-  AiRecapFailureCode.providerUnavailable => 'DeepSeek 暂时不可用，请稍后手动重试。',
+  AiRecapFailureCode.providerUnavailable => '报告服务暂时不可用，请稍后手动重试。',
   AiRecapFailureCode.credentialStoreUnavailable =>
     '系统凭据服务暂不可用，请检查 Windows 凭据服务后重试。',
   AiRecapFailureCode.localStorageUnavailable => '无法安全保存报告，已有报告已保留，请检查本机存储。',
@@ -816,6 +1136,25 @@ int _share(int seconds, int totalSeconds) => totalSeconds <= 0
 
 String _formatEvidence(AiRecapEvidence evidence) =>
     '${evidence.appName} ${_formatDuration(evidence.activeSeconds)}';
+
+String _providerDescription(String providerName) {
+  final local = providerName.contains('本地');
+  return local
+      ? '按日报、周报或月报回看时间投入。当前使用$providerName，生成过程完全离线。'
+      : '按日报、周报或月报回看时间投入。当前使用$providerName，只有点击生成时才会联网。';
+}
+
+String _linkedProviderDescription(String providerName) {
+  final local = providerName.contains('本地');
+  return local
+      ? '所选范围跟随顶部筛选；当前使用$providerName，生成过程完全离线。'
+      : '所选范围跟随顶部筛选；当前使用$providerName，只有点击生成时才会联网。';
+}
+
+bool _isFutureRange(AiRecapRangeKey key, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  return key.endDate.isAfter(today);
+}
 
 String _formatTime(DateTime value) {
   String two(int number) => number.toString().padLeft(2, '0');

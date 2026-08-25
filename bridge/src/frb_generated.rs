@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -572136432;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1616842152;
 
 // Section: executor
 
@@ -303,6 +303,7 @@ fn wire__crate__api__TimeTraceApi_delete_ai_recap_api_key_impl(
             let api_that = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
             >>::sse_decode(&mut deserializer);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -320,9 +321,11 @@ fn wire__crate__api__TimeTraceApi_delete_ai_recap_api_key_impl(
                         }
                     }
                     let api_that_guard = api_that_guard.unwrap();
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::TimeTraceApi::delete_ai_recap_api_key(&*api_that_guard),
-                    )?;
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::TimeTraceApi::delete_ai_recap_api_key(
+                            &*api_that_guard,
+                            api_provider_id,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -1531,6 +1534,7 @@ fn wire__crate__api__TimeTraceApi_import_ai_recap_environment_key_impl(
             let api_that = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
             >>::sse_decode(&mut deserializer);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -1549,7 +1553,10 @@ fn wire__crate__api__TimeTraceApi_import_ai_recap_environment_key_impl(
                     }
                     let api_that_guard = api_that_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok(
-                        crate::api::TimeTraceApi::import_ai_recap_environment_key(&*api_that_guard),
+                        crate::api::TimeTraceApi::import_ai_recap_environment_key(
+                            &*api_that_guard,
+                            api_provider_id,
+                        ),
                     )?;
                     Ok(output_ok)
                 })())
@@ -1878,6 +1885,7 @@ fn wire__crate__api__TimeTraceApi_save_ai_recap_api_key_impl(
             let api_that = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
             >>::sse_decode(&mut deserializer);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
             let api_api_key = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -1899,6 +1907,7 @@ fn wire__crate__api__TimeTraceApi_save_ai_recap_api_key_impl(
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::TimeTraceApi::save_ai_recap_api_key(
                             &*api_that_guard,
+                            api_provider_id,
                             api_api_key,
                         ))?;
                     Ok(output_ok)
@@ -1959,7 +1968,7 @@ fn wire__crate__api__TimeTraceApi_save_diary_draft_impl(
         },
     )
 }
-fn wire__crate__api__TimeTraceApi_set_ai_recap_default_model_impl(
+fn wire__crate__api__TimeTraceApi_set_ai_recap_provider_selection_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1967,7 +1976,7 @@ fn wire__crate__api__TimeTraceApi_set_ai_recap_default_model_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "TimeTraceApi_set_ai_recap_default_model",
+            debug_name: "TimeTraceApi_set_ai_recap_provider_selection",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1984,7 +1993,8 @@ fn wire__crate__api__TimeTraceApi_set_ai_recap_default_model_impl(
             let api_that = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
             >>::sse_decode(&mut deserializer);
-            let api_model = <String>::sse_decode(&mut deserializer);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
+            let api_model_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -2002,11 +2012,13 @@ fn wire__crate__api__TimeTraceApi_set_ai_recap_default_model_impl(
                         }
                     }
                     let api_that_guard = api_that_guard.unwrap();
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::TimeTraceApi::set_ai_recap_default_model(
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::TimeTraceApi::set_ai_recap_provider_selection(
                             &*api_that_guard,
-                            api_model,
-                        ))?;
+                            api_provider_id,
+                            api_model_id,
+                        ),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2472,6 +2484,40 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::ai_recap::AiModelOptionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_displayName = <String>::sse_decode(deserializer);
+        let mut var_costTier = <String>::sse_decode(deserializer);
+        return crate::ai_recap::AiModelOptionDto {
+            id: var_id,
+            display_name: var_displayName,
+            cost_tier: var_costTier,
+        };
+    }
+}
+
+impl SseDecode for crate::ai_recap::AiProviderOptionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_displayName = <String>::sse_decode(deserializer);
+        let mut var_description = <String>::sse_decode(deserializer);
+        let mut var_requiresApiKey = <bool>::sse_decode(deserializer);
+        let mut var_supportsConnectionTest = <bool>::sse_decode(deserializer);
+        let mut var_models = <Vec<crate::ai_recap::AiModelOptionDto>>::sse_decode(deserializer);
+        return crate::ai_recap::AiProviderOptionDto {
+            id: var_id,
+            display_name: var_displayName,
+            description: var_description,
+            requires_api_key: var_requiresApiKey,
+            supports_connection_test: var_supportsConnectionTest,
+            models: var_models,
+        };
+    }
+}
+
 impl SseDecode for crate::ai_recap::AiRecapConnectionReplyDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2487,6 +2533,7 @@ impl SseDecode for crate::ai_recap::AiRecapConnectionReplyDto {
 impl SseDecode for crate::ai_recap::AiRecapDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_providerId = <String>::sse_decode(deserializer);
         let mut var_scope = <String>::sse_decode(deserializer);
         let mut var_startDate = <String>::sse_decode(deserializer);
         let mut var_endDate = <String>::sse_decode(deserializer);
@@ -2502,6 +2549,7 @@ impl SseDecode for crate::ai_recap::AiRecapDto {
         let mut var_totalActiveSeconds = <i64>::sse_decode(deserializer);
         let mut var_applicationCount = <i64>::sse_decode(deserializer);
         return crate::ai_recap::AiRecapDto {
+            provider_id: var_providerId,
             scope: var_scope,
             start_date: var_startDate,
             end_date: var_endDate,
@@ -2581,17 +2629,20 @@ impl SseDecode for crate::ai_recap::AiRecapStatusDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_serviceAvailable = <bool>::sse_decode(deserializer);
-        let mut var_configured = <bool>::sse_decode(deserializer);
-        let mut var_provider = <String>::sse_decode(deserializer);
-        let mut var_defaultModel = <String>::sse_decode(deserializer);
+        let mut var_ready = <bool>::sse_decode(deserializer);
+        let mut var_selectedProviderId = <String>::sse_decode(deserializer);
+        let mut var_selectedModelId = <String>::sse_decode(deserializer);
+        let mut var_providers =
+            <Vec<crate::ai_recap::AiProviderOptionDto>>::sse_decode(deserializer);
         let mut var_credentialSource = <String>::sse_decode(deserializer);
         let mut var_secureStorageAvailable = <bool>::sse_decode(deserializer);
         let mut var_environmentMigrationAvailable = <bool>::sse_decode(deserializer);
         return crate::ai_recap::AiRecapStatusDto {
             service_available: var_serviceAvailable,
-            configured: var_configured,
-            provider: var_provider,
-            default_model: var_defaultModel,
+            ready: var_ready,
+            selected_provider_id: var_selectedProviderId,
+            selected_model_id: var_selectedModelId,
+            providers: var_providers,
             credential_source: var_credentialSource,
             secure_storage_available: var_secureStorageAvailable,
             environment_migration_available: var_environmentMigrationAvailable,
@@ -2742,6 +2793,34 @@ impl SseDecode for Vec<String> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::ai_recap::AiModelOptionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::ai_recap::AiModelOptionDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::ai_recap::AiProviderOptionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::ai_recap::AiProviderOptionDto>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -3094,7 +3173,7 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__TimeTraceApi_set_ai_recap_default_model_impl(
+        39 => wire__crate__api__TimeTraceApi_set_ai_recap_provider_selection_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3201,6 +3280,53 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<TimeTraceApi>> for TimeTraceAp
 }
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::ai_recap::AiModelOptionDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
+            self.cost_tier.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::ai_recap::AiModelOptionDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::ai_recap::AiModelOptionDto>
+    for crate::ai_recap::AiModelOptionDto
+{
+    fn into_into_dart(self) -> crate::ai_recap::AiModelOptionDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::ai_recap::AiProviderOptionDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+            self.requires_api_key.into_into_dart().into_dart(),
+            self.supports_connection_test.into_into_dart().into_dart(),
+            self.models.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::ai_recap::AiProviderOptionDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::ai_recap::AiProviderOptionDto>
+    for crate::ai_recap::AiProviderOptionDto
+{
+    fn into_into_dart(self) -> crate::ai_recap::AiProviderOptionDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::ai_recap::AiRecapConnectionReplyDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3225,6 +3351,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::ai_recap::AiRecapConnectionReplyDt
 impl flutter_rust_bridge::IntoDart for crate::ai_recap::AiRecapDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.provider_id.into_into_dart().into_dart(),
             self.scope.into_into_dart().into_dart(),
             self.start_date.into_into_dart().into_dart(),
             self.end_date.into_into_dart().into_dart(),
@@ -3358,9 +3485,10 @@ impl flutter_rust_bridge::IntoDart for crate::ai_recap::AiRecapStatusDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.service_available.into_into_dart().into_dart(),
-            self.configured.into_into_dart().into_dart(),
-            self.provider.into_into_dart().into_dart(),
-            self.default_model.into_into_dart().into_dart(),
+            self.ready.into_into_dart().into_dart(),
+            self.selected_provider_id.into_into_dart().into_dart(),
+            self.selected_model_id.into_into_dart().into_dart(),
+            self.providers.into_into_dart().into_dart(),
             self.credential_source.into_into_dart().into_dart(),
             self.secure_storage_available.into_into_dart().into_dart(),
             self.environment_migration_available
@@ -3600,6 +3728,27 @@ impl SseEncode for String {
     }
 }
 
+impl SseEncode for crate::ai_recap::AiModelOptionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.display_name, serializer);
+        <String>::sse_encode(self.cost_tier, serializer);
+    }
+}
+
+impl SseEncode for crate::ai_recap::AiProviderOptionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.display_name, serializer);
+        <String>::sse_encode(self.description, serializer);
+        <bool>::sse_encode(self.requires_api_key, serializer);
+        <bool>::sse_encode(self.supports_connection_test, serializer);
+        <Vec<crate::ai_recap::AiModelOptionDto>>::sse_encode(self.models, serializer);
+    }
+}
+
 impl SseEncode for crate::ai_recap::AiRecapConnectionReplyDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3611,6 +3760,7 @@ impl SseEncode for crate::ai_recap::AiRecapConnectionReplyDto {
 impl SseEncode for crate::ai_recap::AiRecapDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.provider_id, serializer);
         <String>::sse_encode(self.scope, serializer);
         <String>::sse_encode(self.start_date, serializer);
         <String>::sse_encode(self.end_date, serializer);
@@ -3669,9 +3819,10 @@ impl SseEncode for crate::ai_recap::AiRecapStatusDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.service_available, serializer);
-        <bool>::sse_encode(self.configured, serializer);
-        <String>::sse_encode(self.provider, serializer);
-        <String>::sse_encode(self.default_model, serializer);
+        <bool>::sse_encode(self.ready, serializer);
+        <String>::sse_encode(self.selected_provider_id, serializer);
+        <String>::sse_encode(self.selected_model_id, serializer);
+        <Vec<crate::ai_recap::AiProviderOptionDto>>::sse_encode(self.providers, serializer);
         <String>::sse_encode(self.credential_source, serializer);
         <bool>::sse_encode(self.secure_storage_available, serializer);
         <bool>::sse_encode(self.environment_migration_available, serializer);
@@ -3773,6 +3924,26 @@ impl SseEncode for Vec<String> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::ai_recap::AiModelOptionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::ai_recap::AiModelOptionDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::ai_recap::AiProviderOptionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::ai_recap::AiProviderOptionDto>::sse_encode(item, serializer);
         }
     }
 }

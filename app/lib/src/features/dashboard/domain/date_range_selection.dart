@@ -106,7 +106,7 @@ DateRangeBounds resolveDateRange(DateRangeSelection selection, DateTime now) {
         start: yesterday,
         end: yesterday,
         label: '昨日',
-        supportedByAiRecap: false,
+        supportedByAiRecap: true,
       );
     case DateRange.week:
       final monday = DateTime(now.year, now.month, now.day - now.weekday + 1);
@@ -121,15 +121,22 @@ DateRangeBounds resolveDateRange(DateRangeSelection selection, DateTime now) {
         start: _formatCalendarDate(DateTime(now.year, now.month)),
         end: today,
         label: '本月',
-        supportedByAiRecap: false,
+        supportedByAiRecap: true,
       );
     case DateRange.custom:
-      final selectedDay = _formatCalendarDate(selection.day ?? now);
+      final selected = selection.day ?? now;
+      final selectedDay = _formatCalendarDate(selected);
+      final todayDate = DateTime(now.year, now.month, now.day);
+      final selectedDate = DateTime(
+        selected.year,
+        selected.month,
+        selected.day,
+      );
       return DateRangeBounds(
         start: selectedDay,
         end: selectedDay,
         label: '所选日期',
-        supportedByAiRecap: false,
+        supportedByAiRecap: !selectedDate.isAfter(todayDate),
       );
   }
 }

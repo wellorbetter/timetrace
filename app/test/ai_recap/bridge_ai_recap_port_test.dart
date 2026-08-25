@@ -15,6 +15,7 @@ void main() {
       final generated = await port.generate(_key);
 
       expect(generated.rangeKey, _key);
+      expect(generated.providerId, AiRecapProviderId.deepSeek);
       expect(generated.totalActiveSeconds, 3600);
       expect(api.lastStart, '2026-08-24');
       expect(api.lastEnd, '2026-08-24');
@@ -83,6 +84,25 @@ void main() {
         ),
       );
     }
+
+    final mismatchedProvider = BridgeAiRecapPort(
+      _FakeBridgeApi(
+        recap: _wireRecap(
+          provider: 'local_summary',
+          model: 'deepseek-v4-flash',
+        ),
+      ),
+    );
+    expect(
+      () => mismatchedProvider.latestReports(),
+      throwsA(
+        isA<AiRecapFailure>().having(
+          (failure) => failure.code,
+          'code',
+          AiRecapFailureCode.invalidResponse,
+        ),
+      ),
+    );
   });
 
   test('reports a bridge status failure separately from missing key', () {
@@ -103,7 +123,11 @@ final AiRecapRangeKey _key = AiRecapRangeKey(
 const Map<String, AiRecapFailureCode> _errorCodes = {
   'not_configured': AiRecapFailureCode.notConfigured,
   'invalid_range': AiRecapFailureCode.invalidRange,
+  'unsupported_provider': AiRecapFailureCode.unsupportedProvider,
   'unsupported_model': AiRecapFailureCode.unsupportedModel,
+  'provider_not_ready': AiRecapFailureCode.providerNotReady,
+  'connection_test_not_supported':
+      AiRecapFailureCode.connectionTestNotSupported,
   'no_usage_data': AiRecapFailureCode.noUsageData,
   'request_too_large': AiRecapFailureCode.requestTooLarge,
   'network': AiRecapFailureCode.network,
@@ -115,12 +139,17 @@ const Map<String, AiRecapFailureCode> _errorCodes = {
   'busy': AiRecapFailureCode.busy,
 };
 
-wire.AiRecapDto _wireRecap({String start = '2026-08-24'}) => wire.AiRecapDto(
+wire.AiRecapDto _wireRecap({
+  String start = '2026-08-24',
+  String provider = 'deepseek',
+  String model = 'deepseek-v4-flash',
+}) => wire.AiRecapDto(
+  providerId: provider,
   scope: 'daily',
   startDate: start,
   endDate: '2026-08-24',
   generatedAtUtc: '2026-08-24T01:30:00Z',
-  model: 'deepseek-v4-flash',
+  model: model,
   summary: _wireStatement('安全摘要'),
   highlights: [_wireStatement('亮点')],
   suggestions: [_wireStatement('建议')],
@@ -160,9 +189,10 @@ class _FakeBridgeApi implements AiRecapBridgeApi {
     if (throwOnStatus) throw StateError('bridge unavailable');
     return const wire.AiRecapStatusDto(
       serviceAvailable: true,
-      configured: true,
-      provider: 'DeepSeek',
-      defaultModel: 'deepseek-v4-flash',
+      ready: true,
+      selectedProviderId: 'deepseek',
+      selectedModelId: 'deepseek-v4-flash',
+      providers: _wireProviders,
       credentialSource: 'secure_store',
       secureStorageAvailable: true,
       environmentMigrationAvailable: false,
@@ -185,3 +215,39 @@ class _FakeBridgeApi implements AiRecapBridgeApi {
     return wire.AiRecapGenerateReplyDto(recap: recap, error: error);
   }
 }
+
+const List<wire.AiProviderOptionDto> _wireProviders = [
+  wire.AiProviderOptionDto(
+    id: 'local_summary',
+    displayName: '本地总结（免费）',
+    description: '使用本机聚合统计生成固定结构报告，数据不离开设备。',
+    requiresApiKey: false,
+    supportsConnectionTest: false,
+    models: [
+      wire.AiModelOptionDto(
+        id: 'local-summary-v1',
+        displayName: '本地总结 v1',
+        costTier: 'free_local',
+      ),
+    ],
+  ),
+  wire.AiProviderOptionDto(
+    id: 'deepseek',
+    displayName: 'DeepSeek',
+    description: '生成时发送应用名与聚合时长，使用你的 API Key，可能产生费用。',
+    requiresApiKey: true,
+    supportsConnectionTest: true,
+    models: [
+      wire.AiModelOptionDto(
+        id: 'deepseek-v4-flash',
+        displayName: 'DeepSeek Flash',
+        costTier: 'paid_cloud',
+      ),
+      wire.AiModelOptionDto(
+        id: 'deepseek-v4-pro',
+        displayName: 'DeepSeek Pro',
+        costTier: 'paid_cloud',
+      ),
+    ],
+  ),
+];

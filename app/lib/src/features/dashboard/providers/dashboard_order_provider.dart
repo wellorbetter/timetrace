@@ -3,13 +3,32 @@ import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// Carousel view keys — user-reorderable.
 const kViews = <String, String>{
+  'ai_report': '时间报告',
   'bar': '柱状图',
   'pie': '饼图',
   'hourly': '时段',
   'summary': '汇总',
   'apps': '应用列表',
 };
-const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
+const kDefaultOrder = ['ai_report', 'bar', 'pie', 'summary', 'apps', 'hourly'];
+
+List<String> normalizeDashboardOrder(Object? savedOrder) {
+  if (savedOrder is! List) return List.of(kDefaultOrder);
+  final order = <String>[];
+  for (final value in savedOrder.whereType<String>()) {
+    if (kViews.containsKey(value) && !order.contains(value)) order.add(value);
+  }
+  // AI reports became a first-class dashboard view. Put the new view first
+  // when migrating an existing saved order so it is immediately discoverable.
+  if (!order.contains('ai_report')) order.insert(0, 'ai_report');
+  for (final view in kDefaultOrder) {
+    if (!order.contains(view)) order.add(view);
+  }
+  // 时段分布固定在最后（产品决策），旧配置也迁移到末尾。
+  order.remove('hourly');
+  order.add('hourly');
+  return order;
+}
 
 /// Persisted dashboard carousel order (local JSON, UI-only — no Rust change).
 class DashboardOrderNotifier extends Notifier<List<String>> {
@@ -19,19 +38,7 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
   List<String> _load() {
     try {
       final raw = UiPreferencesStore.read();
-      if (raw['order'] is! List) return List.of(kDefaultOrder);
-      final order = (raw['order'] as List)
-          .whereType<String>()
-          .where(kViews.containsKey)
-          .toList();
-      // Always keep every known view (missing ones appended at the end).
-      for (final v in kDefaultOrder) {
-        if (!order.contains(v)) order.add(v);
-      }
-      // 时段分布固定在最后（产品决策），旧配置也迁移到末尾。
-      order.remove('hourly');
-      order.add('hourly');
-      return order;
+      return normalizeDashboardOrder(raw['order']);
     } catch (e) {
       return List.of(kDefaultOrder);
     }

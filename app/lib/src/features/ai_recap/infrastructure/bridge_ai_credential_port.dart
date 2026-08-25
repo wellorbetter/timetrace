@@ -7,13 +7,21 @@ import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart'
 abstract interface class AiCredentialBridgeApi {
   wire.AiRecapStatusDto status();
 
-  Future<wire.AiRecapSettingsReplyDto> saveApiKey(String apiKey);
+  Future<wire.AiRecapSettingsReplyDto> saveApiKey({
+    required String providerId,
+    required String apiKey,
+  });
 
-  Future<wire.AiRecapSettingsReplyDto> removeApiKey();
+  Future<wire.AiRecapSettingsReplyDto> removeApiKey(String providerId);
 
-  Future<wire.AiRecapSettingsReplyDto> importEnvironmentApiKey();
+  Future<wire.AiRecapSettingsReplyDto> importEnvironmentApiKey(
+    String providerId,
+  );
 
-  Future<wire.AiRecapSettingsReplyDto> setDefaultModel(String model);
+  Future<wire.AiRecapSettingsReplyDto> setProviderSelection({
+    required String providerId,
+    required String modelId,
+  });
 
   Future<wire.AiRecapConnectionReplyDto> testConnection();
 }
@@ -27,20 +35,28 @@ class TimeTraceAiCredentialBridgeApi implements AiCredentialBridgeApi {
   wire.AiRecapStatusDto status() => _api.aiRecapStatus();
 
   @override
-  Future<wire.AiRecapSettingsReplyDto> saveApiKey(String apiKey) =>
-      _api.saveAiRecapApiKey(apiKey: apiKey);
+  Future<wire.AiRecapSettingsReplyDto> saveApiKey({
+    required String providerId,
+    required String apiKey,
+  }) => _api.saveAiRecapApiKey(providerId: providerId, apiKey: apiKey);
 
   @override
-  Future<wire.AiRecapSettingsReplyDto> removeApiKey() =>
-      _api.deleteAiRecapApiKey();
+  Future<wire.AiRecapSettingsReplyDto> removeApiKey(String providerId) =>
+      _api.deleteAiRecapApiKey(providerId: providerId);
 
   @override
-  Future<wire.AiRecapSettingsReplyDto> importEnvironmentApiKey() =>
-      _api.importAiRecapEnvironmentKey();
+  Future<wire.AiRecapSettingsReplyDto> importEnvironmentApiKey(
+    String providerId,
+  ) => _api.importAiRecapEnvironmentKey(providerId: providerId);
 
   @override
-  Future<wire.AiRecapSettingsReplyDto> setDefaultModel(String model) =>
-      _api.setAiRecapDefaultModel(model: model);
+  Future<wire.AiRecapSettingsReplyDto> setProviderSelection({
+    required String providerId,
+    required String modelId,
+  }) => _api.setAiRecapProviderSelection(
+    providerId: providerId,
+    modelId: modelId,
+  );
 
   @override
   Future<wire.AiRecapConnectionReplyDto> testConnection() =>
@@ -55,27 +71,56 @@ class BridgeAiCredentialPort implements AiCredentialPort {
   @override
   AiRecapProviderStatus status() {
     try {
-      return _mapStatus(_api.status());
+      return mapAiRecapStatus(_api.status());
     } catch (_) {
       return const AiRecapProviderStatus.unavailable();
     }
   }
 
   @override
-  Future<AiRecapProviderStatus> saveApiKey(String apiKey) =>
-      _settingsMutation(() => _api.saveApiKey(apiKey));
+  Future<AiRecapProviderStatus> saveApiKey(
+    String apiKey, {
+    AiRecapProviderId? provider,
+  }) {
+    final providerId = _credentialProvider(provider);
+    return _settingsMutation(
+      () => _api.saveApiKey(providerId: providerId.id, apiKey: apiKey),
+    );
+  }
 
   @override
-  Future<AiRecapProviderStatus> removeApiKey() =>
-      _settingsMutation(_api.removeApiKey);
+  Future<AiRecapProviderStatus> removeApiKey({AiRecapProviderId? provider}) {
+    final providerId = _credentialProvider(provider);
+    return _settingsMutation(() => _api.removeApiKey(providerId.id));
+  }
 
   @override
-  Future<AiRecapProviderStatus> importEnvironmentApiKey() =>
-      _settingsMutation(_api.importEnvironmentApiKey);
+  Future<AiRecapProviderStatus> importEnvironmentApiKey({
+    AiRecapProviderId? provider,
+  }) {
+    final providerId = _credentialProvider(provider);
+    return _settingsMutation(() => _api.importEnvironmentApiKey(providerId.id));
+  }
+
+  @override
+  Future<AiRecapProviderStatus> setProviderSelection(
+    AiRecapProviderId provider,
+    AiRecapModel model,
+  ) {
+    if (model.providerId != provider) {
+      return Future<AiRecapProviderStatus>.error(
+        const AiCredentialFailure(AiCredentialFailureCode.unsupportedModel),
+      );
+    }
+    return _settingsMutation(
+      () =>
+          _api.setProviderSelection(providerId: provider.id, modelId: model.id),
+    );
+  }
 
   @override
   Future<AiRecapProviderStatus> setDefaultModel(AiRecapModel model) =>
-      _settingsMutation(() => _api.setDefaultModel(model.id));
+      setProviderSelection(model.providerId, model);
 
   @override
   Future<void> testConnection() async {
@@ -99,7 +144,7 @@ class BridgeAiCredentialPort implements AiCredentialPort {
   ) async {
     try {
       final reply = await action();
-      final status = _mapStatus(reply.status);
+      final status = mapAiRecapStatus(reply.status);
       final error = reply.error;
       if (error != null) throw _mapFailure(error);
       return status;
@@ -111,43 +156,127 @@ class BridgeAiCredentialPort implements AiCredentialPort {
       );
     }
   }
+
+  AiRecapProviderId _credentialProvider(AiRecapProviderId? provider) {
+    final selected = provider ?? status().selectedProvider;
+    if (selected != AiRecapProviderId.deepSeek) {
+      throw const AiCredentialFailure(
+        AiCredentialFailureCode.unsupportedProvider,
+      );
+    }
+    return selected;
+  }
 }
 
-AiRecapProviderStatus _mapStatus(wire.AiRecapStatusDto value) {
-  final provider = value.provider.trim();
-  if (provider.isEmpty) throw const FormatException('Missing provider');
-
+AiRecapProviderStatus mapAiRecapStatus(wire.AiRecapStatusDto value) {
   final source = switch (value.credentialSource) {
     'secure_store' => AiCredentialSource.secureStore,
     'legacy_environment' => AiCredentialSource.legacyEnvironment,
     'none' => AiCredentialSource.none,
+    'not_required' => AiCredentialSource.notRequired,
     'unavailable' => AiCredentialSource.unavailable,
     _ => throw const FormatException('Unknown credential source'),
   };
-  final sourceIsConfigured =
+
+  final providers = value.providers.map(_mapProvider).toList(growable: false);
+  if (providers.length != AiRecapProviderId.values.length ||
+      providers.map((provider) => provider.id).toSet().length !=
+          providers.length) {
+    throw const FormatException('Invalid provider catalog');
+  }
+  final selectedProvider = AiRecapProviderId.fromId(value.selectedProviderId);
+  final selectedModel = AiRecapModel.fromId(value.selectedModelId);
+  final selectedOption = providers.singleWhere(
+    (provider) => provider.id == selectedProvider,
+  );
+  if (selectedModel.providerId != selectedProvider ||
+      selectedOption.modelOption(selectedModel) == null) {
+    throw const FormatException('Incompatible provider model');
+  }
+
+  final credentialReady =
       source == AiCredentialSource.secureStore ||
       source == AiCredentialSource.legacyEnvironment;
-  if (value.configured != sourceIsConfigured) {
-    throw const FormatException('Inconsistent credential status');
+  if (value.serviceAvailable) {
+    if (selectedOption.requiresApiKey) {
+      if (source == AiCredentialSource.notRequired ||
+          value.ready != credentialReady) {
+        throw const FormatException('Inconsistent credential status');
+      }
+    } else if (source != AiCredentialSource.notRequired || !value.ready) {
+      throw const FormatException('Inconsistent local provider status');
+    }
+  } else if (value.ready || source != AiCredentialSource.unavailable) {
+    throw const FormatException('Invalid unavailable service status');
   }
-  if (value.serviceAvailable !=
-      (source != AiCredentialSource.unavailable)) {
-    throw const FormatException('Inconsistent service status');
-  }
-  if (value.environmentMigrationAvailable &&
-      (source != AiCredentialSource.legacyEnvironment ||
-          !value.secureStorageAvailable)) {
+  final migrationAvailable =
+      source == AiCredentialSource.legacyEnvironment &&
+      value.secureStorageAvailable;
+  if (value.environmentMigrationAvailable != migrationAvailable) {
     throw const FormatException('Inconsistent migration status');
   }
 
   return AiRecapProviderStatus(
-    configured: value.configured,
     serviceAvailable: value.serviceAvailable,
-    providerName: provider,
-    defaultModel: AiRecapModel.fromId(value.defaultModel),
+    ready: value.ready,
+    selectedProvider: selectedProvider,
+    selectedModel: selectedModel,
+    providers: List.unmodifiable(providers),
     credentialSource: source,
     secureStorageAvailable: value.secureStorageAvailable,
     environmentMigrationAvailable: value.environmentMigrationAvailable,
+  );
+}
+
+AiRecapProviderOption _mapProvider(wire.AiProviderOptionDto value) {
+  final provider = AiRecapProviderId.fromId(value.id);
+  final models = value.models
+      .map((item) {
+        final model = AiRecapModel.fromId(item.id);
+        if (model.providerId != provider || item.displayName.trim().isEmpty) {
+          throw const FormatException('Invalid model option');
+        }
+        return AiRecapModelOption(
+          model: model,
+          displayName: item.displayName.trim(),
+          costTier: AiRecapCostTier.fromId(item.costTier),
+        );
+      })
+      .toList(growable: false);
+  if (value.displayName.trim().isEmpty ||
+      value.description.trim().isEmpty ||
+      models.isEmpty ||
+      models.map((model) => model.model).toSet().length != models.length) {
+    throw const FormatException('Invalid provider option');
+  }
+  if ((provider == AiRecapProviderId.localSummary &&
+          (value.requiresApiKey || value.supportsConnectionTest)) ||
+      (provider == AiRecapProviderId.deepSeek &&
+          (!value.requiresApiKey || !value.supportsConnectionTest))) {
+    throw const FormatException('Invalid provider capabilities');
+  }
+  final expectedModels = switch (provider) {
+    AiRecapProviderId.localSummary => {AiRecapModel.localSummary},
+    AiRecapProviderId.deepSeek => {AiRecapModel.flash, AiRecapModel.pro},
+  };
+  if (models.length != expectedModels.length ||
+      !models.every(
+        (option) =>
+            expectedModels.contains(option.model) &&
+            option.costTier ==
+                (provider == AiRecapProviderId.localSummary
+                    ? AiRecapCostTier.freeLocal
+                    : AiRecapCostTier.paidCloud),
+      )) {
+    throw const FormatException('Incomplete provider model catalog');
+  }
+  return AiRecapProviderOption(
+    id: provider,
+    displayName: value.displayName.trim(),
+    description: value.description.trim(),
+    requiresApiKey: value.requiresApiKey,
+    supportsConnectionTest: value.supportsConnectionTest,
+    models: List.unmodifiable(models),
   );
 }
 
@@ -155,7 +284,11 @@ AiCredentialFailure _mapFailure(wire.AiRecapErrorDto value) {
   final code = switch (value.code) {
     'not_configured' => AiCredentialFailureCode.notConfigured,
     'invalid_api_key' => AiCredentialFailureCode.invalidKey,
+    'unsupported_provider' => AiCredentialFailureCode.unsupportedProvider,
     'unsupported_model' => AiCredentialFailureCode.unsupportedModel,
+    'provider_not_ready' => AiCredentialFailureCode.providerNotReady,
+    'connection_test_not_supported' =>
+      AiCredentialFailureCode.connectionTestNotSupported,
     'credential_store' => AiCredentialFailureCode.secureStorageUnavailable,
     'local_storage' => AiCredentialFailureCode.localStorageUnavailable,
     'authentication' => AiCredentialFailureCode.authentication,

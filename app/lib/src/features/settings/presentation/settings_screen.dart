@@ -726,6 +726,7 @@ List<Widget> _dashboardOrderPicker(WidgetRef ref) {
           dense: true,
           leading: Icon(
             switch (order[i]) {
+              'ai_report' => Icons.auto_awesome_outlined,
               'bar' => Icons.bar_chart,
               'pie' => Icons.pie_chart_outline,
               'summary' => Icons.summarize_outlined,

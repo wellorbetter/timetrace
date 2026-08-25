@@ -9,8 +9,6 @@ import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart'
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_card.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_screen.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
-import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection.dart';
-import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 void main() {
   testWidgets('opening and navigating all report periods never generates', (
@@ -19,7 +17,7 @@ void main() {
     final port = _FakePort();
     await _pumpScreen(tester, port);
 
-    expect(find.text('AI 时间报告'), findsOneWidget);
+    expect(find.text('时间报告'), findsWidgets);
     expect(find.text('日报'), findsOneWidget);
     expect(find.text('周报'), findsWidgets);
     expect(find.text('月报'), findsOneWidget);
@@ -74,6 +72,7 @@ void main() {
       expect(find.text('下周预留一次无打扰时段'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsWidgets);
       expect(find.textContaining('不代表工作成果或绩效评价'), findsOneWidget);
+      expect(find.textContaining('DeepSeek · Flash'), findsOneWidget);
       expect(find.textContaining('仅发送应用名称与聚合时长'), findsOneWidget);
       expect(port.generateCalls, 1);
       expect(port.lastKey, _daily(24));
@@ -149,7 +148,7 @@ void main() {
     await _pumpScreen(tester, port);
 
     expect(find.byKey(const Key('ai-recap-not-configured')), findsOneWidget);
-    expect(find.textContaining('在设置中配置 AI 服务'), findsOneWidget);
+    expect(find.textContaining('在设置中完成报告生成配置'), findsOneWidget);
     expect(find.text('去设置'), findsOneWidget);
     expect(
       tester
@@ -160,49 +159,151 @@ void main() {
     expect(port.generateCalls, 0);
   });
 
-  testWidgets('dashboard always shows the newest saved report across types', (
+  testWidgets('local free provider generates without key and stays offline', (
     tester,
   ) async {
     final port = _FakePort(
-      reports: [
-        _result(
-          _daily(24),
-          summary: '较早的日报。',
-          generatedAt: DateTime.utc(2026, 8, 24, 1),
+      statusValue: const AiRecapProviderStatus(
+        ready: true,
+        selectedProvider: AiRecapProviderId.localSummary,
+        selectedModel: AiRecapModel.localSummary,
+        credentialSource: AiCredentialSource.notRequired,
+      ),
+    );
+    await _pumpScreen(tester, port);
+
+    expect(find.textContaining('本地总结（免费）'), findsOneWidget);
+    expect(find.textContaining('不会发送任何使用数据'), findsOneWidget);
+    expect(find.byKey(const Key('ai-recap-not-configured')), findsNothing);
+    await tester.tap(find.byKey(const Key('ai-recap-generate')));
+    await tester.pumpAndSettle();
+    expect(port.generateCalls, 1);
+    expect(find.textContaining('本地总结（免费） · 本地总结 v1'), findsOneWidget);
+  });
+
+  testWidgets(
+    'dashboard-linked report uses the latest exact key without duplicate controls',
+    (tester) async {
+      final port = _FakePort();
+      var linkedKey = _currentWeek;
+      var linkedLabel = '顶部范围：本周（截至今日）';
+      late StateSetter updateHost;
+
+      Widget linkedCard() => Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 640,
+            height: 330,
+            child: AiRecapCard(rangeKey: linkedKey, rangeLabel: linkedLabel),
+          ),
         ),
-        _result(
-          _currentMonth,
-          summary: '最新保存的月报。',
-          generatedAt: DateTime.utc(2026, 8, 24, 2),
+      );
+
+      await _pumpWidget(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) {
+            updateHost = setState;
+            return linkedCard();
+          },
         ),
-      ],
+        port,
+        surfaceSize: const Size(760, 500),
+      );
+
+      expect(find.text(linkedLabel), findsOneWidget);
+      expect(find.textContaining('所选范围跟随顶部筛选'), findsOneWidget);
+      expect(find.byKey(const Key('ai-recap-range-selector')), findsNothing);
+      expect(find.byKey(const Key('ai-report-previous-period')), findsNothing);
+      expect(find.byKey(const Key('ai-report-next-period')), findsNothing);
+      expect(find.text('日报'), findsNothing);
+      expect(find.text('周报'), findsNothing);
+      expect(find.text('月报'), findsNothing);
+      expect(
+        find.byKey(const Key('ai-recap-dashboard-section')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const Key('ai-recap-linked-scroll')),
+            )
+            .primary,
+        isFalse,
+      );
+      expect(find.byType(Scrollbar), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('ai-recap-generate')));
+      await tester.pumpAndSettle();
+      expect(port.generateCalls, 1);
+      expect(port.lastKey, _currentWeek);
+      expect(find.text('新生成的周报。'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      final linkedScrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(const Key('ai-recap-linked-scroll')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(linkedScrollable.position.maxScrollExtent, greaterThan(0));
+      linkedScrollable.position.jumpTo(
+        linkedScrollable.position.maxScrollExtent,
+      );
+      expect(linkedScrollable.position.pixels, greaterThan(0));
+
+      updateHost(() {
+        linkedKey = _daily(23);
+        linkedLabel = '顶部范围：昨日';
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('顶部范围：昨日'), findsOneWidget);
+      expect(linkedScrollable.position.pixels, 0);
+      expect(find.text('新生成的周报。'), findsNothing);
+      await tester.tap(find.byKey(const Key('ai-recap-generate')));
+      await tester.pumpAndSettle();
+      expect(port.generateCalls, 2);
+      expect(port.lastKey, _daily(23));
+    },
+  );
+
+  testWidgets('dashboard-linked invalid future range cannot generate', (
+    tester,
+  ) async {
+    final port = _FakePort();
+    final now = DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final invalidKey = AiRecapRangeKey(
+      scope: AiRecapScope.daily,
+      startDate: tomorrow,
+      endDate: tomorrow,
     );
     await _pumpWidget(
       tester,
       Scaffold(
-        body: ListView(padding: EdgeInsets.all(12), children: [AiRecapCard()]),
+        body: SizedBox(
+          height: 330,
+          child: AiRecapCard(rangeKey: invalidKey, rangeLabel: '未来日期'),
+        ),
       ),
       port,
-      dashboardBounds: const DateRangeBounds(
-        start: '2026-08-23',
-        end: '2026-08-23',
-        label: '昨天',
-        supportedByAiRecap: false,
-      ),
     );
 
-    expect(find.text('最新保存的月报。'), findsOneWidget);
-    expect(find.text('月报'), findsOneWidget);
-    expect(find.text('较早的日报。'), findsNothing);
-    expect(find.byKey(const Key('ai-recap-card-metadata')), findsOneWidget);
+    expect(find.text('未来日期'), findsOneWidget);
+    expect(find.byKey(const Key('ai-recap-invalid-range')), findsOneWidget);
+    expect(find.textContaining('未来日期不能生成报告'), findsOneWidget);
+    expect(find.text('请先在顶部选择今天或过去日期。'), findsOneWidget);
     expect(
-      tester.getSize(find.byKey(const Key('ai-recap-dashboard-card'))).height,
-      inInclusiveRange(116, 160),
+      tester
+          .widget<FilledButton>(find.byKey(const Key('ai-recap-generate')))
+          .onPressed,
+      isNull,
     );
     expect(port.generateCalls, 0);
   });
 
-  testWidgets('report actions are keyboard reachable and card is semantic', (
+  testWidgets('report actions are keyboard reachable and section is semantic', (
     tester,
   ) async {
     final port = _FakePort();
@@ -219,13 +320,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(port.generateCalls, 1);
 
-    await _pumpWidget(tester, const AiRecapCard(), port);
+    await _pumpWidget(
+      tester,
+      SingleChildScrollView(child: AiRecapSection(now: _today)),
+      port,
+    );
     final semantics = tester.ensureSemantics();
-    expect(find.bySemanticsLabel(RegExp('AI 时间报告')), findsOneWidget);
+    expect(find.text('时间报告'), findsOneWidget);
     semantics.dispose();
   });
 
-  testWidgets('report page remains usable at 420 logical pixels', (
+  testWidgets('inline report section remains usable at 420 logical pixels', (
     tester,
   ) async {
     final port = _FakePort(generated: _result(_daily(24), summary: '窄窗口报告内容。'));
@@ -267,12 +372,6 @@ final AiRecapRangeKey _currentWeek = AiRecapRangeKey(
   endDate: DateTime(2026, 8, 24),
 );
 
-final AiRecapRangeKey _currentMonth = AiRecapRangeKey(
-  scope: AiRecapScope.monthly,
-  startDate: DateTime(2026, 8, 1),
-  endDate: DateTime(2026, 8, 24),
-);
-
 AiRecapRangeKey _daily(int day) => AiRecapRangeKey(
   scope: AiRecapScope.daily,
   startDate: DateTime(2026, 8, day),
@@ -294,18 +393,13 @@ Future<void> _pumpWidget(
   WidgetTester tester,
   Widget child,
   AiRecapPort port, {
-  DateRangeBounds? dashboardBounds,
   Size surfaceSize = const Size(1100, 820),
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        aiRecapPortProvider.overrideWithValue(port),
-        if (dashboardBounds != null)
-          dashboardRangeBoundsProvider.overrideWithValue(dashboardBounds),
-      ],
+      overrides: [aiRecapPortProvider.overrideWithValue(port)],
       child: MaterialApp(home: child),
     ),
   );
@@ -315,13 +409,16 @@ Future<void> _pumpWidget(
 AiRecapResult _result(
   AiRecapRangeKey key, {
   required String summary,
+  AiRecapProviderId providerId = AiRecapProviderId.deepSeek,
+  AiRecapModel model = AiRecapModel.flash,
   DateTime? generatedAt,
   List<String> highlights = const ['保持了稳定节奏'],
   List<String> suggestions = const ['安排一次专注复盘'],
 }) => AiRecapResult(
   rangeKey: key,
   generatedAt: generatedAt ?? DateTime.utc(2026, 8, 24, 1, 30),
-  model: AiRecapModel.flash,
+  providerId: providerId,
+  model: model,
   summary: _statement(summary),
   highlights: highlights.map(_statement).toList(growable: false),
   suggestions: suggestions.map(_statement).toList(growable: false),
@@ -367,6 +464,12 @@ class _FakePort implements AiRecapPort {
     lastKey = key;
     if (failure case final value?) throw value;
     if (pending case final value?) return value.future;
-    return generated ?? _result(key, summary: '新生成的${key.scope.label}。');
+    return generated ??
+        _result(
+          key,
+          summary: '新生成的${key.scope.label}。',
+          providerId: statusValue.selectedProvider,
+          model: statusValue.selectedModel,
+        );
   }
 }

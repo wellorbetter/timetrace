@@ -104,13 +104,11 @@ class AiRecapController extends Notifier<AiRecapState> {
 
   @override
   AiRecapState build() {
-    final credentialRevision = ref.watch(aiCredentialRevisionProvider);
+    ref.watch(aiCredentialRevisionProvider);
     final port = ref.watch(aiRecapPortProvider);
     try {
       return AiRecapState(
-        status: credentialRevision == 0
-            ? const AiRecapProviderStatus.unconfigured()
-            : port.status(),
+        status: port.status(),
         results: _reportMap(port.latestReports()),
       );
     } catch (_) {
@@ -148,21 +146,7 @@ class AiRecapController extends Notifier<AiRecapState> {
   /// chooses the persisted default model.
   Future<void> generate(AiRecapRangeKey key) async {
     if (state.pendingKey != null) return;
-
-    AiRecapProviderStatus status;
-    try {
-      status = _port.status();
-    } catch (_) {
-      _setFailure(
-        key,
-        const AiRecapFailure(
-          code: AiRecapFailureCode.bridgeUnavailable,
-          retryable: true,
-        ),
-        status: const AiRecapProviderStatus.unavailable(),
-      );
-      return;
-    }
+    final status = state.status;
     if (!status.serviceAvailable) {
       _setFailure(
         key,
@@ -174,7 +158,7 @@ class AiRecapController extends Notifier<AiRecapState> {
       );
       return;
     }
-    if (!status.configured) {
+    if (!status.ready) {
       _setFailure(
         key,
         const AiRecapFailure(

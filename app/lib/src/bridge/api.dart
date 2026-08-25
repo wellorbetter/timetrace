@@ -18,7 +18,7 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Register a diary image for a date.
   String addDiaryImage({required String date, required String path});
 
-  /// Redacted DeepSeek configuration state; never exposes credential data.
+  /// Redacted report-provider state; never exposes credential data.
   AiRecapStatusDto aiRecapStatus();
 
   /// Clear ALL tracked usage data (sessions + page visits).
@@ -28,8 +28,10 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
 
-  /// Removes the secure API key; a legacy environment key may become active again.
-  Future<AiRecapSettingsReplyDto> deleteAiRecapApiKey();
+  /// Removes one provider's secure key; its environment fallback may become active.
+  Future<AiRecapSettingsReplyDto> deleteAiRecapApiKey({
+    required String providerId,
+  });
 
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id});
@@ -127,8 +129,10 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String date,
   });
 
-  /// Explicitly imports the legacy environment key into secure storage.
-  Future<AiRecapSettingsReplyDto> importAiRecapEnvironmentKey();
+  /// Explicitly imports a provider's legacy environment key into secure storage.
+  Future<AiRecapSettingsReplyDto> importAiRecapEnvironmentKey({
+    required String providerId,
+  });
 
   /// Reports whether a database read has entered its non-panicking fallback.
   bool isDatabaseDegraded();
@@ -149,15 +153,19 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// quotes/args stripped). Returns None if no .exe is found.
   String? resolveExePath({required String command});
 
-  /// Securely creates or replaces the DeepSeek API key.
-  Future<AiRecapSettingsReplyDto> saveAiRecapApiKey({required String apiKey});
+  /// Securely creates or replaces a credential for one closed provider.
+  Future<AiRecapSettingsReplyDto> saveAiRecapApiKey({
+    required String providerId,
+    required String apiKey,
+  });
 
   /// Autosave a draft for a date (one draft per day). Returns its id.
   PlatformInt64 saveDiaryDraft({required String date, required String content});
 
-  /// Saves the default DeepSeek model used by subsequent report generation.
-  Future<AiRecapSettingsReplyDto> setAiRecapDefaultModel({
-    required String model,
+  /// Atomically saves a validated provider/model selection.
+  Future<AiRecapSettingsReplyDto> setAiRecapProviderSelection({
+    required String providerId,
+    required String modelId,
   });
 
   /// Persist user configuration (applies on next monitor start).
@@ -178,7 +186,7 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
 
-  /// Explicitly tests DeepSeek credentials without sending usage aggregates.
+  /// Explicitly tests the selected provider without sending usage aggregates.
   Future<AiRecapConnectionReplyDto> testAiRecapConnection();
 
   /// Enable/disable a startup entry.

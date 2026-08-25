@@ -32,7 +32,7 @@ void main() {
       expect(bounds.supportedByAiRecap, isTrue);
     });
 
-    test('yesterday, month, and custom are stable unsupported ranges', () {
+    test('yesterday, month, and custom are stable report ranges', () {
       final now = DateTime(2026, 3, 1, 12);
       final cases = <(DateRangeSelection, String, String, String)>[
         (
@@ -62,7 +62,7 @@ void main() {
         expect(bounds.start, expectedStart);
         expect(bounds.end, expectedEnd);
         expect(bounds.label, expectedLabel);
-        expect(bounds.supportedByAiRecap, isFalse);
+        expect(bounds.supportedByAiRecap, isTrue);
       }
     });
 
@@ -79,6 +79,17 @@ void main() {
       expect(beforeMidnight.end, '2026-08-23');
       expect(afterMidnight.start, '2026-08-24');
       expect(afterMidnight.end, '2026-08-24');
+    });
+
+    test('a future calendar day cannot generate a linked report', () {
+      final bounds = resolveDateRange(
+        DateRangeSelection(DateRange.custom, day: DateTime(2026, 8, 27)),
+        DateTime(2026, 8, 26, 9),
+      );
+
+      expect(bounds.start, '2026-08-27');
+      expect(bounds.end, '2026-08-27');
+      expect(bounds.supportedByAiRecap, isFalse);
     });
   });
 }

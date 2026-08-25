@@ -1,4 +1,4 @@
-//! Privacy-bounded DeepSeek recap service.
+//! Privacy-bounded local and DeepSeek recap service.
 //!
 //! The service accepts only aggregate application display names and active
 //! durations from a narrow data source. Credentials, HTTP details, and the
@@ -20,13 +20,15 @@ use zeroize::Zeroizing;
 use crate::ai_credentials::{
     ApiKeySource, CredentialError, CredentialOrigin, StoredOrEnvironmentApiKeySource,
 };
-use crate::ai_report_store::{AiReportStore, AiReportStoreError};
+use crate::ai_report_store::{AiProviderSelectionRecord, AiReportStore, AiReportStoreError};
 
 const API_URL: &str = "https://api.deepseek.com/chat/completions";
 const MODELS_API_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_MODEL: &str = "deepseek-v4-flash";
 const PRO_MODEL: &str = "deepseek-v4-pro";
-const PROVIDER_NAME: &str = "DeepSeek";
+const LOCAL_PROVIDER_ID: &str = "local_summary";
+const LOCAL_MODEL: &str = "local-summary-v1";
+const DEEPSEEK_PROVIDER_ID: &str = "deepseek";
 const MAX_APPS_SENT: usize = 12;
 const MAX_APP_NAME_CHARS: usize = 80;
 const MAX_REQUEST_BYTES: usize = 24 * 1024;
@@ -112,17 +114,47 @@ pub trait RecapTransport: Send + Sync {
     }
 }
 
+/// One closed model choice safe to expose to Flutter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiModelOptionDto {
+    /// Stable model identifier accepted by Rust.
+    pub id: String,
+    /// Localized product label.
+    pub display_name: String,
+    /// `free_local` or `paid_cloud`.
+    pub cost_tier: String,
+}
+
+/// One closed provider choice safe to expose to Flutter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiProviderOptionDto {
+    /// Stable provider identifier accepted by Rust.
+    pub id: String,
+    /// Localized product label.
+    pub display_name: String,
+    /// Stable privacy/cost description without endpoints.
+    pub description: String,
+    /// Whether the provider needs a user-owned API key.
+    pub requires_api_key: bool,
+    /// Whether an explicit aggregate-free connection test is meaningful.
+    pub supports_connection_test: bool,
+    /// Closed models belonging to this provider.
+    pub models: Vec<AiModelOptionDto>,
+}
+
 /// Provider configuration state safe to expose to Flutter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiRecapStatusDto {
     /// Whether the complete local AI report service is available.
     pub service_available: bool,
-    /// Whether a bounded key is available from an allowed source.
-    pub configured: bool,
-    /// Human-readable provider name; never contains endpoint or key data.
-    pub provider: String,
-    /// Model selected when the UI has not chosen another supported model.
-    pub default_model: String,
+    /// Whether the current provider/model can generate immediately.
+    pub ready: bool,
+    /// Stable selected provider identifier.
+    pub selected_provider_id: String,
+    /// Stable selected model identifier.
+    pub selected_model_id: String,
+    /// Complete closed provider/model catalog.
+    pub providers: Vec<AiProviderOptionDto>,
     /// `secure_store`, `legacy_environment`, `none`, or `unavailable`.
     pub credential_source: String,
     /// Whether the operating-system secure credential store is available.
@@ -135,6 +167,9 @@ pub struct AiRecapStatusDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiRecapDto {
+    /// Closed provider used to generate this report. Missing legacy values are DeepSeek.
+    #[serde(default = "legacy_deepseek_provider_id")]
+    pub provider_id: String,
     /// Logical report type: `daily`, `weekly`, or `monthly`.
     pub scope: String,
     /// Inclusive local-calendar start date in `YYYY-MM-DD` form.
@@ -143,7 +178,7 @@ pub struct AiRecapDto {
     pub end_date: String,
     /// Generation time in UTC RFC3339 form.
     pub generated_at_utc: String,
-    /// Exact supported DeepSeek model used for generation.
+    /// Exact supported model used for generation.
     pub model: String,
     /// Short Chinese overview with evidence grounded in the sent aggregates.
     pub summary: AiRecapStatementDto,
@@ -231,6 +266,99 @@ impl AiRecapGenerateReplyDto {
     }
 }
 
+fn legacy_deepseek_provider_id() -> String {
+    DEEPSEEK_PROVIDER_ID.to_owned()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiProviderId {
+    LocalSummary,
+    DeepSeek,
+}
+
+impl AiProviderId {
+    fn parse(value: &str) -> Result<Self, ServiceFailure> {
+        match value {
+            LOCAL_PROVIDER_ID => Ok(Self::LocalSummary),
+            DEEPSEEK_PROVIDER_ID => Ok(Self::DeepSeek),
+            _ => Err(ServiceFailure::UnsupportedProvider),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::LocalSummary => LOCAL_PROVIDER_ID,
+            Self::DeepSeek => DEEPSEEK_PROVIDER_ID,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProviderSelection {
+    provider: AiProviderId,
+    model: &'static str,
+}
+
+impl ProviderSelection {
+    fn local_default() -> Self {
+        Self {
+            provider: AiProviderId::LocalSummary,
+            model: LOCAL_MODEL,
+        }
+    }
+
+    fn parse(provider_id: &str, model_id: &str) -> Result<Self, ServiceFailure> {
+        let provider = AiProviderId::parse(provider_id)?;
+        let model = match (provider, model_id) {
+            (AiProviderId::LocalSummary, LOCAL_MODEL) => LOCAL_MODEL,
+            (AiProviderId::DeepSeek, DEFAULT_MODEL) => DEFAULT_MODEL,
+            (AiProviderId::DeepSeek, PRO_MODEL) => PRO_MODEL,
+            _ => return Err(ServiceFailure::UnsupportedModel),
+        };
+        Ok(Self { provider, model })
+    }
+
+    fn from_record(record: AiProviderSelectionRecord) -> Result<Self, ServiceFailure> {
+        Self::parse(&record.provider_id, &record.model_id)
+    }
+}
+
+fn provider_options() -> Vec<AiProviderOptionDto> {
+    vec![
+        AiProviderOptionDto {
+            id: LOCAL_PROVIDER_ID.to_owned(),
+            display_name: "本地总结（免费）".to_owned(),
+            description: "使用本机聚合统计生成固定结构报告，数据不离开设备。".to_owned(),
+            requires_api_key: false,
+            supports_connection_test: false,
+            models: vec![AiModelOptionDto {
+                id: LOCAL_MODEL.to_owned(),
+                display_name: "本地总结 v1".to_owned(),
+                cost_tier: "free_local".to_owned(),
+            }],
+        },
+        AiProviderOptionDto {
+            id: DEEPSEEK_PROVIDER_ID.to_owned(),
+            display_name: "DeepSeek".to_owned(),
+            description: "生成时发送应用名与聚合时长，使用你的 API Key，可能产生费用。".to_owned(),
+            requires_api_key: true,
+            supports_connection_test: true,
+            models: vec![
+                AiModelOptionDto {
+                    id: DEFAULT_MODEL.to_owned(),
+                    display_name: "DeepSeek Flash".to_owned(),
+                    cost_tier: "paid_cloud".to_owned(),
+                },
+                AiModelOptionDto {
+                    id: PRO_MODEL.to_owned(),
+                    display_name: "DeepSeek Pro".to_owned(),
+                    cost_tier: "paid_cloud".to_owned(),
+                },
+            ],
+        },
+    ]
+}
+
 /// Thread-safe, process-memory recap orchestrator.
 ///
 /// `generate` performs blocking database and HTTP work and therefore must be
@@ -239,11 +367,11 @@ impl AiRecapGenerateReplyDto {
 pub struct AiRecapService {
     usage_source: Arc<dyn AggregateUsageSource>,
     key_source: Arc<dyn ApiKeySource>,
-    transport: Arc<dyn RecapTransport>,
+    generators: ProviderRegistry,
     report_store: Arc<dyn AiReportStore>,
     latest: Mutex<LatestCache>,
     report_commit: Mutex<()>,
-    default_model: Mutex<&'static str>,
+    selection: Mutex<ProviderSelection>,
     data_epoch: AtomicU64,
     in_flight: AtomicBool,
 }
@@ -264,13 +392,27 @@ impl AiRecapService {
 
     /// Reads the current local provider configuration without making a request.
     pub fn status(&self) -> AiRecapStatusDto {
+        let selection = self.current_selection();
         if !self.report_store.is_available() {
             return AiRecapStatusDto {
                 service_available: false,
-                configured: false,
-                provider: PROVIDER_NAME.to_owned(),
-                default_model: self.current_model().to_owned(),
+                ready: false,
+                selected_provider_id: selection.provider.as_str().to_owned(),
+                selected_model_id: selection.model.to_owned(),
+                providers: provider_options(),
                 credential_source: CredentialOrigin::Unavailable.as_str().to_owned(),
+                secure_storage_available: false,
+                environment_migration_available: false,
+            };
+        }
+        if selection.provider == AiProviderId::LocalSummary {
+            return AiRecapStatusDto {
+                service_available: true,
+                ready: true,
+                selected_provider_id: selection.provider.as_str().to_owned(),
+                selected_model_id: selection.model.to_owned(),
+                providers: provider_options(),
+                credential_source: "not_required".to_owned(),
                 secure_storage_available: false,
                 environment_migration_available: false,
             };
@@ -281,10 +423,11 @@ impl AiRecapService {
             && resolved.secure_storage_available;
         let service_available = resolved.origin != CredentialOrigin::Unavailable;
         AiRecapStatusDto {
-            service_available,
-            configured: resolved.key.is_some(),
-            provider: PROVIDER_NAME.to_owned(),
-            default_model: self.current_model().to_owned(),
+            service_available: true,
+            ready: service_available && resolved.key.is_some(),
+            selected_provider_id: selection.provider.as_str().to_owned(),
+            selected_model_id: selection.model.to_owned(),
+            providers: provider_options(),
             credential_source: resolved.origin.as_str().to_owned(),
             secure_storage_available: resolved.secure_storage_available,
             environment_migration_available,
@@ -293,7 +436,10 @@ impl AiRecapService {
 
     /// Returns the latest result for one exact logical scope and date range.
     pub fn latest(&self, scope: &str, start_date: &str, end_date: &str) -> Option<AiRecapDto> {
-        let range = parse_range(scope, start_date, end_date).ok()?;
+        // A report generated for an in-progress period remains readable after
+        // local midnight. Generation uses the stricter current-period parser;
+        // cache lookup only accepts structurally valid historical ranges.
+        let range = parse_persisted_range(scope, start_date, end_date).ok()?;
         self.lock_latest().get(&range)
     }
 
@@ -303,47 +449,68 @@ impl AiRecapService {
     }
 
     /// Securely creates or replaces the stored DeepSeek API key.
-    pub fn save_api_key(&self, key: String) -> AiRecapSettingsReplyDto {
+    pub fn save_api_key(&self, provider_id: String, key: String) -> AiRecapSettingsReplyDto {
         let key = Zeroizing::new(key);
-        let result = self
-            .key_source
-            .save_deepseek_key(key.as_str())
-            .map_err(|error| match error {
-                CredentialError::InvalidData => ServiceFailure::InvalidApiKey,
-                _ => ServiceFailure::CredentialStore,
-            });
+        let result = AiProviderId::parse(&provider_id).and_then(|provider| {
+            if provider != AiProviderId::DeepSeek {
+                return Err(ServiceFailure::UnsupportedProvider);
+            }
+            self.key_source
+                .save_deepseek_key(key.as_str())
+                .map_err(|error| match error {
+                    CredentialError::InvalidData => ServiceFailure::InvalidApiKey,
+                    _ => ServiceFailure::CredentialStore,
+                })
+        });
         self.settings_reply(result)
     }
 
     /// Explicitly imports the legacy environment key into secure storage.
-    pub fn import_environment_api_key(&self) -> AiRecapSettingsReplyDto {
-        let result = match self.key_source.read_environment_deepseek_key() {
-            Some(key) => self
-                .key_source
-                .save_deepseek_key(key.as_str())
-                .map_err(|_| ServiceFailure::CredentialStore),
-            None => Err(ServiceFailure::NotConfigured),
-        };
+    pub fn import_environment_api_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
+        let result = AiProviderId::parse(&provider_id).and_then(|provider| {
+            if provider != AiProviderId::DeepSeek {
+                return Err(ServiceFailure::UnsupportedProvider);
+            }
+            match self.key_source.read_environment_deepseek_key() {
+                Some(key) => self
+                    .key_source
+                    .save_deepseek_key(key.as_str())
+                    .map_err(|_| ServiceFailure::CredentialStore),
+                None => Err(ServiceFailure::NotConfigured),
+            }
+        });
         self.settings_reply(result)
     }
 
     /// Removes the secure key. A valid legacy environment key becomes active
     /// again because secure storage is always preferred over the fallback.
-    pub fn delete_api_key(&self) -> AiRecapSettingsReplyDto {
-        let result = self
-            .key_source
-            .delete_deepseek_key()
-            .map_err(|_| ServiceFailure::CredentialStore);
+    pub fn delete_api_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
+        let result = AiProviderId::parse(&provider_id).and_then(|provider| {
+            if provider != AiProviderId::DeepSeek {
+                return Err(ServiceFailure::UnsupportedProvider);
+            }
+            self.key_source
+                .delete_deepseek_key()
+                .map_err(|_| ServiceFailure::CredentialStore)
+        });
         self.settings_reply(result)
     }
 
-    /// Persists the default DeepSeek model used by future report generations.
-    pub fn set_default_model(&self, model: String) -> AiRecapSettingsReplyDto {
-        let result = validate_model(&model).and_then(|model| {
+    /// Atomically persists the provider and its validated model.
+    pub fn set_provider_selection(
+        &self,
+        provider_id: String,
+        model_id: String,
+    ) -> AiRecapSettingsReplyDto {
+        let result = ProviderSelection::parse(&provider_id, &model_id).and_then(|selection| {
+            // Serialize the durable write and in-memory publication with the
+            // same guard so concurrent Settings calls cannot diverge until
+            // the next restart.
+            let mut current = self.lock_selection();
             self.report_store
-                .save_default_model(model)
+                .save_provider_selection(selection.provider.as_str(), selection.model)
                 .map_err(|_| ServiceFailure::LocalStorage)?;
-            *self.lock_default_model() = model;
+            *current = selection;
             Ok(())
         });
         self.settings_reply(result)
@@ -360,6 +527,13 @@ impl AiRecapService {
                 };
             }
         };
+        let selection = self.current_selection();
+        if selection.provider == AiProviderId::LocalSummary {
+            return AiRecapConnectionReplyDto {
+                success: false,
+                error: Some(ServiceFailure::ConnectionTestNotSupported.into_dto()),
+            };
+        }
         let resolved = self.key_source.resolve_deepseek_key(true);
         if resolved.origin == CredentialOrigin::Unavailable {
             return AiRecapConnectionReplyDto {
@@ -374,8 +548,9 @@ impl AiRecapService {
             };
         };
         match self
-            .transport
-            .test_connection(key.as_str(), self.current_model())
+            .generators
+            .generator(selection.provider)
+            .test_connection(selection.model, Some(key.as_str()))
         {
             Ok(()) => AiRecapConnectionReplyDto {
                 success: true,
@@ -399,21 +574,31 @@ impl AiRecapService {
         start_date: String,
         end_date: String,
     ) -> AiRecapGenerateReplyDto {
+        self.generate_at(scope, start_date, end_date, Local::now().date_naive())
+    }
+
+    fn generate_at(
+        &self,
+        scope: String,
+        start_date: String,
+        end_date: String,
+        today: NaiveDate,
+    ) -> AiRecapGenerateReplyDto {
         if !self.report_store.is_available() {
             return AiRecapGenerateReplyDto::failure(ServiceFailure::LocalStorage);
         }
-        let range = match parse_range(&scope, &start_date, &end_date) {
+        let range = match parse_range_at(&scope, &start_date, &end_date, today) {
             Ok(range) => range,
             Err(failure) => return AiRecapGenerateReplyDto::failure(failure),
         };
-        let model = self.current_model();
+        let selection = self.current_selection();
         let _in_flight = match InFlightGuard::acquire(&self.in_flight) {
             Ok(guard) => guard,
             Err(failure) => return AiRecapGenerateReplyDto::failure(failure),
         };
 
         let data_epoch = self.data_epoch.load(Ordering::Acquire);
-        match self.generate_inner(range, model, data_epoch) {
+        match self.generate_inner(range, selection, data_epoch) {
             Ok(recap) => AiRecapGenerateReplyDto::success(recap),
             Err(failure) => AiRecapGenerateReplyDto::failure(failure),
         }
@@ -425,13 +610,19 @@ impl AiRecapService {
         transport: Arc<dyn RecapTransport>,
         report_store: Arc<dyn AiReportStore>,
     ) -> Self {
-        let model = report_store
-            .load_default_model()
-            .ok()
-            .flatten()
-            .as_deref()
-            .and_then(|model| validate_model(model).ok())
-            .unwrap_or(DEFAULT_MODEL);
+        let selection = match report_store.load_provider_selection() {
+            Ok(record) => ProviderSelection::from_record(record).unwrap_or_else(|failure| {
+                tracing::warn!(
+                    error = failure.into_dto().code,
+                    "invalid persisted AI provider selection; using local safe default"
+                );
+                ProviderSelection::local_default()
+            }),
+            Err(error) => {
+                tracing::warn!(error = %error, "failed to load AI provider selection");
+                ProviderSelection::local_default()
+            }
+        };
         let mut latest = LatestCache::default();
         match report_store.load_latest_reports() {
             Ok(reports) => {
@@ -448,11 +639,11 @@ impl AiRecapService {
         Self {
             usage_source,
             key_source,
-            transport,
+            generators: ProviderRegistry::new(transport),
             report_store,
             latest: Mutex::new(latest),
             report_commit: Mutex::new(()),
-            default_model: Mutex::new(model),
+            selection: Mutex::new(selection),
             data_epoch: AtomicU64::new(0),
             in_flight: AtomicBool::new(false),
         }
@@ -461,22 +652,27 @@ impl AiRecapService {
     fn generate_inner(
         &self,
         range: RangeKey,
-        model: &'static str,
+        selection: ProviderSelection,
         data_epoch: u64,
     ) -> Result<AiRecapDto, ServiceFailure> {
         let usage = self.usage_source.read(range.start, range.end);
         let prepared = prepare_usage(usage)?;
 
-        let resolved = self.key_source.resolve_deepseek_key(true);
-        if resolved.origin == CredentialOrigin::Unavailable {
-            return Err(ServiceFailure::CredentialStore);
-        }
-        let key = resolved.key.ok_or(ServiceFailure::NotConfigured)?;
-        let request = build_request(&range, model, &prepared)?;
-        let completion = self.transport.complete(&key, &request);
-        drop(key);
-        let response = completion.map_err(ServiceFailure::Transport)?;
-        let parsed = parse_provider_response(&response, &prepared, range.scope)?;
+        let credential = if selection.provider == AiProviderId::DeepSeek {
+            let resolved = self.key_source.resolve_deepseek_key(true);
+            if resolved.origin == CredentialOrigin::Unavailable {
+                return Err(ServiceFailure::CredentialStore);
+            }
+            Some(resolved.key.ok_or(ServiceFailure::NotConfigured)?)
+        } else {
+            None
+        };
+        let parsed = self.generators.generator(selection.provider).generate(
+            &range,
+            selection.model,
+            &prepared,
+            credential.as_ref().map(|key| key.as_str()),
+        )?;
         let top_applications = prepared
             .sent
             .iter()
@@ -488,11 +684,12 @@ impl AiRecapService {
             .collect();
 
         let recap = AiRecapDto {
+            provider_id: selection.provider.as_str().to_owned(),
             scope: range.scope.as_str().to_owned(),
             start_date: range.start.to_string(),
             end_date: range.end.to_string(),
             generated_at_utc: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
-            model: model.to_owned(),
+            model: selection.model.to_owned(),
             summary: parsed.summary,
             highlights: parsed.highlights,
             suggestions: parsed.suggestions,
@@ -529,12 +726,12 @@ impl AiRecapService {
         }
     }
 
-    fn current_model(&self) -> &'static str {
-        *self.lock_default_model()
+    fn current_selection(&self) -> ProviderSelection {
+        *self.lock_selection()
     }
 
-    fn lock_default_model(&self) -> MutexGuard<'_, &'static str> {
-        match self.default_model.lock() {
+    fn lock_selection(&self) -> MutexGuard<'_, ProviderSelection> {
+        match self.selection.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
@@ -660,7 +857,9 @@ enum ServiceFailure {
     NotConfigured,
     InvalidApiKey,
     InvalidRange,
+    UnsupportedProvider,
     UnsupportedModel,
+    ConnectionTestNotSupported,
     NoUsageData,
     RequestTooLarge,
     InvalidResponse,
@@ -676,7 +875,9 @@ impl ServiceFailure {
             Self::NotConfigured => ("not_configured", false),
             Self::InvalidApiKey => ("invalid_api_key", false),
             Self::InvalidRange => ("invalid_range", false),
+            Self::UnsupportedProvider => ("unsupported_provider", false),
             Self::UnsupportedModel => ("unsupported_model", false),
+            Self::ConnectionTestNotSupported => ("connection_test_not_supported", false),
             Self::NoUsageData => ("no_usage_data", false),
             Self::RequestTooLarge => ("request_too_large", false),
             Self::InvalidResponse | Self::Transport(RecapFailure::InvalidResponse) => {
@@ -694,6 +895,67 @@ impl ServiceFailure {
         AiRecapErrorDto {
             code: code.to_owned(),
             retryable,
+        }
+    }
+}
+
+/// Closed provider registry. Adding a provider requires an explicit Rust branch;
+/// callers can never supply an endpoint or dynamically dispatch arbitrary code.
+struct ProviderRegistry {
+    deepseek_transport: Arc<dyn RecapTransport>,
+}
+
+impl ProviderRegistry {
+    fn new(deepseek_transport: Arc<dyn RecapTransport>) -> Self {
+        Self { deepseek_transport }
+    }
+
+    fn generator(&self, provider: AiProviderId) -> ProviderGenerator<'_> {
+        match provider {
+            AiProviderId::LocalSummary => ProviderGenerator::LocalSummary,
+            AiProviderId::DeepSeek => ProviderGenerator::DeepSeek(&*self.deepseek_transport),
+        }
+    }
+}
+
+enum ProviderGenerator<'a> {
+    LocalSummary,
+    DeepSeek(&'a dyn RecapTransport),
+}
+
+impl ProviderGenerator<'_> {
+    fn generate(
+        &self,
+        range: &RangeKey,
+        model: &str,
+        usage: &PreparedUsage,
+        credential: Option<&str>,
+    ) -> Result<ValidatedRecapContent, ServiceFailure> {
+        match self {
+            Self::LocalSummary => {
+                if model != LOCAL_MODEL || credential.is_some() {
+                    return Err(ServiceFailure::UnsupportedModel);
+                }
+                generate_local_summary(usage, range.scope)
+            }
+            Self::DeepSeek(transport) => {
+                let model = validate_model(model)?;
+                let key = credential.ok_or(ServiceFailure::NotConfigured)?;
+                let request = build_request(range, model, usage)?;
+                let response = transport
+                    .complete(key, &request)
+                    .map_err(ServiceFailure::Transport)?;
+                parse_provider_response(&response, usage, range.scope)
+            }
+        }
+    }
+
+    fn test_connection(&self, model: &str, credential: Option<&str>) -> Result<(), RecapFailure> {
+        match self {
+            Self::LocalSummary => Err(RecapFailure::InvalidResponse),
+            Self::DeepSeek(transport) => {
+                transport.test_connection(credential.ok_or(RecapFailure::Authentication)?, model)
+            }
         }
     }
 }
@@ -1009,11 +1271,15 @@ fn build_request(
     Ok(body)
 }
 
-fn parse_range(scope: &str, start: &str, end: &str) -> Result<RangeKey, ServiceFailure> {
+fn parse_range_at(
+    scope: &str,
+    start: &str,
+    end: &str,
+    today: NaiveDate,
+) -> Result<RangeKey, ServiceFailure> {
     let scope = RecapScope::parse(scope)?;
     let start = parse_exact_date(start)?;
     let end = parse_exact_date(end)?;
-    let today = Local::now().date_naive();
     if end > today {
         return Err(ServiceFailure::InvalidRange);
     }
@@ -1044,7 +1310,7 @@ fn is_last_day_of_month(date: NaiveDate) -> bool {
 
 fn validate_persisted_report(report: &AiRecapDto) -> Option<RangeKey> {
     let range = parse_persisted_range(&report.scope, &report.start_date, &report.end_date).ok()?;
-    validate_model(&report.model).ok()?;
+    ProviderSelection::parse(&report.provider_id, &report.model).ok()?;
     chrono::DateTime::parse_from_rfc3339(&report.generated_at_utc).ok()?;
     if report.total_active_seconds <= 0
         || report.application_count <= 0
@@ -1161,6 +1427,69 @@ struct ProviderStatement {
 struct ProviderEvidence {
     app_name: String,
     active_seconds: i64,
+}
+
+fn generate_local_summary(
+    usage: &PreparedUsage,
+    scope: RecapScope,
+) -> Result<ValidatedRecapContent, ServiceFailure> {
+    let evidence_for = |index: usize| {
+        let row = usage
+            .sent
+            .get(index)
+            .ok_or(ServiceFailure::InvalidResponse)?;
+        Ok(ProviderEvidence {
+            app_name: row.app_name.clone(),
+            active_seconds: row.active_seconds,
+        })
+    };
+    let top = evidence_for(0)?;
+    let mut highlights = vec![ProviderStatement {
+        kind: "top_application".to_owned(),
+        evidence: vec![ProviderEvidence {
+            app_name: top.app_name.clone(),
+            active_seconds: top.active_seconds,
+        }],
+    }];
+    if usage.sent.len() >= 2 {
+        highlights.push(ProviderStatement {
+            kind: "usage_concentration".to_owned(),
+            evidence: (0..usage.sent.len().min(3))
+                .map(|index| evidence_for(index))
+                .collect::<Result<Vec<_>, _>>()?,
+        });
+    }
+    let mut suggestions = vec![ProviderStatement {
+        kind: "review_top_application".to_owned(),
+        evidence: vec![ProviderEvidence {
+            app_name: top.app_name.clone(),
+            active_seconds: top.active_seconds,
+        }],
+    }];
+    if usage.sent.len() >= 2 {
+        suggestions.push(ProviderStatement {
+            kind: "protect_time_block".to_owned(),
+            evidence: vec![evidence_for(1)?],
+        });
+    }
+    if usage.sent.len() >= 3 {
+        suggestions.push(ProviderStatement {
+            kind: "set_time_budget".to_owned(),
+            evidence: vec![evidence_for(2)?],
+        });
+    }
+    validate_generated_content(
+        RecapContent {
+            summary: ProviderStatement {
+                kind: "usage_overview".to_owned(),
+                evidence: vec![top],
+            },
+            highlights,
+            suggestions,
+        },
+        usage,
+        scope,
+    )
 }
 
 fn parse_provider_response(
@@ -1485,7 +1814,10 @@ mod tests {
 
     struct FakeReportStore {
         reports: Mutex<BTreeMap<String, AiRecapDto>>,
-        model: Mutex<Option<String>>,
+        selection: Mutex<AiProviderSelectionRecord>,
+        selection_save_active: AtomicUsize,
+        selection_save_max_active: AtomicUsize,
+        selection_save_delay_ms: AtomicU64,
         fail_report_saves: AtomicBool,
         fail_report_clears: AtomicBool,
     }
@@ -1494,7 +1826,13 @@ mod tests {
         fn new() -> Self {
             Self {
                 reports: Mutex::new(BTreeMap::new()),
-                model: Mutex::new(None),
+                selection: Mutex::new(AiProviderSelectionRecord {
+                    provider_id: DEEPSEEK_PROVIDER_ID.to_owned(),
+                    model_id: DEFAULT_MODEL.to_owned(),
+                }),
+                selection_save_active: AtomicUsize::new(0),
+                selection_save_max_active: AtomicUsize::new(0),
+                selection_save_delay_ms: AtomicU64::new(0),
                 fail_report_saves: AtomicBool::new(false),
                 fail_report_clears: AtomicBool::new(false),
             }
@@ -1531,12 +1869,27 @@ mod tests {
             Ok(())
         }
 
-        fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
-            Ok(self.model.lock().expect("fake model lock").clone())
+        fn load_provider_selection(&self) -> Result<AiProviderSelectionRecord, AiReportStoreError> {
+            Ok(self.selection.lock().expect("fake selection lock").clone())
         }
 
-        fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError> {
-            *self.model.lock().expect("fake model lock") = Some(model.to_owned());
+        fn save_provider_selection(
+            &self,
+            provider_id: &str,
+            model_id: &str,
+        ) -> Result<(), AiReportStoreError> {
+            let active = self.selection_save_active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.selection_save_max_active
+                .fetch_max(active, Ordering::SeqCst);
+            let delay_ms = self.selection_save_delay_ms.load(Ordering::SeqCst);
+            if delay_ms != 0 {
+                thread::sleep(Duration::from_millis(delay_ms));
+            }
+            *self.selection.lock().expect("fake selection lock") = AiProviderSelectionRecord {
+                provider_id: provider_id.to_owned(),
+                model_id: model_id.to_owned(),
+            };
+            self.selection_save_active.fetch_sub(1, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -1584,12 +1937,16 @@ mod tests {
             self.inner.clear_latest_reports()
         }
 
-        fn load_default_model(&self) -> Result<Option<String>, AiReportStoreError> {
-            self.inner.load_default_model()
+        fn load_provider_selection(&self) -> Result<AiProviderSelectionRecord, AiReportStoreError> {
+            self.inner.load_provider_selection()
         }
 
-        fn save_default_model(&self, model: &str) -> Result<(), AiReportStoreError> {
-            self.inner.save_default_model(model)
+        fn save_provider_selection(
+            &self,
+            provider_id: &str,
+            model_id: &str,
+        ) -> Result<(), AiReportStoreError> {
+            self.inner.save_provider_selection(provider_id, model_id)
         }
     }
 
@@ -1766,15 +2123,92 @@ mod tests {
             service.status(),
             AiRecapStatusDto {
                 service_available: true,
-                configured: true,
-                provider: "DeepSeek".to_owned(),
-                default_model: DEFAULT_MODEL.to_owned(),
+                ready: true,
+                selected_provider_id: DEEPSEEK_PROVIDER_ID.to_owned(),
+                selected_model_id: DEFAULT_MODEL.to_owned(),
+                providers: provider_options(),
                 credential_source: "secure_store".to_owned(),
                 secure_storage_available: true,
                 environment_migration_available: false,
             }
         );
         assert_eq!(key.reads.load(Ordering::Relaxed), 1);
+        assert_eq!(transport.call_count(), 0);
+    }
+
+    #[test]
+    fn local_summary_is_ready_without_key_or_network_and_persists_report() {
+        let key = Arc::new(FakeKeySource::new(None));
+        let transport = Arc::new(FakeTransport::failing(RecapFailure::Network));
+        let store = Arc::new(FakeReportStore::new());
+        store
+            .save_provider_selection(LOCAL_PROVIDER_ID, LOCAL_MODEL)
+            .expect("select local summary");
+        let service = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            key.clone(),
+            transport.clone(),
+            store.clone(),
+        );
+
+        let status = service.status();
+        assert!(status.service_available);
+        assert!(status.ready);
+        assert_eq!(status.selected_provider_id, LOCAL_PROVIDER_ID);
+        assert_eq!(status.selected_model_id, LOCAL_MODEL);
+        assert_eq!(status.credential_source, "not_required");
+        assert_eq!(key.reads.load(Ordering::Relaxed), 0);
+
+        let fixed_today = NaiveDate::from_ymd_opt(2026, 8, 24).expect("fixed Monday");
+        for (scope, start, end, expected_label) in [
+            ("daily", "2026-08-24", "2026-08-24", "所选日期"),
+            ("weekly", "2026-08-24", "2026-08-24", "所选周"),
+            ("monthly", "2026-08-01", "2026-08-24", "所选月份"),
+        ] {
+            let reply = service.generate_at(
+                scope.to_owned(),
+                start.to_owned(),
+                end.to_owned(),
+                fixed_today,
+            );
+            let recap = reply.recap.expect("local time report");
+            assert!(reply.error.is_none());
+            assert_eq!(recap.provider_id, LOCAL_PROVIDER_ID);
+            assert_eq!(recap.model, LOCAL_MODEL);
+            assert_eq!(recap.scope, scope);
+            assert!(recap.summary.text.contains(expected_label));
+        }
+        assert_eq!(transport.call_count(), 0);
+        assert_eq!(key.reads.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            store
+                .load_latest_reports()
+                .expect("persisted local report")
+                .len(),
+            3
+        );
+
+        let restarted = AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            key.clone(),
+            transport.clone(),
+            store,
+        );
+        assert_eq!(restarted.status().selected_provider_id, LOCAL_PROVIDER_ID);
+        assert_eq!(restarted.latest_reports().len(), 3);
+        assert!(
+            restarted
+                .latest_reports()
+                .iter()
+                .all(|report| report.provider_id == LOCAL_PROVIDER_ID)
+        );
+
+        let connection = restarted.test_connection();
+        assert!(!connection.success);
+        assert_eq!(
+            connection.error.expect("unsupported connection test").code,
+            "connection_test_not_supported"
+        );
         assert_eq!(transport.call_count(), 0);
     }
 
@@ -1792,7 +2226,7 @@ mod tests {
 
         let status = service.status();
         assert!(!status.service_available);
-        assert!(!status.configured);
+        assert!(!status.ready);
         assert_eq!(status.credential_source, "unavailable");
 
         let reply = generate(&service, "2026-08-24");
@@ -1820,24 +2254,78 @@ mod tests {
         assert_eq!(initial.credential_source, "legacy_environment");
         assert!(initial.environment_migration_available);
 
-        let saved = service.save_api_key(" new-stored-secret ".to_owned());
+        let saved = service.save_api_key(
+            DEEPSEEK_PROVIDER_ID.to_owned(),
+            " new-stored-secret ".to_owned(),
+        );
         assert!(saved.error.is_none());
         assert_eq!(saved.status.credential_source, "secure_store");
         assert!(!format!("{saved:?}").contains("new-stored-secret"));
 
-        let model = service.set_default_model(PRO_MODEL.to_owned());
+        let model =
+            service.set_provider_selection(DEEPSEEK_PROVIDER_ID.to_owned(), PRO_MODEL.to_owned());
         assert!(model.error.is_none());
-        assert_eq!(model.status.default_model, PRO_MODEL);
+        assert_eq!(model.status.selected_model_id, PRO_MODEL);
         assert_eq!(
-            store.model.lock().expect("fake model lock").as_deref(),
-            Some(PRO_MODEL)
+            store
+                .selection
+                .lock()
+                .expect("fake selection lock")
+                .model_id,
+            PRO_MODEL
         );
 
-        let deleted = service.delete_api_key();
+        let deleted = service.delete_api_key(DEEPSEEK_PROVIDER_ID.to_owned());
         assert!(deleted.error.is_none());
         assert_eq!(deleted.status.credential_source, "legacy_environment");
-        assert!(deleted.status.configured);
+        assert!(deleted.status.ready);
         assert!(deleted.status.environment_migration_available);
+    }
+
+    #[test]
+    fn concurrent_provider_updates_publish_the_same_durable_and_memory_selection() {
+        let store = Arc::new(FakeReportStore::new());
+        store.selection_save_delay_ms.store(25, Ordering::SeqCst);
+        let service = Arc::new(AiRecapService::with_ports(
+            Arc::new(FakeUsageSource::new(usage())),
+            Arc::new(FakeKeySource::new(Some("secret"))),
+            Arc::new(FakeTransport::successful()),
+            store.clone(),
+        ));
+
+        let local_service = service.clone();
+        let local = thread::spawn(move || {
+            local_service
+                .set_provider_selection(LOCAL_PROVIDER_ID.to_owned(), LOCAL_MODEL.to_owned())
+        });
+        let cloud_service = service.clone();
+        let cloud = thread::spawn(move || {
+            cloud_service
+                .set_provider_selection(DEEPSEEK_PROVIDER_ID.to_owned(), PRO_MODEL.to_owned())
+        });
+
+        assert!(
+            local
+                .join()
+                .expect("local selection thread")
+                .error
+                .is_none()
+        );
+        assert!(
+            cloud
+                .join()
+                .expect("cloud selection thread")
+                .error
+                .is_none()
+        );
+        assert_eq!(store.selection_save_max_active.load(Ordering::SeqCst), 1);
+
+        let persisted = store
+            .load_provider_selection()
+            .expect("persisted provider selection");
+        let current = service.current_selection();
+        assert_eq!(persisted.provider_id, current.provider.as_str());
+        assert_eq!(persisted.model_id, current.model);
     }
 
     #[test]
@@ -1883,7 +2371,7 @@ mod tests {
     }
 
     #[test]
-    fn persisted_latest_reports_and_default_model_load_without_network_after_restart() {
+    fn persisted_latest_reports_and_provider_selection_load_without_network_after_restart() {
         let store = Arc::new(FakeReportStore::new());
         let first_transport = Arc::new(FakeTransport::successful());
         let first = AiRecapService::with_ports(
@@ -1894,7 +2382,7 @@ mod tests {
         );
         assert!(
             first
-                .set_default_model(PRO_MODEL.to_owned())
+                .set_provider_selection(DEEPSEEK_PROVIDER_ID.to_owned(), PRO_MODEL.to_owned())
                 .error
                 .is_none()
         );
@@ -1910,7 +2398,7 @@ mod tests {
             store.clone(),
         );
 
-        assert_eq!(restarted.status().default_model, PRO_MODEL);
+        assert_eq!(restarted.status().selected_model_id, PRO_MODEL);
         assert_eq!(restarted.latest_reports(), vec![generated.clone()]);
         assert_eq!(
             restarted.latest("daily", "2026-08-24", "2026-08-24"),
@@ -1938,9 +2426,10 @@ mod tests {
     }
 
     #[test]
-    fn invalid_scope_range_and_default_model_return_typed_errors() {
+    fn invalid_scope_range_and_provider_selection_return_typed_errors() {
         let transport = Arc::new(FakeTransport::successful());
         let service = service(usage(), Some("secret"), transport.clone());
+        let fixed_today = NaiveDate::from_ymd_opt(2026, 8, 24).expect("fixed Monday");
 
         let invalid_range = service.generate(
             "daily".to_owned(),
@@ -1956,9 +2445,9 @@ mod tests {
             assert_eq!(error_code(&reply), "invalid_range");
         }
 
-        assert!(parse_range("daily", "2026-08-24", "2026-08-24").is_ok());
-        assert!(parse_range("weekly", "2026-08-24", "2026-08-24").is_ok());
-        assert!(parse_range("monthly", "2026-08-01", "2026-08-24").is_ok());
+        assert!(parse_range_at("daily", "2026-08-24", "2026-08-24", fixed_today).is_ok());
+        assert!(parse_range_at("weekly", "2026-08-24", "2026-08-24", fixed_today).is_ok());
+        assert!(parse_range_at("monthly", "2026-08-01", "2026-08-24", fixed_today).is_ok());
         for (scope, start, end) in [
             ("unknown", "2026-08-24", "2026-08-24"),
             ("daily", "2026-08-24", "2026-08-25"),
@@ -1969,17 +2458,20 @@ mod tests {
             ("monthly", "2026-07-01", "2026-07-30"),
         ] {
             assert_eq!(
-                parse_range(scope, start, end),
+                parse_range_at(scope, start, end, fixed_today),
                 Err(ServiceFailure::InvalidRange),
                 "{scope} {start}..{end} must be rejected"
             );
         }
-        assert!(parse_range("weekly", "2026-08-17", "2026-08-18").is_err());
+        assert!(parse_range_at("weekly", "2026-08-17", "2026-08-18", fixed_today).is_err());
         assert!(parse_persisted_range("weekly", "2026-08-17", "2026-08-18").is_ok());
-        assert!(parse_range("monthly", "2026-07-01", "2026-07-18").is_err());
+        assert!(parse_range_at("monthly", "2026-07-01", "2026-07-18", fixed_today).is_err());
         assert!(parse_persisted_range("monthly", "2026-07-01", "2026-07-18").is_ok());
 
-        let invalid_model = service.set_default_model("deepseek-unknown".to_owned());
+        let invalid_model = service.set_provider_selection(
+            DEEPSEEK_PROVIDER_ID.to_owned(),
+            "deepseek-unknown".to_owned(),
+        );
         assert_eq!(
             invalid_model
                 .error
@@ -2204,13 +2696,24 @@ mod tests {
         let transport = Arc::new(FakeTransport::successful());
         let service = service(usage(), Some("secret"), transport.clone());
         let monday = "2026-08-24";
+        let fixed_today = NaiveDate::from_ymd_opt(2026, 8, 24).expect("fixed Monday");
 
         let today = service
-            .generate("daily".to_owned(), monday.to_owned(), monday.to_owned())
+            .generate_at(
+                "daily".to_owned(),
+                monday.to_owned(),
+                monday.to_owned(),
+                fixed_today,
+            )
             .recap
             .expect("today recap");
         let week = service
-            .generate("weekly".to_owned(), monday.to_owned(), monday.to_owned())
+            .generate_at(
+                "weekly".to_owned(),
+                monday.to_owned(),
+                monday.to_owned(),
+                fixed_today,
+            )
             .recap
             .expect("Monday week-to-date recap");
 
@@ -2680,10 +3183,11 @@ mod tests {
             Arc::new(FakeReportStore::new()),
         );
 
-        assert!(service.status().configured, "live smoke requires a key");
+        assert!(service.status().ready, "live smoke requires a key");
 
         for model in [DEFAULT_MODEL, PRO_MODEL] {
-            let settings = service.set_default_model(model.to_owned());
+            let settings =
+                service.set_provider_selection(DEEPSEEK_PROVIDER_ID.to_owned(), model.to_owned());
             assert!(settings.error.is_none());
             let reply = service.generate(
                 "weekly".to_owned(),

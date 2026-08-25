@@ -6,6 +6,87 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// One closed model choice safe to expose to Flutter.
+class AiModelOptionDto {
+  /// Stable model identifier accepted by Rust.
+  final String id;
+
+  /// Localized product label.
+  final String displayName;
+
+  /// `free_local` or `paid_cloud`.
+  final String costTier;
+
+  const AiModelOptionDto({
+    required this.id,
+    required this.displayName,
+    required this.costTier,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ displayName.hashCode ^ costTier.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiModelOptionDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          displayName == other.displayName &&
+          costTier == other.costTier;
+}
+
+/// One closed provider choice safe to expose to Flutter.
+class AiProviderOptionDto {
+  /// Stable provider identifier accepted by Rust.
+  final String id;
+
+  /// Localized product label.
+  final String displayName;
+
+  /// Stable privacy/cost description without endpoints.
+  final String description;
+
+  /// Whether the provider needs a user-owned API key.
+  final bool requiresApiKey;
+
+  /// Whether an explicit aggregate-free connection test is meaningful.
+  final bool supportsConnectionTest;
+
+  /// Closed models belonging to this provider.
+  final List<AiModelOptionDto> models;
+
+  const AiProviderOptionDto({
+    required this.id,
+    required this.displayName,
+    required this.description,
+    required this.requiresApiKey,
+    required this.supportsConnectionTest,
+    required this.models,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      displayName.hashCode ^
+      description.hashCode ^
+      requiresApiKey.hashCode ^
+      supportsConnectionTest.hashCode ^
+      models.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiProviderOptionDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          displayName == other.displayName &&
+          description == other.description &&
+          requiresApiKey == other.requiresApiKey &&
+          supportsConnectionTest == other.supportsConnectionTest &&
+          models == other.models;
+}
+
 /// Reply for an explicit, aggregate-free provider connection test.
 class AiRecapConnectionReplyDto {
   /// True only after DeepSeek accepts the configured credential.
@@ -30,6 +111,9 @@ class AiRecapConnectionReplyDto {
 
 /// A complete, validated recap result safe to expose to Flutter.
 class AiRecapDto {
+  /// Closed provider used to generate this report. Missing legacy values are DeepSeek.
+  final String providerId;
+
   /// Logical report type: `daily`, `weekly`, or `monthly`.
   final String scope;
 
@@ -42,7 +126,7 @@ class AiRecapDto {
   /// Generation time in UTC RFC3339 form.
   final String generatedAtUtc;
 
-  /// Exact supported DeepSeek model used for generation.
+  /// Exact supported model used for generation.
   final String model;
 
   /// Short Chinese overview with evidence grounded in the sent aggregates.
@@ -64,6 +148,7 @@ class AiRecapDto {
   final PlatformInt64 applicationCount;
 
   const AiRecapDto({
+    required this.providerId,
     required this.scope,
     required this.startDate,
     required this.endDate,
@@ -79,6 +164,7 @@ class AiRecapDto {
 
   @override
   int get hashCode =>
+      providerId.hashCode ^
       scope.hashCode ^
       startDate.hashCode ^
       endDate.hashCode ^
@@ -96,6 +182,7 @@ class AiRecapDto {
       identical(this, other) ||
       other is AiRecapDto &&
           runtimeType == other.runtimeType &&
+          providerId == other.providerId &&
           scope == other.scope &&
           startDate == other.startDate &&
           endDate == other.endDate &&
@@ -227,14 +314,17 @@ class AiRecapStatusDto {
   /// Whether the complete local AI report service is available.
   final bool serviceAvailable;
 
-  /// Whether a bounded key is available from an allowed source.
-  final bool configured;
+  /// Whether the current provider/model can generate immediately.
+  final bool ready;
 
-  /// Human-readable provider name; never contains endpoint or key data.
-  final String provider;
+  /// Stable selected provider identifier.
+  final String selectedProviderId;
 
-  /// Model selected when the UI has not chosen another supported model.
-  final String defaultModel;
+  /// Stable selected model identifier.
+  final String selectedModelId;
+
+  /// Complete closed provider/model catalog.
+  final List<AiProviderOptionDto> providers;
 
   /// `secure_store`, `legacy_environment`, `none`, or `unavailable`.
   final String credentialSource;
@@ -247,9 +337,10 @@ class AiRecapStatusDto {
 
   const AiRecapStatusDto({
     required this.serviceAvailable,
-    required this.configured,
-    required this.provider,
-    required this.defaultModel,
+    required this.ready,
+    required this.selectedProviderId,
+    required this.selectedModelId,
+    required this.providers,
     required this.credentialSource,
     required this.secureStorageAvailable,
     required this.environmentMigrationAvailable,
@@ -258,9 +349,10 @@ class AiRecapStatusDto {
   @override
   int get hashCode =>
       serviceAvailable.hashCode ^
-      configured.hashCode ^
-      provider.hashCode ^
-      defaultModel.hashCode ^
+      ready.hashCode ^
+      selectedProviderId.hashCode ^
+      selectedModelId.hashCode ^
+      providers.hashCode ^
       credentialSource.hashCode ^
       secureStorageAvailable.hashCode ^
       environmentMigrationAvailable.hashCode;
@@ -271,9 +363,10 @@ class AiRecapStatusDto {
       other is AiRecapStatusDto &&
           runtimeType == other.runtimeType &&
           serviceAvailable == other.serviceAvailable &&
-          configured == other.configured &&
-          provider == other.provider &&
-          defaultModel == other.defaultModel &&
+          ready == other.ready &&
+          selectedProviderId == other.selectedProviderId &&
+          selectedModelId == other.selectedModelId &&
+          providers == other.providers &&
           credentialSource == other.credentialSource &&
           secureStorageAvailable == other.secureStorageAvailable &&
           environmentMigrationAvailable == other.environmentMigrationAvailable;

@@ -65,7 +65,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -572136432;
+  int get rustContentHash => 1616842152;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -99,6 +99,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiDeleteAiRecapApiKey({
     required TimeTraceApi that,
+    required String providerId,
   });
 
   void crateApiTimeTraceApiDeleteDiaryEntry({
@@ -227,7 +228,10 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<AiRecapSettingsReplyDto>
-  crateApiTimeTraceApiImportAiRecapEnvironmentKey({required TimeTraceApi that});
+  crateApiTimeTraceApiImportAiRecapEnvironmentKey({
+    required TimeTraceApi that,
+    required String providerId,
+  });
 
   bool crateApiTimeTraceApiIsDatabaseDegraded({required TimeTraceApi that});
 
@@ -253,6 +257,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiSaveAiRecapApiKey({
     required TimeTraceApi that,
+    required String providerId,
     required String apiKey,
   });
 
@@ -262,9 +267,11 @@ abstract class RustLibApi extends BaseApi {
     required String content,
   });
 
-  Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiSetAiRecapDefaultModel({
+  Future<AiRecapSettingsReplyDto>
+  crateApiTimeTraceApiSetAiRecapProviderSelection({
     required TimeTraceApi that,
-    required String model,
+    required String providerId,
+    required String modelId,
   });
 
   void crateApiTimeTraceApiSetConfig({
@@ -487,6 +494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiDeleteAiRecapApiKey({
     required TimeTraceApi that,
+    required String providerId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -496,6 +504,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
+          sse_encode_String(providerId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -508,7 +517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiTimeTraceApiDeleteAiRecapApiKeyConstMeta,
-        argValues: [that],
+        argValues: [that, providerId],
         apiImpl: this,
       ),
     );
@@ -517,7 +526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTimeTraceApiDeleteAiRecapApiKeyConstMeta =>
       const TaskConstMeta(
         debugName: "TimeTraceApi_delete_ai_recap_api_key",
-        argNames: ["that"],
+        argNames: ["that", "providerId"],
       );
 
   @override
@@ -1310,6 +1319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<AiRecapSettingsReplyDto>
   crateApiTimeTraceApiImportAiRecapEnvironmentKey({
     required TimeTraceApi that,
+    required String providerId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1319,6 +1329,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
+          sse_encode_String(providerId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1331,7 +1342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiTimeTraceApiImportAiRecapEnvironmentKeyConstMeta,
-        argValues: [that],
+        argValues: [that, providerId],
         apiImpl: this,
       ),
     );
@@ -1340,7 +1351,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTimeTraceApiImportAiRecapEnvironmentKeyConstMeta =>
       const TaskConstMeta(
         debugName: "TimeTraceApi_import_ai_recap_environment_key",
-        argNames: ["that"],
+        argNames: ["that", "providerId"],
       );
 
   @override
@@ -1534,6 +1545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiSaveAiRecapApiKey({
     required TimeTraceApi that,
+    required String providerId,
     required String apiKey,
   }) {
     return handler.executeNormal(
@@ -1544,6 +1556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
+          sse_encode_String(providerId, serializer);
           sse_encode_String(apiKey, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -1557,7 +1570,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiTimeTraceApiSaveAiRecapApiKeyConstMeta,
-        argValues: [that, apiKey],
+        argValues: [that, providerId, apiKey],
         apiImpl: this,
       ),
     );
@@ -1566,7 +1579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTimeTraceApiSaveAiRecapApiKeyConstMeta =>
       const TaskConstMeta(
         debugName: "TimeTraceApi_save_ai_recap_api_key",
-        argNames: ["that", "apiKey"],
+        argNames: ["that", "providerId", "apiKey"],
       );
 
   @override
@@ -1605,9 +1618,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<AiRecapSettingsReplyDto> crateApiTimeTraceApiSetAiRecapDefaultModel({
+  Future<AiRecapSettingsReplyDto>
+  crateApiTimeTraceApiSetAiRecapProviderSelection({
     required TimeTraceApi that,
-    required String model,
+    required String providerId,
+    required String modelId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1617,7 +1632,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          sse_encode_String(model, serializer);
+          sse_encode_String(providerId, serializer);
+          sse_encode_String(modelId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1629,17 +1645,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_ai_recap_settings_reply_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiTimeTraceApiSetAiRecapDefaultModelConstMeta,
-        argValues: [that, model],
+        constMeta: kCrateApiTimeTraceApiSetAiRecapProviderSelectionConstMeta,
+        argValues: [that, providerId, modelId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiTimeTraceApiSetAiRecapDefaultModelConstMeta =>
+  TaskConstMeta get kCrateApiTimeTraceApiSetAiRecapProviderSelectionConstMeta =>
       const TaskConstMeta(
-        debugName: "TimeTraceApi_set_ai_recap_default_model",
-        argNames: ["that", "model"],
+        debugName: "TimeTraceApi_set_ai_recap_provider_selection",
+        argNames: ["that", "providerId", "modelId"],
       );
 
   @override
@@ -1967,6 +1983,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiModelOptionDto dco_decode_ai_model_option_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AiModelOptionDto(
+      id: dco_decode_String(arr[0]),
+      displayName: dco_decode_String(arr[1]),
+      costTier: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  AiProviderOptionDto dco_decode_ai_provider_option_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AiProviderOptionDto(
+      id: dco_decode_String(arr[0]),
+      displayName: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+      requiresApiKey: dco_decode_bool(arr[3]),
+      supportsConnectionTest: dco_decode_bool(arr[4]),
+      models: dco_decode_list_ai_model_option_dto(arr[5]),
+    );
+  }
+
+  @protected
   AiRecapConnectionReplyDto dco_decode_ai_recap_connection_reply_dto(
     dynamic raw,
   ) {
@@ -1984,20 +2029,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiRecapDto dco_decode_ai_recap_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return AiRecapDto(
-      scope: dco_decode_String(arr[0]),
-      startDate: dco_decode_String(arr[1]),
-      endDate: dco_decode_String(arr[2]),
-      generatedAtUtc: dco_decode_String(arr[3]),
-      model: dco_decode_String(arr[4]),
-      summary: dco_decode_ai_recap_statement_dto(arr[5]),
-      highlights: dco_decode_list_ai_recap_statement_dto(arr[6]),
-      suggestions: dco_decode_list_ai_recap_statement_dto(arr[7]),
-      topApplications: dco_decode_list_ai_recap_evidence_dto(arr[8]),
-      totalActiveSeconds: dco_decode_i_64(arr[9]),
-      applicationCount: dco_decode_i_64(arr[10]),
+      providerId: dco_decode_String(arr[0]),
+      scope: dco_decode_String(arr[1]),
+      startDate: dco_decode_String(arr[2]),
+      endDate: dco_decode_String(arr[3]),
+      generatedAtUtc: dco_decode_String(arr[4]),
+      model: dco_decode_String(arr[5]),
+      summary: dco_decode_ai_recap_statement_dto(arr[6]),
+      highlights: dco_decode_list_ai_recap_statement_dto(arr[7]),
+      suggestions: dco_decode_list_ai_recap_statement_dto(arr[8]),
+      topApplications: dco_decode_list_ai_recap_evidence_dto(arr[9]),
+      totalActiveSeconds: dco_decode_i_64(arr[10]),
+      applicationCount: dco_decode_i_64(arr[11]),
     );
   }
 
@@ -2065,16 +2111,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiRecapStatusDto dco_decode_ai_recap_status_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return AiRecapStatusDto(
       serviceAvailable: dco_decode_bool(arr[0]),
-      configured: dco_decode_bool(arr[1]),
-      provider: dco_decode_String(arr[2]),
-      defaultModel: dco_decode_String(arr[3]),
-      credentialSource: dco_decode_String(arr[4]),
-      secureStorageAvailable: dco_decode_bool(arr[5]),
-      environmentMigrationAvailable: dco_decode_bool(arr[6]),
+      ready: dco_decode_bool(arr[1]),
+      selectedProviderId: dco_decode_String(arr[2]),
+      selectedModelId: dco_decode_String(arr[3]),
+      providers: dco_decode_list_ai_provider_option_dto(arr[4]),
+      credentialSource: dco_decode_String(arr[5]),
+      secureStorageAvailable: dco_decode_bool(arr[6]),
+      environmentMigrationAvailable: dco_decode_bool(arr[7]),
     );
   }
 
@@ -2227,6 +2274,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<AiModelOptionDto> dco_decode_list_ai_model_option_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ai_model_option_dto).toList();
+  }
+
+  @protected
+  List<AiProviderOptionDto> dco_decode_list_ai_provider_option_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ai_provider_option_dto)
+        .toList();
   }
 
   @protected
@@ -2497,6 +2560,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiModelOptionDto sse_decode_ai_model_option_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_costTier = sse_decode_String(deserializer);
+    return AiModelOptionDto(
+      id: var_id,
+      displayName: var_displayName,
+      costTier: var_costTier,
+    );
+  }
+
+  @protected
+  AiProviderOptionDto sse_decode_ai_provider_option_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_requiresApiKey = sse_decode_bool(deserializer);
+    var var_supportsConnectionTest = sse_decode_bool(deserializer);
+    var var_models = sse_decode_list_ai_model_option_dto(deserializer);
+    return AiProviderOptionDto(
+      id: var_id,
+      displayName: var_displayName,
+      description: var_description,
+      requiresApiKey: var_requiresApiKey,
+      supportsConnectionTest: var_supportsConnectionTest,
+      models: var_models,
+    );
+  }
+
+  @protected
   AiRecapConnectionReplyDto sse_decode_ai_recap_connection_reply_dto(
     SseDeserializer deserializer,
   ) {
@@ -2509,6 +2608,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   AiRecapDto sse_decode_ai_recap_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_providerId = sse_decode_String(deserializer);
     var var_scope = sse_decode_String(deserializer);
     var var_startDate = sse_decode_String(deserializer);
     var var_endDate = sse_decode_String(deserializer);
@@ -2523,6 +2623,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_totalActiveSeconds = sse_decode_i_64(deserializer);
     var var_applicationCount = sse_decode_i_64(deserializer);
     return AiRecapDto(
+      providerId: var_providerId,
       scope: var_scope,
       startDate: var_startDate,
       endDate: var_endDate,
@@ -2594,17 +2695,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_serviceAvailable = sse_decode_bool(deserializer);
-    var var_configured = sse_decode_bool(deserializer);
-    var var_provider = sse_decode_String(deserializer);
-    var var_defaultModel = sse_decode_String(deserializer);
+    var var_ready = sse_decode_bool(deserializer);
+    var var_selectedProviderId = sse_decode_String(deserializer);
+    var var_selectedModelId = sse_decode_String(deserializer);
+    var var_providers = sse_decode_list_ai_provider_option_dto(deserializer);
     var var_credentialSource = sse_decode_String(deserializer);
     var var_secureStorageAvailable = sse_decode_bool(deserializer);
     var var_environmentMigrationAvailable = sse_decode_bool(deserializer);
     return AiRecapStatusDto(
       serviceAvailable: var_serviceAvailable,
-      configured: var_configured,
-      provider: var_provider,
-      defaultModel: var_defaultModel,
+      ready: var_ready,
+      selectedProviderId: var_selectedProviderId,
+      selectedModelId: var_selectedModelId,
+      providers: var_providers,
       credentialSource: var_credentialSource,
       secureStorageAvailable: var_secureStorageAvailable,
       environmentMigrationAvailable: var_environmentMigrationAvailable,
@@ -2774,6 +2877,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AiModelOptionDto> sse_decode_list_ai_model_option_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AiModelOptionDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ai_model_option_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AiProviderOptionDto> sse_decode_list_ai_provider_option_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AiProviderOptionDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ai_provider_option_dto(deserializer));
     }
     return ans_;
   }
@@ -3150,6 +3281,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_ai_model_option_dto(
+    AiModelOptionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_String(self.costTier, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_provider_option_dto(
+    AiProviderOptionDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_bool(self.requiresApiKey, serializer);
+    sse_encode_bool(self.supportsConnectionTest, serializer);
+    sse_encode_list_ai_model_option_dto(self.models, serializer);
+  }
+
+  @protected
   void sse_encode_ai_recap_connection_reply_dto(
     AiRecapConnectionReplyDto self,
     SseSerializer serializer,
@@ -3162,6 +3318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_ai_recap_dto(AiRecapDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.providerId, serializer);
     sse_encode_String(self.scope, serializer);
     sse_encode_String(self.startDate, serializer);
     sse_encode_String(self.endDate, serializer);
@@ -3232,9 +3389,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.serviceAvailable, serializer);
-    sse_encode_bool(self.configured, serializer);
-    sse_encode_String(self.provider, serializer);
-    sse_encode_String(self.defaultModel, serializer);
+    sse_encode_bool(self.ready, serializer);
+    sse_encode_String(self.selectedProviderId, serializer);
+    sse_encode_String(self.selectedModelId, serializer);
+    sse_encode_list_ai_provider_option_dto(self.providers, serializer);
     sse_encode_String(self.credentialSource, serializer);
     sse_encode_bool(self.secureStorageAvailable, serializer);
     sse_encode_bool(self.environmentMigrationAvailable, serializer);
@@ -3377,6 +3535,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ai_model_option_dto(
+    List<AiModelOptionDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ai_model_option_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ai_provider_option_dto(
+    List<AiProviderOptionDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ai_provider_option_dto(item, serializer);
     }
   }
 
@@ -3707,7 +3889,7 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
       .api
       .crateApiTimeTraceApiAddDiaryImage(that: this, date: date, path: path);
 
-  /// Redacted DeepSeek configuration state; never exposes credential data.
+  /// Redacted report-provider state; never exposes credential data.
   AiRecapStatusDto aiRecapStatus() =>
       RustLib.instance.api.crateApiTimeTraceApiAiRecapStatus(that: this);
 
@@ -3715,9 +3897,13 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   bool clearData() =>
       RustLib.instance.api.crateApiTimeTraceApiClearData(that: this);
 
-  /// Removes the secure API key; a legacy environment key may become active again.
-  Future<AiRecapSettingsReplyDto> deleteAiRecapApiKey() =>
-      RustLib.instance.api.crateApiTimeTraceApiDeleteAiRecapApiKey(that: this);
+  /// Removes one provider's secure key; its environment fallback may become active.
+  Future<AiRecapSettingsReplyDto> deleteAiRecapApiKey({
+    required String providerId,
+  }) => RustLib.instance.api.crateApiTimeTraceApiDeleteAiRecapApiKey(
+    that: this,
+    providerId: providerId,
+  );
 
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id}) => RustLib.instance.api
@@ -3885,11 +4071,13 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     date: date,
   );
 
-  /// Explicitly imports the legacy environment key into secure storage.
-  Future<AiRecapSettingsReplyDto> importAiRecapEnvironmentKey() => RustLib
-      .instance
-      .api
-      .crateApiTimeTraceApiImportAiRecapEnvironmentKey(that: this);
+  /// Explicitly imports a provider's legacy environment key into secure storage.
+  Future<AiRecapSettingsReplyDto> importAiRecapEnvironmentKey({
+    required String providerId,
+  }) => RustLib.instance.api.crateApiTimeTraceApiImportAiRecapEnvironmentKey(
+    that: this,
+    providerId: providerId,
+  );
 
   /// Reports whether a database read has entered its non-panicking fallback.
   bool isDatabaseDegraded() =>
@@ -3920,12 +4108,15 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   String? resolveExePath({required String command}) => RustLib.instance.api
       .crateApiTimeTraceApiResolveExePath(that: this, command: command);
 
-  /// Securely creates or replaces the DeepSeek API key.
-  Future<AiRecapSettingsReplyDto> saveAiRecapApiKey({required String apiKey}) =>
-      RustLib.instance.api.crateApiTimeTraceApiSaveAiRecapApiKey(
-        that: this,
-        apiKey: apiKey,
-      );
+  /// Securely creates or replaces a credential for one closed provider.
+  Future<AiRecapSettingsReplyDto> saveAiRecapApiKey({
+    required String providerId,
+    required String apiKey,
+  }) => RustLib.instance.api.crateApiTimeTraceApiSaveAiRecapApiKey(
+    that: this,
+    providerId: providerId,
+    apiKey: apiKey,
+  );
 
   /// Autosave a draft for a date (one draft per day). Returns its id.
   PlatformInt64 saveDiaryDraft({
@@ -3937,12 +4128,14 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
     content: content,
   );
 
-  /// Saves the default DeepSeek model used by subsequent report generation.
-  Future<AiRecapSettingsReplyDto> setAiRecapDefaultModel({
-    required String model,
-  }) => RustLib.instance.api.crateApiTimeTraceApiSetAiRecapDefaultModel(
+  /// Atomically saves a validated provider/model selection.
+  Future<AiRecapSettingsReplyDto> setAiRecapProviderSelection({
+    required String providerId,
+    required String modelId,
+  }) => RustLib.instance.api.crateApiTimeTraceApiSetAiRecapProviderSelection(
     that: this,
-    model: model,
+    providerId: providerId,
+    modelId: modelId,
   );
 
   /// Persist user configuration (applies on next monitor start).
@@ -3977,7 +4170,7 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   void setTrackingPaused({required bool paused}) => RustLib.instance.api
       .crateApiTimeTraceApiSetTrackingPaused(that: this, paused: paused);
 
-  /// Explicitly tests DeepSeek credentials without sending usage aggregates.
+  /// Explicitly tests the selected provider without sending usage aggregates.
   Future<AiRecapConnectionReplyDto> testAiRecapConnection() => RustLib
       .instance
       .api

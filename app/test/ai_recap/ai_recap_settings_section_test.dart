@@ -95,12 +95,22 @@ void main() {
         find.byKey(const ValueKey('ai-api-key-field')),
       );
       expect(field.obscureText, isTrue);
+      expect(
+        find.byKey(const ValueKey('ai-provider-selector')),
+        findsOneWidget,
+      );
+      expect(find.text('服务提供方'), findsOneWidget);
+      expect(find.textContaining('使用你的 API Key'), findsOneWidget);
+      expect(find.byType(Card), findsNothing);
       expect(find.text('未配置'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.enterText(
         find.byKey(const ValueKey('ai-api-key-field')),
         'sk-sensitive-value',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-save-key-button')),
       );
       await tester.tap(find.byKey(const ValueKey('ai-save-key-button')));
       await tester.pumpAndSettle();
@@ -143,6 +153,83 @@ void main() {
       expect(find.text('已连接'), findsOneWidget);
     });
 
+    testWidgets('local free provider hides key and connection controls', (
+      tester,
+    ) async {
+      final port = _FakeCredentialPort(
+        initialStatus: const AiRecapProviderStatus(
+          ready: true,
+          selectedProvider: AiRecapProviderId.localSummary,
+          selectedModel: AiRecapModel.localSummary,
+          credentialSource: AiCredentialSource.notRequired,
+        ),
+      );
+
+      await _pumpSection(tester, port);
+
+      expect(find.text('本地总结（免费）'), findsOneWidget);
+      expect(find.text('本地总结 v1'), findsWidgets);
+      expect(find.byKey(const ValueKey('ai-fixed-model')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ai-default-model-selector')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('ai-test-connection-button')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('provider switching keeps conditional controls consistent', (
+      tester,
+    ) async {
+      final port = _FakeCredentialPort(
+        initialStatus: const AiRecapProviderStatus(
+          ready: true,
+          selectedProvider: AiRecapProviderId.localSummary,
+          selectedModel: AiRecapModel.localSummary,
+          credentialSource: AiCredentialSource.notRequired,
+        ),
+      );
+      await _pumpSection(tester, port);
+
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DeepSeek').last);
+      await tester.pumpAndSettle();
+
+      expect(port.modelUpdates, [AiRecapModel.flash]);
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ai-test-connection-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ai-default-model-selector')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('本地总结（免费）').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
+      expect(find.byKey(const ValueKey('ai-fixed-model')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DeepSeek').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsOneWidget);
+      expect(port.modelUpdates, [
+        AiRecapModel.flash,
+        AiRecapModel.localSummary,
+        AiRecapModel.flash,
+      ]);
+    });
+
     testWidgets('clears the API key field even when secure save fails', (
       tester,
     ) async {
@@ -153,6 +240,9 @@ void main() {
       await tester.enterText(
         find.byKey(const ValueKey('ai-api-key-field')),
         'sk-sensitive-value',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-save-key-button')),
       );
       await tester.tap(find.byKey(const ValueKey('ai-save-key-button')));
       await tester.pumpAndSettle();
@@ -166,7 +256,7 @@ void main() {
       );
       expect(find.textContaining('sk-sensitive-value'), findsNothing);
       expect(find.textContaining('must never reach the UI'), findsNothing);
-      expect(find.textContaining('AI 服务组件暂时不可用'), findsOneWidget);
+      expect(find.textContaining('报告生成组件暂时不可用'), findsOneWidget);
     });
 
     testWidgets('default model and connection test are explicit actions', (
@@ -182,12 +272,19 @@ void main() {
       await _pumpSection(tester, port);
       expect(port.modelUpdates, isEmpty);
       expect(port.connectionTestCalls, 0);
+      expect(
+        find.byKey(const ValueKey('ai-default-model-selector')),
+        findsOneWidget,
+      );
 
-      await tester.tap(find.text('深度（Pro）'));
+      await tester.tap(find.text('DeepSeek Pro'));
       await tester.pumpAndSettle();
       expect(port.modelUpdates, [AiRecapModel.pro]);
 
-      await tester.tap(find.byKey(const ValueKey('ai-test-connection-button')));
+      final connectionButton = tester.widget<OutlinedButton>(
+        find.byKey(const ValueKey('ai-test-connection-button')),
+      );
+      connectionButton.onPressed!();
       await tester.pumpAndSettle();
       expect(port.connectionTestCalls, 1);
       expect(find.text('连接成功，可以生成报告。'), findsOneWidget);
@@ -230,7 +327,10 @@ class _FakeCredentialPort implements AiCredentialPort {
   AiRecapProviderStatus status() => _status;
 
   @override
-  Future<AiRecapProviderStatus> saveApiKey(String apiKey) async {
+  Future<AiRecapProviderStatus> saveApiKey(
+    String apiKey, {
+    AiRecapProviderId? provider,
+  }) async {
     final error = saveError;
     if (error != null) throw error;
     savedApiKey = apiKey;
@@ -243,7 +343,9 @@ class _FakeCredentialPort implements AiCredentialPort {
   }
 
   @override
-  Future<AiRecapProviderStatus> removeApiKey() async {
+  Future<AiRecapProviderStatus> removeApiKey({
+    AiRecapProviderId? provider,
+  }) async {
     _status = AiRecapProviderStatus(
       configured: false,
       defaultModel: _status.defaultModel,
@@ -253,7 +355,9 @@ class _FakeCredentialPort implements AiCredentialPort {
   }
 
   @override
-  Future<AiRecapProviderStatus> importEnvironmentApiKey() async {
+  Future<AiRecapProviderStatus> importEnvironmentApiKey({
+    AiRecapProviderId? provider,
+  }) async {
     importCalls += 1;
     _status = AiRecapProviderStatus(
       configured: true,
@@ -271,6 +375,23 @@ class _FakeCredentialPort implements AiCredentialPort {
       defaultModel: model,
       credentialSource: _status.credentialSource,
       environmentMigrationAvailable: _status.environmentMigrationAvailable,
+    );
+    return _status;
+  }
+
+  @override
+  Future<AiRecapProviderStatus> setProviderSelection(
+    AiRecapProviderId provider,
+    AiRecapModel model,
+  ) async {
+    modelUpdates.add(model);
+    _status = AiRecapProviderStatus(
+      ready: provider == AiRecapProviderId.localSummary || _status.configured,
+      selectedProvider: provider,
+      selectedModel: model,
+      credentialSource: provider == AiRecapProviderId.localSummary
+          ? AiCredentialSource.notRequired
+          : _status.credentialSource,
     );
     return _status;
   }
