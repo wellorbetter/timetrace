@@ -87,10 +87,13 @@ class TrayService with TrayListener {
     switch (menuItem.key) {
       case 'show':
         _showWindow();
+        break;
       case 'pause':
         _togglePause();
+        break;
       case 'quit':
         _quit();
+        break;
     }
   }
 }
