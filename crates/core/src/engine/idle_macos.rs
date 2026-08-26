@@ -1,9 +1,20 @@
-//! macOS idle detection via IOHIDSystem's HIDIdleTime (nanoseconds).
+//! macOS idle detection via Quartz event-source state.
+//!
+//! This avoids spawning `ioreg` on every tracking poll. Quartz exposes the
+//! elapsed time since any keyboard/mouse/tablet input directly from the HID
+//! event source, which is exactly the signal TimeTrace needs.
 
-use std::process::Command;
 use std::time::Duration;
 
 use crate::contracts::idle::IdleDetector;
+
+const HID_SYSTEM_STATE: i32 = 1;
+const ANY_INPUT_EVENT_TYPE: u32 = u32::MAX;
+
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    fn CGEventSourceSecondsSinceLastEventType(state_id: i32, event_type: u32) -> f64;
+}
 
 pub struct MacOsIdleDetector;
 
@@ -17,16 +28,13 @@ impl IdleDetector for MacOsIdleDetector {
     }
 
     fn idle_duration(&self) -> Duration {
-        let output = match Command::new("ioreg").args(["-c", "IOHIDSystem"]).output() {
-            Ok(v) if v.status.success() => v,
-            _ => return Duration::ZERO,
+        let seconds = unsafe {
+            CGEventSourceSecondsSinceLastEventType(HID_SYSTEM_STATE, ANY_INPUT_EVENT_TYPE)
         };
-        let text = String::from_utf8_lossy(&output.stdout);
-        let marker = "\"HIDIdleTime\" = ";
-        let value = text.lines().find_map(|line| {
-            let i = line.find(marker)?;
-            line[i + marker.len()..].trim().split_whitespace().next()?.parse::<u64>().ok()
-        }).unwrap_or(0);
-        Duration::from_nanos(value)
+        if seconds.is_finite() && seconds > 0.0 {
+            Duration::from_secs_f64(seconds)
+        } else {
+            Duration::ZERO
+        }
     }
 }
