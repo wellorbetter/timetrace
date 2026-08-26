@@ -1,11 +1,12 @@
 //! Configuration management.
 //!
-//! Reads/writes `%APPDATA%\TimeTrace\config.json`.
-
-use std::path::PathBuf;
+//! Persists per-user configuration in TimeTrace's platform-native app support
+//! directory (`%APPDATA%` on Windows, Application Support on macOS).
 
 use serde::{Deserialize, Serialize};
 use tracing::warn;
+
+use crate::paths::config_path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -17,11 +18,11 @@ pub struct AppConfig {
     #[serde(default = "default_idle_threshold")]
     pub idle_threshold_minutes: u64,
 
-    /// Whether to minimize to system tray on close.
+    /// Whether to minimize/hide to the platform background status area on close.
     #[serde(default = "default_true")]
     pub minimize_to_tray: bool,
 
-    /// Whether to start minimized.
+    /// Whether to start with the main window hidden.
     #[serde(default)]
     pub start_minimized: bool,
 
@@ -29,7 +30,7 @@ pub struct AppConfig {
     #[serde(default = "default_true")]
     pub auto_start_tracking: bool,
 
-    /// Applications to exclude from tracking (by exe name).
+    /// Applications to exclude from tracking (process or display name).
     #[serde(default)]
     pub excluded_apps: Vec<String>,
 }
@@ -54,16 +55,14 @@ impl Default for AppConfig {
 impl AppConfig {
     /// Load config from the default path, or return defaults.
     pub fn load() -> Self {
-        let path = Self::config_path();
+        let path = config_path();
         match std::fs::read_to_string(&path) {
-            Ok(contents) => {
-                serde_json::from_str(&contents).unwrap_or_else(|e| {
-                    warn!("Failed to parse config, using defaults: {e}");
-                    Self::default()
-                })
-            }
+            Ok(contents) => serde_json::from_str(&contents).unwrap_or_else(|e| {
+                warn!("Failed to parse config, using defaults: {e}");
+                Self::default()
+            }),
             Err(_) => {
-                // No config file yet — create with defaults
+                // No config file yet — create with defaults.
                 let config = Self::default();
                 let _ = config.save();
                 config
@@ -73,19 +72,12 @@ impl AppConfig {
 
     /// Save config to the default path.
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let path = Self::config_path();
+        let path = config_path();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
         std::fs::write(path, json)
-    }
-
-    fn config_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("TimeTrace")
-            .join("config.json")
     }
 }

@@ -6,6 +6,7 @@ pub mod config;
 pub mod contracts;
 pub mod engine;
 pub mod error;
+pub mod paths;
 pub mod storage;
 
 pub use config::AppConfig;
@@ -19,22 +20,19 @@ pub use engine::{
     run_monitor_loop, PlatformIdleDetector, PlatformStartupScanner,
     PlatformWindowResolver, SessionAggregator, SysinfoProcessQuery,
 };
+pub use paths::{
+    app_data_dir, config_path, database_path, ensure_app_data_dir, rust_log_path,
+    APP_DIR_NAME,
+};
 
-// Backward-compatible platform aliases keep the existing bridge/TUI/GUI code
-// source-compatible while the implementation changes per target OS.
+// Windows-only compatibility aliases for the legacy TUI/egui frontends. New
+// cross-platform code should use the neutral Platform* names above.
 #[cfg(target_os = "windows")]
 pub use engine::idle_win32::Win32IdleDetector;
 #[cfg(target_os = "windows")]
 pub use engine::startup_win32::WindowsStartupScanner;
 #[cfg(target_os = "windows")]
 pub use engine::window_win32::Win32WindowResolver;
-
-#[cfg(target_os = "macos")]
-pub use engine::idle_macos::MacOsIdleDetector as Win32IdleDetector;
-#[cfg(target_os = "macos")]
-pub use engine::startup_macos::MacOsStartupScanner as WindowsStartupScanner;
-#[cfg(target_os = "macos")]
-pub use engine::window_macos::MacOsWindowResolver as Win32WindowResolver;
 
 #[cfg(target_os = "windows")]
 pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};

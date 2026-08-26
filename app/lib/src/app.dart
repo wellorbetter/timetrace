@@ -2,14 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/router/app_router.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
-import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 class TimetraceApp extends ConsumerStatefulWidget {
   const TimetraceApp({super.key});
@@ -23,12 +23,17 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
   @override
   void initState() {
     super.initState();
-    _setup();
+    _setupDesktopWindow();
   }
 
-  Future<void> _setup() async {
+  Future<void> _setupDesktopWindow() async {
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
+
+    // Keep a consistent desktop shell on Windows and macOS. Native title bars
+    // remain native; only the usable content envelope is standardized.
+    await windowManager.setTitle('TimeTrace');
+    await windowManager.setMinimumSize(const Size(840, 600));
     await windowManager.setPreventClose(true);
 
     if (Platform.isWindows) {
