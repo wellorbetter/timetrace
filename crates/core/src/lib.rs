@@ -20,6 +20,22 @@ pub use engine::{
     PlatformWindowResolver, SessionAggregator, SysinfoProcessQuery,
 };
 
+// Backward-compatible platform aliases keep the existing bridge/TUI/GUI code
+// source-compatible while the implementation changes per target OS.
+#[cfg(target_os = "windows")]
+pub use engine::idle_win32::Win32IdleDetector;
+#[cfg(target_os = "windows")]
+pub use engine::startup_win32::WindowsStartupScanner;
+#[cfg(target_os = "windows")]
+pub use engine::window_win32::Win32WindowResolver;
+
+#[cfg(target_os = "macos")]
+pub use engine::idle_macos::MacOsIdleDetector as Win32IdleDetector;
+#[cfg(target_os = "macos")]
+pub use engine::startup_macos::MacOsStartupScanner as WindowsStartupScanner;
+#[cfg(target_os = "macos")]
+pub use engine::window_macos::MacOsWindowResolver as Win32WindowResolver;
+
 #[cfg(target_os = "windows")]
 pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};
 #[cfg(target_os = "macos")]
