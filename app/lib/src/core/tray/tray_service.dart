@@ -17,7 +17,9 @@ class TrayService with TrayListener {
     trayManager.addListener(this);
     await trayManager.setIcon(
       Platform.isWindows ? 'assets/icon.ico' : 'assets/icon_preview.png',
-      isTemplate: false,
+      // macOS menu-bar icons should behave as template images so the system
+      // renders them correctly in both light and dark appearances.
+      isTemplate: Platform.isMacOS,
     );
     await trayManager.setToolTip('TimeTrace — 应用使用追踪');
     try {
@@ -74,7 +76,13 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    _showWindow();
+    // A menu-bar item conventionally opens its menu on primary click on macOS;
+    // Windows keeps the existing primary-click-to-show-window behavior.
+    if (Platform.isMacOS) {
+      trayManager.popUpContextMenu();
+    } else {
+      _showWindow();
+    }
   }
 
   @override

@@ -185,7 +185,7 @@ class _PagesList extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '${seconds ~/ 60}分 · ${(seconds / total * 100).round()}%',
+                    '${seconds ~/ 60}分 · ${total > 0 ? (seconds / total * 100).round() : 0}%',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),

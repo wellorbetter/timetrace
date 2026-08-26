@@ -54,12 +54,26 @@ jobs:
           test -x "$APP_BIN"
           "$APP_BIN" >"$RUNNER_TEMP/timetrace-smoke.log" 2>&1 &
           PID=$!
-          sleep 5
+          sleep 8
           if ! kill -0 "$PID" 2>/dev/null; then
             echo "TimeTrace exited during smoke launch" >&2
             cat "$RUNNER_TEMP/timetrace-smoke.log" >&2 || true
             exit 1
           fi
+
+          DATA_DIR="$HOME/Library/Application Support/TimeTrace"
+          APP_LOG="$DATA_DIR/app.log"
+          DB_PATH="$DATA_DIR/time.db"
+          test -s "$DB_PATH"
+          test -f "$APP_LOG"
+          grep -q 'TimeTraceApi initialized' "$APP_LOG"
+          grep -q 'tray initialized (macos)' "$APP_LOG"
+          if grep -q 'API init FAILED' "$APP_LOG"; then
+            echo "Rust API initialization failed during smoke launch" >&2
+            cat "$APP_LOG" >&2
+            exit 1
+          fi
+
           kill "$PID" || true
           wait "$PID" || true
       - name: Package macOS app
