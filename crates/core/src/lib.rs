@@ -1,7 +1,6 @@
 //! # TimeTrace Core
 //!
 //! Shared library crate containing all business logic.
-//! Used by both `timetrace-tui` (terminal) and `timetrace-gui` (desktop).
 
 pub mod config;
 pub mod contracts;
@@ -17,9 +16,14 @@ pub use contracts::startup::{DisableResult, StartupEntryRecord, StartupScanner};
 pub use contracts::storage::{AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord};
 pub use contracts::window::WindowResolver;
 pub use engine::{
-    run_monitor_loop, SessionAggregator, SysinfoProcessQuery,
-    Win32IdleDetector, Win32WindowResolver, WindowsStartupScanner,
+    run_monitor_loop, PlatformIdleDetector, PlatformStartupScanner,
+    PlatformWindowResolver, SessionAggregator, SysinfoProcessQuery,
 };
+
+#[cfg(target_os = "windows")]
 pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};
+#[cfg(target_os = "macos")]
+pub use engine::startup_macos::{is_self_start_enabled, set_self_start_enabled};
+
 pub use error::AppError;
 pub use storage::SqliteStore;
