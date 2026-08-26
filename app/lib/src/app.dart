@@ -30,12 +30,16 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
     await windowManager.setPreventClose(true);
-    await windowManager.setIcon('assets/icon.ico');
+
+    if (Platform.isWindows) {
+      await windowManager.setIcon('assets/icon.ico');
+    }
 
     final tray = TrayService(ref);
     await tray.init();
     final config = ref.read(apiProvider).getConfig();
-    if (config.startMinimized || Platform.executableArguments.contains('--minimized')) {
+    if (config.startMinimized ||
+        Platform.executableArguments.contains('--minimized')) {
       await windowManager.hide();
     }
   }
