@@ -18,3 +18,7 @@ dirs.workspace = true
 [target.'cfg(target_os = "windows")'.dependencies]
 windows.workspace = true
 winreg.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", features = ["NSWorkspace", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSURL"] }
