@@ -45,6 +45,23 @@ jobs:
         run: |
           chmod +x scripts/build_macos.sh
           ./scripts/build_macos.sh
+      - name: Smoke launch macOS app
+        run: |
+          APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
+          test -x "$APP_BIN"
+          "$APP_BIN" >"$RUNNER_TEMP/timetrace-smoke.log" 2>&1 &
+          PID=$!
+          sleep 5
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "TimeTrace exited during smoke launch" >&2
+            cat "$RUNNER_TEMP/timetrace-smoke.log" >&2 || true
+            exit 1
+          fi
+          kill "$PID" || true
+          wait "$PID" || true
       - name: Package macOS app
         run: |
           APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
