@@ -1,19 +1,20 @@
-//! Foreground window monitor — the core tracking loop.
+//! Foreground application monitor — the core tracking loop.
 //!
-//! Event-driven (like RescueTime): a WinEventHook on
-//! EVENT_SYSTEM_FOREGROUND pushes foreground switches instantly, so
-//! switching apps is captured in milliseconds instead of waiting for the
-//! poll tick. The timed poll remains as a fallback (covers fullscreen
-//! games / UAC where the hook may not fire).
+//! Windows supplements the timed poll with WinEventHook notifications for
+//! near-instant foreground/title changes. Other desktop platforms use the same
+//! portable poll loop without the Windows-specific hook.
 
 use std::sync::mpsc;
+#[cfg(target_os = "windows")]
 use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use tracing::info;
 
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, PeekMessageW, TranslateMessage, MSG, EVENT_OBJECT_NAMECHANGE,
     EVENT_SYSTEM_FOREGROUND, PM_REMOVE, WINEVENT_OUTOFCONTEXT,
@@ -23,10 +24,10 @@ use crate::contracts::events::{AppInfo, EventSink, EventSourceHandle, TrackedEve
 use crate::contracts::idle::IdleDetector;
 use crate::contracts::window::WindowResolver;
 
-/// Bridge from the WinEvent callback (extern fn) to the monitor thread.
-/// HWND is not Send on windows 0.57, so we only pass a signal.
+#[cfg(target_os = "windows")]
 static FG_EVENT: OnceLock<mpsc::Sender<()>> = OnceLock::new();
 
+#[cfg(target_os = "windows")]
 unsafe extern "system" fn win_event_proc(
     _hook: HWINEVENTHOOK,
     event: u32,
@@ -36,10 +37,8 @@ unsafe extern "system" fn win_event_proc(
     _event_thread: u32,
     _ms: u32,
 ) {
-    // Foreground switches AND window-title changes (browser tab switches,
-    // e.g. Edge updates its title on every tab) both push a recheck.
     if event == EVENT_SYSTEM_FOREGROUND
-        || (event == EVENT_OBJECT_NAMECHANGE && id_object == 0 /* OBJID_WINDOW */)
+        || (event == EVENT_OBJECT_NAMECHANGE && id_object == 0)
     {
         if let Some(tx) = FG_EVENT.get() {
             let _ = tx.send(());
@@ -64,14 +63,12 @@ where
     let (pause_tx, pause_rx) = mpsc::channel::<bool>();
     let (fg_tx, fg_rx) = mpsc::channel::<()>();
 
-    // Event-hook thread: SetWinEventHook needs a message loop on the
-    // registering thread. Foreground switches are pushed to the monitor.
+    #[cfg(target_os = "windows")]
     {
         let fg_tx = fg_tx.clone();
         thread::spawn(move || {
             unsafe {
                 FG_EVENT.set(fg_tx).ok();
-                // Foreground switches → app switches.
                 let _hook_fg = SetWinEventHook(
                     EVENT_SYSTEM_FOREGROUND,
                     EVENT_SYSTEM_FOREGROUND,
@@ -81,7 +78,6 @@ where
                     0,
                     WINEVENT_OUTOFCONTEXT,
                 );
-                // Window-title changes → browser page switches (Edge etc.).
                 let _hook_name = SetWinEventHook(
                     EVENT_OBJECT_NAMECHANGE,
                     EVENT_OBJECT_NAMECHANGE,
@@ -107,6 +103,14 @@ where
         });
     }
 
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Keep the sender/receiver pair alive for EventSourceHandle's uniform
+        // lifecycle API. No platform hook thread is needed on polling targets.
+        drop(fg_tx);
+        drop(hook_stop_rx);
+    }
+
     thread::spawn(move || {
         let mut current_app: Option<AppInfo> = None;
         let mut is_paused = false;
@@ -124,9 +128,6 @@ where
             }
 
             let now = Instant::now();
-            // Sleep/resume (or system freeze): close the dangling DB session
-            // at the last known active time so the gap is never attributed
-            // to the pre-gap app.
             let gap = now - last_poll;
             last_poll = now;
             if gap > poll_interval * 5 {
@@ -138,8 +139,6 @@ where
                 is_idle = false;
             }
 
-            // A WinEventHook fired -> foreground/title changed -> check now.
-            // Title-change events can be chatty, so cap rechecks at ~2/s.
             let hook_fired = fg_rx.try_recv().is_ok();
             let can_check = now - last_title_check >= Duration::from_millis(500);
             if hook_fired && can_check {
@@ -147,12 +146,9 @@ where
             }
 
             if !is_paused {
-                // While already idle, only re-check input (cheap); skip the
-                // expensive foreground/process resolution entirely.
                 let now_idle_input = idle_detector.is_idle(idle_threshold);
 
                 if now_idle_input && !is_idle {
-                    // User stopped typing: idle started (input threshold ago).
                     is_idle = true;
                     info!("Monitor: idle started (input)");
                     sink.accept(TrackedEvent::IdleStarted {
@@ -170,13 +166,11 @@ where
                             timestamp: chrono::Utc::now(),
                         });
                     }
-                    let foreground = raw_foreground.filter(|app| !is_excluded(app, &excluded_apps));
-                    let lock = foreground
-                        .as_ref()
-                        .map_or(false, is_lock_or_screensaver);
+                    let foreground =
+                        raw_foreground.filter(|app| !is_excluded(app, &excluded_apps));
+                    let lock = foreground.as_ref().is_some_and(is_lock_or_screensaver);
 
                     if lock && !is_idle {
-                        // Lock screen / screensaver: away instantly, no grace.
                         is_idle = true;
                         info!("Monitor: idle started (lock/screensaver)");
                         sink.accept(TrackedEvent::IdleStarted {
@@ -201,8 +195,7 @@ where
                         }
                     } else if !is_idle {
                         if let Some(fg) = foreground {
-                            // Track per-window-title: "Edge - Bilibili" vs "Edge - GitHub".
-                            let same = current_app.as_ref().map_or(false, |c| {
+                            let same = current_app.as_ref().is_some_and(|c| {
                                 c.exe_path == fg.exe_path && c.window_title == fg.window_title
                             });
                             if !same {
@@ -219,8 +212,6 @@ where
                 }
             }
 
-            // Poll cadence: on a fresh hook event check again immediately,
-            // otherwise sleep the configured interval (fallback).
             if hook_fired && can_check {
                 continue;
             }
@@ -231,17 +222,19 @@ where
     EventSourceHandle::new(stop_tx, pause_tx, hook_stop_tx)
 }
 
-/// Lock screen / screensaver / logon foreground processes: the user is
-/// away instantly (no input-threshold grace).
 fn is_lock_or_screensaver(app: &AppInfo) -> bool {
     let stem = app
         .exe_path
-        .rsplit("\\")
+        .rsplit(['\\', '/'])
         .next()
         .unwrap_or("")
         .trim_end_matches(".exe")
         .to_lowercase();
-    stem == "lockapp" || stem == "logonui" || stem.ends_with(".scr")
+    stem == "lockapp"
+        || stem == "logonui"
+        || stem.ends_with(".scr")
+        || stem == "loginwindow"
+        || stem == "screensaverengine"
 }
 
 fn is_excluded(app: &AppInfo, excluded_apps: &[String]) -> bool {
@@ -267,10 +260,7 @@ mod tests {
 
     #[test]
     fn excludes_by_exe_name_with_or_without_extension() {
-        let app = AppInfo::new(
-            r"C:\Apps\Example.exe".into(),
-            "Example".into(),
-        );
+        let app = AppInfo::new(r"C:\Apps\Example.exe".into(), "Example".into());
         assert!(is_excluded(&app, &["example".into()]));
         assert!(is_excluded(&app, &["EXAMPLE.EXE".into()]));
         assert!(!is_excluded(&app, &["other.exe".into()]));
