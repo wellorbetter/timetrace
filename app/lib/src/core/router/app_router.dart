@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
-/// Shell scaffold with a Material 3 NavigationRail.
+/// Quiet desktop shell: a compact navigation rail with strong alignment and
+/// almost no decorative chrome. Content, not navigation, stays dominant.
 class AppShell extends ConsumerWidget {
   const AppShell({required this.child, super.key});
 
@@ -12,79 +13,65 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: _indexOf(context),
-            onDestinationSelected: (i) => context.go(_paths[i]),
-            labelType: NavigationRailLabelType.all,
-            leading: Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // App logo: rounded tile with timer glyph
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.tertiary,
-                        ],
+          SizedBox(
+            width: 96,
+            child: NavigationRail(
+              selectedIndex: _indexOf(context),
+              onDestinationSelected: (i) => context.go(_paths[i]),
+              labelType: NavigationRailLabelType.all,
+              minWidth: 72,
+              groupAlignment: -0.55,
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 18, bottom: 30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: scheme.outlineVariant),
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      child: Icon(
+                        Icons.timelapse_rounded,
+                        size: 20,
+                        color: scheme.primary,
+                      ),
                     ),
-                    child: const Icon(Icons.timer_outlined,
-                        size: 24, color: Colors.white),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('TimeTrace',
+                    const SizedBox(height: 9),
+                    Text(
+                      'TimeTrace',
                       style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-                ],
+                        fontSize: 10,
+                        letterSpacing: 0.15,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.space_dashboard_outlined),
+                  selectedIcon: Icon(Icons.space_dashboard_rounded),
+                  label: Text('概览'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.tune_outlined),
+                  selectedIcon: Icon(Icons.tune_rounded),
+                  label: Text('设置'),
+                ),
+              ],
             ),
-            // ── Material 3 selected-state colors ──
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-            indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
-            indicatorShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            selectedIconTheme: IconThemeData(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-            selectedLabelTextStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-              fontWeight: FontWeight.w600,
-            ),
-            unselectedIconTheme: IconThemeData(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            unselectedLabelTextStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.insights_outlined),
-                selectedIcon: Icon(Icons.insights),
-                label: Text('仪表盘'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: Text('设置'),
-              ),
-            ],
           ),
-          const VerticalDivider(width: 1),
+          VerticalDivider(width: 1, thickness: 1, color: scheme.outlineVariant),
           Expanded(child: child),
         ],
       ),
@@ -94,7 +81,6 @@ class AppShell extends ConsumerWidget {
 
 const _paths = ['/dashboard', '/settings'];
 
-/// Resolve the selected rail index from the current route path.
 int _indexOf(BuildContext context) {
   final location = GoRouterState.of(context).uri.path;
   final i = _paths.indexOf(location);
