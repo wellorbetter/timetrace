@@ -1,34 +1,39 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
-/// A selectable font (system fonts available on Windows).
+/// A selectable desktop font.
 class AppFont {
   const AppFont({required this.name, required this.family, required this.preview});
 
-  final String name; // display name
-  final String family; // font family for Flutter
-  final String preview; // sample text showing the style
+  final String name;
+  final String family;
+  final String preview;
 
-  static const all = [
+  static const windows = [
     AppFont(name: 'Segoe UI', family: 'Segoe UI', preview: 'TimeTrace 使用统计'),
     AppFont(name: '微软雅黑 UI', family: 'Microsoft YaHei UI', preview: 'TimeTrace 使用统计'),
     AppFont(name: '微软雅黑', family: 'Microsoft YaHei', preview: 'TimeTrace 使用统计'),
     AppFont(name: '等线', family: 'DengXian', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '宋体', family: 'SimSun', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '黑体', family: 'SimHei', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '楷体', family: 'KaiTi', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '仿宋', family: 'FangSong', preview: 'TimeTrace 使用统计'),
     AppFont(name: 'Consolas', family: 'Consolas', preview: 'TimeTrace 使用统计'),
   ];
 
-  /// Default is Segoe UI (clean, modern).
+  static const macos = [
+    AppFont(name: '系统字体', family: '.AppleSystemUIFont', preview: 'TimeTrace 使用统计'),
+    AppFont(name: '苹方', family: 'PingFang SC', preview: 'TimeTrace 使用统计'),
+    AppFont(name: 'SF Pro Text', family: 'SF Pro Text', preview: 'TimeTrace Usage'),
+    AppFont(name: 'Menlo', family: 'Menlo', preview: 'TimeTrace Usage'),
+  ];
+
+  static List<AppFont> get all => Platform.isMacOS ? macos : windows;
+
   static AppFont get defaultFont => all.first;
 
   static AppFont? byName(String? name) =>
       all.where((f) => f.name == name).firstOrNull;
 }
 
-/// Selected font preference.
 class FontNotifier extends Notifier<AppFont> {
   @override
   AppFont build() {
