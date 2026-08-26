@@ -7,10 +7,12 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 import 'package:timetrace_app/src/bridge/frb_generated.dart' as frb;
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import 'package:timetrace_app/src/core/platform_paths.dart';
 import 'package:timetrace_app/src/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PlatformPaths.ensureDirectory();
   AppLogger.init();
   AppLogger.log('initializing Rust bridge');
 
@@ -19,11 +21,8 @@ Future<void> main() async {
     externalLibrary: ExternalLibrary.open(libraryPath),
   );
 
-  final dbDir = _dataDirectory();
-  await Directory(dbDir).create(recursive: true);
-  final separator = Platform.pathSeparator;
   try {
-    initializeApi(dbPath: '$dbDir${separator}time.db');
+    initializeApi(dbPath: PlatformPaths.database);
     AppLogger.log('TimeTraceApi initialized');
   } catch (e, st) {
     AppLogger.log('API init FAILED: $e\n$st');
@@ -48,16 +47,4 @@ String _bridgeLibraryPath() {
     return 'libtimetrace_bridge.dylib';
   }
   return 'libtimetrace_bridge.so';
-}
-
-String _dataDirectory() {
-  if (Platform.isWindows) {
-    return '${Platform.environment['APPDATA'] ?? '.'}\\TimeTrace';
-  }
-  if (Platform.isMacOS) {
-    final home = Platform.environment['HOME'] ?? '.';
-    return '$home/Library/Application Support/TimeTrace';
-  }
-  final home = Platform.environment['HOME'] ?? '.';
-  return '$home/.local/share/TimeTrace';
 }

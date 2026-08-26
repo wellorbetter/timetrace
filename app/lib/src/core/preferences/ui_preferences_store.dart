@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Small versioned JSON store for Windows-only UI preferences.
+import 'package:timetrace_app/src/core/platform_paths.dart';
+
+/// Small versioned JSON store for desktop UI preferences.
 class UiPreferencesStore {
   static const _version = 1;
 
-  static File get _file {
-    final dir = Platform.environment['APPDATA'] ?? '.';
-    return File('$dir\\TimeTrace\\ui_config.json');
-  }
+  static File get _file => File(PlatformPaths.uiPreferences);
 
   static Map<String, dynamic> read() {
     try {
@@ -35,7 +34,7 @@ class UiPreferencesStore {
       final current = read();
       current['version'] = _version;
       current.addAll(values);
-      _file.parent.createSync(recursive: true);
+      PlatformPaths.ensureDirectory();
       _file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(current));
     } catch (_) {
       // Preferences are non-critical; the app continues with in-memory state.
