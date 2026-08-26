@@ -41,3 +41,13 @@ jobs:
         run: |
           chmod +x scripts/build_macos.sh
           ./scripts/build_macos.sh
+      - name: Package macOS app
+        run: |
+          APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/TimeTrace-macOS.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TimeTrace-macOS
+          path: ${{ runner.temp }}/TimeTrace-macOS.zip
+          if-no-files-found: error
