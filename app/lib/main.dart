@@ -13,15 +13,51 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppLogger.init();
   AppLogger.log('initializing Rust bridge');
+
+  final libraryPath = _bridgeLibraryPath();
   await frb.RustLib.init(
-    externalLibrary: ExternalLibrary.open('timetrace_bridge.dll'),
+    externalLibrary: ExternalLibrary.open(libraryPath),
   );
-  final dbDir = '${Platform.environment['APPDATA'] ?? '.'}\\TimeTrace';
+
+  final dbDir = _dataDirectory();
+  await Directory(dbDir).create(recursive: true);
+  final separator = Platform.pathSeparator;
   try {
-    initializeApi(dbPath: '$dbDir\\time.db');
+    initializeApi(dbPath: '$dbDir${separator}time.db');
     AppLogger.log('TimeTraceApi initialized');
   } catch (e, st) {
     AppLogger.log('API init FAILED: $e\n$st');
   }
+
   runApp(const ProviderScope(child: TimetraceApp()));
+}
+
+String _bridgeLibraryPath() {
+  if (Platform.isWindows) return 'timetrace_bridge.dll';
+  if (Platform.isMacOS) {
+    final executable = File(Platform.resolvedExecutable);
+    final bundled = File(
+      '${executable.parent.parent.path}/Frameworks/libtimetrace_bridge.dylib',
+    );
+    if (bundled.existsSync()) return bundled.path;
+
+    // Developer fallback: scripts/build_macos.sh bundles the dylib for release,
+    // while local flutter run can use a previously built Rust debug artifact.
+    final cwdFallback = File('../target/debug/libtimetrace_bridge.dylib');
+    if (cwdFallback.existsSync()) return cwdFallback.absolute.path;
+    return 'libtimetrace_bridge.dylib';
+  }
+  return 'libtimetrace_bridge.so';
+}
+
+String _dataDirectory() {
+  if (Platform.isWindows) {
+    return '${Platform.environment['APPDATA'] ?? '.'}\\TimeTrace';
+  }
+  if (Platform.isMacOS) {
+    final home = Platform.environment['HOME'] ?? '.';
+    return '$home/Library/Application Support/TimeTrace';
+  }
+  final home = Platform.environment['HOME'] ?? '.';
+  return '$home/.local/share/TimeTrace';
 }
