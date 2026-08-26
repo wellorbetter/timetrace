@@ -18,6 +18,19 @@ if [[ ! -d macos ]]; then
   rm -f test/widget_test.dart
 fi
 
+# Give the generated runner product-quality macOS identity. The Dart package
+# remains `timetrace_app`; only the native app/product name and bundle identity
+# are changed.
+APP_INFO="macos/Runner/Configs/AppInfo.xcconfig"
+if [[ ! -f "$APP_INFO" ]]; then
+  echo "Missing generated macOS AppInfo.xcconfig" >&2
+  exit 1
+fi
+sed -i '' 's/^PRODUCT_NAME = .*/PRODUCT_NAME = TimeTrace/' "$APP_INFO"
+sed -i '' 's/^PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = com.wellorbetter.timetrace/' "$APP_INFO"
+grep -q '^PRODUCT_NAME = TimeTrace$' "$APP_INFO"
+grep -q '^PRODUCT_BUNDLE_IDENTIFIER = com.wellorbetter.timetrace$' "$APP_INFO"
+
 # TimeTrace is a desktop activity tracker. The default Flutter macOS template
 # enables App Sandbox, which blocks observing other processes, direct access to
 # the user's Application Support directory, and LaunchAgent management. Keep
@@ -44,6 +57,15 @@ flutter build macos --release
 APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
 if [[ -z "$APP_PATH" ]]; then
   echo "Unable to locate built .app bundle" >&2
+  exit 1
+fi
+if [[ "$(basename "$APP_PATH")" != "TimeTrace.app" ]]; then
+  echo "Unexpected macOS product name: $(basename "$APP_PATH")" >&2
+  exit 1
+fi
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+if [[ "$BUNDLE_ID" != "com.wellorbetter.timetrace" ]]; then
+  echo "Unexpected bundle identifier: $BUNDLE_ID" >&2
   exit 1
 fi
 
