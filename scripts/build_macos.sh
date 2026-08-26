@@ -13,6 +13,9 @@ cd "$APP"
 if [[ ! -d macos ]]; then
   echo "==> Generating Flutter macOS runner"
   flutter create --platforms=macos --project-name timetrace_app .
+  # `flutter create` adds a template test that references MyApp, while this
+  # existing project boots TimetraceApp. Keep only the project's real tests.
+  rm -f test/widget_test.dart
 fi
 
 flutter pub get
