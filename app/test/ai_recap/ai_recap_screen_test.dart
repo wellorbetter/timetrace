@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_recap_port.dart';
+import 'package:timetrace_app/src/features/ai_recap/domain/ai_diary_preferences.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_card.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_screen.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_diary_preferences_provider.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
 
 void main() {
@@ -211,8 +213,7 @@ void main() {
         surfaceSize: const Size(760, 500),
       );
 
-      expect(find.text(linkedLabel), findsOneWidget);
-      expect(find.textContaining('所选范围跟随顶部筛选'), findsOneWidget);
+      expect(find.textContaining(linkedLabel), findsOneWidget);
       expect(find.byKey(const Key('ai-recap-range-selector')), findsNothing);
       expect(find.byKey(const Key('ai-report-previous-period')), findsNothing);
       expect(find.byKey(const Key('ai-report-next-period')), findsNothing);
@@ -224,14 +225,12 @@ void main() {
         findsOneWidget,
       );
       expect(
-        tester
-            .widget<SingleChildScrollView>(
-              find.byKey(const Key('ai-recap-linked-scroll')),
-            )
-            .primary,
-        isFalse,
+        find.descendant(
+          of: find.byKey(const Key('ai-recap-dashboard-section')),
+          matching: find.byType(Scrollable),
+        ),
+        findsNothing,
       );
-      expect(find.byType(Scrollbar), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('ai-recap-generate')));
       await tester.pumpAndSettle();
@@ -240,26 +239,13 @@ void main() {
       expect(find.text('新生成的周报。'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      final linkedScrollable = tester.state<ScrollableState>(
-        find.descendant(
-          of: find.byKey(const Key('ai-recap-linked-scroll')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      expect(linkedScrollable.position.maxScrollExtent, greaterThan(0));
-      linkedScrollable.position.jumpTo(
-        linkedScrollable.position.maxScrollExtent,
-      );
-      expect(linkedScrollable.position.pixels, greaterThan(0));
-
       updateHost(() {
         linkedKey = _daily(23);
         linkedLabel = '顶部范围：昨日';
       });
       await tester.pumpAndSettle();
 
-      expect(find.text('顶部范围：昨日'), findsOneWidget);
-      expect(linkedScrollable.position.pixels, 0);
+      expect(find.textContaining('顶部范围：昨日'), findsOneWidget);
       expect(find.text('新生成的周报。'), findsNothing);
       await tester.tap(find.byKey(const Key('ai-recap-generate')));
       await tester.pumpAndSettle();
@@ -290,10 +276,8 @@ void main() {
       port,
     );
 
-    expect(find.text('未来日期'), findsOneWidget);
-    expect(find.byKey(const Key('ai-recap-invalid-range')), findsOneWidget);
-    expect(find.textContaining('未来日期不能生成报告'), findsOneWidget);
-    expect(find.text('请先在顶部选择今天或过去日期。'), findsOneWidget);
+    expect(find.textContaining('未来日期'), findsWidgets);
+    expect(find.text('未来日期还没有可供回顾的活动。'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const Key('ai-recap-generate')))
@@ -399,11 +383,34 @@ Future<void> _pumpWidget(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [aiRecapPortProvider.overrideWithValue(port)],
+      overrides: [
+        aiRecapPortProvider.overrideWithValue(port),
+        aiDiaryPreferencesStorageProvider.overrideWithValue(
+          _MemoryPreferencesStorage({
+            AiDiaryPreferences.enabledKey: true,
+            AiDiaryPreferences.coverSourceKey: 'none',
+          }),
+        ),
+      ],
       child: MaterialApp(home: child),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _MemoryPreferencesStorage implements AiDiaryPreferencesStorage {
+  _MemoryPreferencesStorage(Map<String, dynamic> initial)
+    : values = Map<String, dynamic>.from(initial);
+
+  final Map<String, dynamic> values;
+
+  @override
+  Map<String, dynamic> read() => Map<String, dynamic>.from(values);
+
+  @override
+  void update(Map<String, dynamic> values) {
+    this.values.addAll(values);
+  }
 }
 
 AiRecapResult _result(

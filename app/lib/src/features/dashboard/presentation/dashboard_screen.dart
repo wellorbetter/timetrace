@@ -5,6 +5,8 @@ import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_card.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_diary_preferences_provider.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_recap_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/date_range_selection.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
@@ -81,7 +83,7 @@ int dashboardCarouselCanonicalPage(int physicalPage, int logicalPageCount) {
 }
 
 /// Single-page dashboard (概览 + 日历日记 merged):
-/// stats → carousel (时间报告/图表/汇总/应用) + calendar → journal.
+/// stats → carousel (图表/汇总/应用) + calendar → smart recap + journal.
 /// The top range is the single source for both statistics and reports.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -374,19 +376,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget _buildPage(
     String key, {
     required DateTime day,
-    required DateRangeSelection selection,
-    required DateRangeBounds bounds,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
     final Widget page = switch (key) {
-      'ai_report' => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: AiRecapCard(
-          rangeKey: dashboardReportRangeKey(selection, bounds),
-          rangeLabel: bounds.label,
-        ),
-      ),
       'bar' => apps.isEmpty
           ? _placeholder('暂无使用数据')
           : AppChartSection(
@@ -480,6 +473,16 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final sel = ref.watch(dashboardRangeProvider);
     final bounds = ref.watch(dashboardRangeBoundsProvider);
     final calDay = bounds.endDate;
+    final aiDiaryEnabled = ref.watch(
+      aiDiaryPreferencesProvider.select((value) => value.enabled),
+    );
+    final aiReady = aiDiaryEnabled
+        ? ref.watch(
+            aiRecapControllerProvider.select(
+              (value) => value.status.serviceAvailable && value.status.ready,
+            ),
+          )
+        : false;
     _visibleApps = apps;
     _measureCalendar();
 
@@ -500,7 +503,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
         return Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
+            constraints: const BoxConstraints(maxWidth: 1180),
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
@@ -625,8 +628,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                               child: _buildPage(
                                                 viewKey,
                                                 day: calDay,
-                                                selection: sel,
-                                                bounds: bounds,
                                                 order: order,
                                                 apps: apps,
                                               ),
@@ -692,6 +693,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     // Calendar block (left column / top on narrow)
                     Widget calendar = Card(
                       key: _calendarKey,
+                      margin: EdgeInsets.zero,
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Column(
@@ -772,6 +774,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   },
                 ),
                 const SizedBox(height: 12),
+                if (aiReady) ...[
+                  AiRecapCard(
+                    rangeKey: dashboardReportRangeKey(sel, bounds),
+                    rangeLabel: bounds.label,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // ── Journal (selected day) ──
                 // Diary section — no outer Card (avoids card-in-card);
                 // posts/editor carry their own tone+shadow.

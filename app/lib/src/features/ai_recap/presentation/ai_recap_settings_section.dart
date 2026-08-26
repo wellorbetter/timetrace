@@ -1,8 +1,11 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_credential_port.dart';
+import 'package:timetrace_app/src/features/ai_recap/domain/ai_diary_preferences.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_credential_provider.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_diary_preferences_provider.dart';
 
 class AiRecapSettingsSection extends ConsumerStatefulWidget {
   const AiRecapSettingsSection({super.key});
@@ -26,6 +29,7 @@ class _AiRecapSettingsSectionState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(aiCredentialControllerProvider);
+    final preferences = ref.watch(aiDiaryPreferencesProvider);
     final colors = Theme.of(context).colorScheme;
     final selectedProvider = state.status.selectedProviderOption;
 
@@ -44,7 +48,7 @@ class _AiRecapSettingsSectionState
               ),
               const SizedBox(width: 8),
               Text(
-                'AI 与报告',
+                '智能回顾',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -52,80 +56,118 @@ class _AiRecapSettingsSectionState
             ],
           ),
         ),
-        _ProviderRow(
-          status: state.status,
-          enabled: !state.busy && state.status.serviceAvailable,
-          onSelected: _setProvider,
+        SwitchListTile.adaptive(
+          key: const ValueKey('ai-recap-enabled-switch'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          secondary: const Icon(Icons.auto_awesome_outlined),
+          title: const Text('启用智能回顾'),
+          subtitle: const Text('开启后，可在日记区域生成每日、每周或每月回顾。'),
+          value: preferences.enabled,
+          onChanged: (enabled) {
+            ref.read(aiDiaryPreferencesProvider.notifier).setEnabled(enabled);
+          },
         ),
-        const Divider(indent: 12, endIndent: 12),
-        if ((selectedProvider?.models.length ?? 0) == 1)
-          ListTile(
-            key: const ValueKey('ai-fixed-model'),
-            leading: const Icon(Icons.memory_outlined),
-            title: const Text('生成器版本'),
-            subtitle: Text(state.status.selectedModel.description),
-            trailing: Text(selectedProvider!.models.single.displayName),
-          )
-        else ...[
-          ListTile(
-            leading: const Icon(Icons.tune_outlined),
-            title: const Text('默认模型'),
-            subtitle: Text(state.status.selectedModel.description),
-          ),
-          Column(
-            key: const ValueKey('ai-default-model-selector'),
-            children: [
-              for (final model in selectedProvider?.models ?? const [])
-                _ModelTile(
-                  option: model,
-                  selected: state.status.selectedModel == model.model,
-                  enabled: !state.busy && state.status.serviceAvailable,
-                  onSelected: _setDefaultModel,
-                ),
-            ],
-          ),
-        ],
-        if (state.status.requiresApiKey) ...[
+        if (preferences.enabled) ...[
           const Divider(indent: 12, endIndent: 12),
-          ListTile(
-            leading: const Icon(Icons.key_outlined),
-            title: const Text('API Key'),
-            subtitle: Text(_statusDescription(state.status)),
-            trailing: _StatusBadge(status: state.status),
+          _ProviderSelector(
+            status: state.status,
+            enabled: !state.busy && state.status.serviceAvailable,
+            onSelected: _setProvider,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            child: _CredentialEditor(
-              controller: _apiKeyController,
-              state: state,
-              onSave: _saveApiKey,
-              onImport: _importEnvironmentApiKey,
-              onRemove: _confirmRemoveApiKey,
+          const SizedBox(height: 8),
+          if ((selectedProvider?.models.length ?? 0) == 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _ReadOnlyModelCard(
+                key: const ValueKey('ai-fixed-model'),
+                option: selectedProvider!.models.single,
+              ),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: Text(
+                '选择模型',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
-        ],
-        if (state.status.supportsConnectionTest) ...[
+            Padding(
+              key: const ValueKey('ai-default-model-selector'),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                children: [
+                  for (final model in selectedProvider?.models ?? const []) ...[
+                    _ModelTile(
+                      option: model,
+                      selected: state.status.selectedModel == model.model,
+                      enabled: !state.busy && state.status.serviceAvailable,
+                      onSelected: _setDefaultModel,
+                    ),
+                    if (model != selectedProvider?.models.last)
+                      const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          if (state.status.requiresApiKey) ...[
+            const Divider(indent: 12, endIndent: 12),
+            ListTile(
+              leading: const Icon(Icons.key_outlined),
+              title: const Text('API Key'),
+              subtitle: Text(_statusDescription(state.status)),
+              trailing: _StatusBadge(status: state.status),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: _CredentialEditor(
+                controller: _apiKeyController,
+                state: state,
+                onSave: _saveApiKey,
+                onImport: _importEnvironmentApiKey,
+                onRemove: _confirmRemoveApiKey,
+              ),
+            ),
+          ],
+          if (state.status.supportsConnectionTest) ...[
+            const Divider(indent: 12, endIndent: 12),
+            _ConnectionTest(state: state, onTest: _testConnection),
+          ],
+          if (state.failure != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: _InlineMessage(
+                icon: Icons.error_outline,
+                color: colors.error,
+                text: _failureMessage(state.failure!),
+              ),
+            )
+          else if (state.connectionTestSucceeded == true)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: _InlineMessage(
+                icon: Icons.check_circle_outline,
+                color: colors.primary,
+                text: '连接成功，可以生成回顾。',
+              ),
+            ),
           const Divider(indent: 12, endIndent: 12),
-          _ConnectionTest(state: state, onTest: _testConnection),
-        ],
-        if (state.failure != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: _InlineMessage(
-              icon: Icons.error_outline,
-              color: colors.error,
-              text: _failureMessage(state.failure!),
-            ),
-          )
-        else if (state.connectionTestSucceeded == true)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: _InlineMessage(
-              icon: Icons.check_circle_outline,
-              color: colors.primary,
-              text: '连接成功，可以生成报告。',
-            ),
+          _DiaryCoverSettings(
+            preferences: preferences,
+            onSelectBuiltIn: (coverId) {
+              ref
+                  .read(aiDiaryPreferencesProvider.notifier)
+                  .selectBuiltIn(coverId);
+            },
+            onPickCustom: _pickCustomCover,
+            onSelectNone: () {
+              ref.read(aiDiaryPreferencesProvider.notifier).setNone();
+            },
+            onRemoveCustom: _removeCustomCover,
           ),
+        ],
       ],
     );
   }
@@ -217,6 +259,39 @@ class _AiRecapSettingsSectionState
     await ref.read(aiCredentialControllerProvider.notifier).testConnection();
   }
 
+  Future<void> _pickCustomCover() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: false,
+      );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final path = result.files.single.path;
+      if (path == null || path.isEmpty) {
+        _showMessage('未能读取所选图片，请重新选择。');
+        return;
+      }
+      final imported = await ref
+          .read(aiDiaryPreferencesProvider.notifier)
+          .importCustomCover(path);
+      if (!mounted) return;
+      _showMessage(
+        imported
+            ? '自定义封面已保存到 TimeTrace。'
+            : '未能导入图片，请选择 10 MB 以内的 PNG、JPG 或 WebP 文件。',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('未能打开图片选择器，请稍后重试。');
+    }
+  }
+
+  void _removeCustomCover() {
+    ref.read(aiDiaryPreferencesProvider.notifier).setNone();
+    _showMessage('自定义封面已移除。');
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(
       context,
@@ -224,8 +299,8 @@ class _AiRecapSettingsSectionState
   }
 }
 
-class _ProviderRow extends StatelessWidget {
-  const _ProviderRow({
+class _ProviderSelector extends StatelessWidget {
+  const _ProviderSelector({
     required this.status,
     required this.enabled,
     required this.onSelected,
@@ -237,31 +312,223 @@ class _ProviderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.cloud_outlined),
-      title: const Text('服务提供方'),
-      subtitle: Text(
-        status.selectedProviderOption?.description ?? '选择报告的生成方式。',
+    return Padding(
+      key: const ValueKey('ai-provider-selector'),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '生成方式',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '本地方式完全离线；使用云端前请确认愿意发送聚合后的应用名与时长。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final choices = [
+                for (final provider in status.providers)
+                  _ProviderChoiceCard(
+                    option: provider,
+                    selected: provider.id == status.selectedProvider,
+                    enabled: enabled,
+                    onTap: () {
+                      if (provider.id != status.selectedProvider) {
+                        onSelected(provider.id);
+                      }
+                    },
+                  ),
+              ];
+              if (constraints.maxWidth >= 680) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < choices.length; index++) ...[
+                      Expanded(child: choices[index]),
+                      if (index != choices.length - 1)
+                        const SizedBox(width: 10),
+                    ],
+                  ],
+                );
+              }
+              return Column(
+                children: [
+                  for (var index = 0; index < choices.length; index++) ...[
+                    choices[index],
+                    if (index != choices.length - 1) const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
       ),
-      trailing: DropdownButtonHideUnderline(
-        child: DropdownButton<AiRecapProviderId>(
-          key: const ValueKey('ai-provider-selector'),
-          value: status.selectedProvider,
-          items: [
-            for (final provider in status.providers)
-              DropdownMenuItem(
-                value: provider.id,
-                child: Text(provider.displayName),
-              ),
-          ],
-          onChanged: enabled
-              ? (provider) {
-                  if (provider != null && provider != status.selectedProvider) {
-                    onSelected(provider);
-                  }
-                }
-              : null,
+    );
+  }
+}
+
+class _ProviderChoiceCard extends StatelessWidget {
+  const _ProviderChoiceCard({
+    required this.option,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final AiRecapProviderOption option;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final local = option.id == AiRecapProviderId.localSummary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: '生成方式：${option.displayName}',
+      child: Material(
+        key: ValueKey(
+          local ? 'ai-provider-local-card' : 'ai-provider-deepseek-card',
         ),
+        color: selected
+            ? colors.secondaryContainer.withValues(alpha: 0.72)
+            : colors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    local ? Icons.offline_bolt_outlined : Icons.cloud_outlined,
+                    color: selected ? colors.primary : colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              option.displayName,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: local
+                                  ? colors.tertiaryContainer
+                                  : colors.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              local ? '免费 · 本地' : '需 API Key',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        option.description,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: selected ? colors.primary : colors.outline,
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyModelCard extends StatelessWidget {
+  const _ReadOnlyModelCard({super.key, required this.option});
+
+  final AiRecapModelOption option;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.memory_outlined),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('生成器版本', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 2),
+                Text(
+                  option.model.description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(option.displayName),
+        ],
       ),
     );
   }
@@ -281,26 +548,293 @@ class _ModelTile extends StatelessWidget {
   final ValueChanged<AiRecapModel> onSelected;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    dense: true,
-    contentPadding: const EdgeInsets.only(left: 52, right: 12),
-    leading: Icon(
-      option.model == AiRecapModel.flash
-          ? Icons.bolt_outlined
-          : option.model == AiRecapModel.pro
-          ? Icons.psychology_outlined
-          : Icons.computer_outlined,
-    ),
-    title: Text(option.displayName),
-    subtitle: Text(option.model.description),
-    trailing: Icon(
-      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-      color: selected ? Theme.of(context).colorScheme.primary : null,
-    ),
-    enabled: enabled,
-    selected: selected,
-    onTap: enabled ? () => onSelected(option.model) : null,
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: selected
+          ? colors.secondaryContainer.withValues(alpha: 0.62)
+          : colors.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: selected ? colors.primary : colors.outlineVariant,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        leading: Icon(
+          option.model == AiRecapModel.flash
+              ? Icons.bolt_outlined
+              : option.model == AiRecapModel.pro
+              ? Icons.psychology_outlined
+              : Icons.computer_outlined,
+        ),
+        title: Text(option.displayName),
+        subtitle: Text(option.model.description),
+        trailing: Icon(
+          selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+          color: selected ? colors.primary : colors.outline,
+        ),
+        enabled: enabled,
+        selected: selected,
+        onTap: enabled ? () => onSelected(option.model) : null,
+      ),
+    );
+  }
+}
+
+const _builtInCoverOptions = <_BuiltInCoverOption>[
+  _BuiltInCoverOption(
+    id: 'night_focus',
+    title: '夜间专注',
+    assetPath: 'assets/ai_diary/night_focus.jpg',
+  ),
+  _BuiltInCoverOption(
+    id: 'warm_afternoon',
+    title: '暖阳午后',
+    assetPath: 'assets/ai_diary/warm_afternoon.jpg',
+  ),
+  _BuiltInCoverOption(
+    id: 'rainy_evening',
+    title: '雨夜回声',
+    assetPath: 'assets/ai_diary/rainy_evening.jpg',
+  ),
+  _BuiltInCoverOption(
+    id: 'spring_morning',
+    title: '春日清晨',
+    assetPath: 'assets/ai_diary/spring_morning.jpg',
+  ),
+];
+
+class _BuiltInCoverOption {
+  const _BuiltInCoverOption({
+    required this.id,
+    required this.title,
+    required this.assetPath,
+  });
+
+  final String id;
+  final String title;
+  final String assetPath;
+}
+
+class _DiaryCoverSettings extends StatelessWidget {
+  const _DiaryCoverSettings({
+    required this.preferences,
+    required this.onSelectBuiltIn,
+    required this.onPickCustom,
+    required this.onSelectNone,
+    required this.onRemoveCustom,
+  });
+
+  final AiDiaryPreferences preferences;
+  final ValueChanged<String> onSelectBuiltIn;
+  final VoidCallback onPickCustom;
+  final VoidCallback onSelectNone;
+  final VoidCallback onRemoveCustom;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final customSelected = preferences.coverSource == AiDiaryCoverSource.custom;
+    return Padding(
+      key: const ValueKey('ai-diary-cover-settings'),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.image_outlined, size: 19, color: colors.primary),
+              const SizedBox(width: 8),
+              Text(
+                '日记封面',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '封面用于智能日记卡。自定义图片会复制到 TimeTrace 的应用目录。',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth < 560
+                  ? (constraints.maxWidth - 10) / 2
+                  : 158.0;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final option in _builtInCoverOptions)
+                    SizedBox(
+                      width: itemWidth,
+                      child: _BuiltInCoverCard(
+                        option: option,
+                        selected:
+                            preferences.coverSource ==
+                                AiDiaryCoverSource.builtIn &&
+                            preferences.builtInCoverId == option.id,
+                        onTap: () => onSelectBuiltIn(option.id),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('ai-pick-custom-cover-button'),
+                onPressed: onPickCustom,
+                icon: Icon(
+                  customSelected
+                      ? Icons.check_circle_outline
+                      : Icons.add_photo_alternate_outlined,
+                ),
+                label: Text(customSelected ? '更换本地图片' : '选择本地图片'),
+              ),
+              ChoiceChip(
+                key: const ValueKey('ai-no-cover-choice'),
+                avatar: const Icon(Icons.hide_image_outlined, size: 18),
+                label: const Text('不显示封面'),
+                selected: preferences.coverSource == AiDiaryCoverSource.none,
+                onSelected: (_) => onSelectNone(),
+              ),
+            ],
+          ),
+          if (customSelected) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 19,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('正在使用已安全复制的自定义封面')),
+                  TextButton(
+                    key: const ValueKey('ai-remove-custom-cover-button'),
+                    onPressed: onRemoveCustom,
+                    child: const Text('移除'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BuiltInCoverCard extends StatelessWidget {
+  const _BuiltInCoverCard({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _BuiltInCoverOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '日记封面：${option.title}',
+      child: Material(
+        key: ValueKey('ai-cover-${option.id}'),
+        color: colors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      option.assetPath,
+                      fit: BoxFit.cover,
+                      cacheWidth: 360,
+                      cacheHeight: 225,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (context, error, stackTrace) => ColoredBox(
+                        color: colors.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Positioned(
+                        top: 7,
+                        right: 7,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.check,
+                            size: 14,
+                            color: colors.onPrimary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                child: Text(
+                  option.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _StatusBadge extends StatelessWidget {

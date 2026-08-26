@@ -3,14 +3,13 @@ import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// Carousel view keys — user-reorderable.
 const kViews = <String, String>{
-  'ai_report': '时间报告',
   'bar': '柱状图',
   'pie': '饼图',
   'hourly': '时段',
   'summary': '汇总',
   'apps': '应用列表',
 };
-const kDefaultOrder = ['ai_report', 'bar', 'pie', 'summary', 'apps', 'hourly'];
+const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
 
 List<String> normalizeDashboardOrder(Object? savedOrder) {
   if (savedOrder is! List) return List.of(kDefaultOrder);
@@ -18,9 +17,6 @@ List<String> normalizeDashboardOrder(Object? savedOrder) {
   for (final value in savedOrder.whereType<String>()) {
     if (kViews.containsKey(value) && !order.contains(value)) order.add(value);
   }
-  // AI reports became a first-class dashboard view. Put the new view first
-  // when migrating an existing saved order so it is immediately discoverable.
-  if (!order.contains('ai_report')) order.insert(0, 'ai_report');
   for (final view in kDefaultOrder) {
     if (!order.contains(view)) order.add(view);
   }

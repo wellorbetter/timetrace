@@ -468,7 +468,9 @@ class SettingsScreen extends ConsumerWidget {
                 final cleared = ref.read(apiProvider).clearData();
                 ref.invalidate(settingsProvider);
                 ref.invalidate(dashboardProvider);
-                ref.read(aiRecapControllerProvider.notifier).synchronize();
+                // Invalidate cached UI state without forcing a first native AI
+                // initialization when the feature has never been opened.
+                ref.invalidate(aiRecapControllerProvider);
                 if (cleared) {
                   AppLogger.log('data cleared via settings');
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -726,7 +728,6 @@ List<Widget> _dashboardOrderPicker(WidgetRef ref) {
           dense: true,
           leading: Icon(
             switch (order[i]) {
-              'ai_report' => Icons.auto_awesome_outlined,
               'bar' => Icons.bar_chart,
               'pie' => Icons.pie_chart_outline,
               'summary' => Icons.summarize_outlined,

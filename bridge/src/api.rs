@@ -4,8 +4,11 @@
 //! All methods are synchronous; data is small and local.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
+
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
 use flutter_rust_bridge::frb;
@@ -15,7 +18,7 @@ use crate::ai_recap::{
     AiRecapConnectionReplyDto, AiRecapDto, AiRecapGenerateReplyDto, AiRecapService,
     AiRecapSettingsReplyDto, AiRecapStatusDto, SqliteAggregateUsageSource,
 };
-use crate::ai_report_store::{AiReportStore, SqliteAiReportStore, UnavailableAiReportStore};
+use crate::ai_report_store::{AiReportStore, AiReportStoreError, SqliteAiReportStore, UnavailableAiReportStore};
 
 /// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
 fn setup_logging() {
@@ -130,9 +133,86 @@ pub struct ConfigDto {
 
 // ── Main API ──
 
+/// Lazily owns the feature-local AI service and its second SQLite connection.
+///
+/// The extra initialization mutex coordinates the one-time initializer with a
+/// pre-initialization `clear_data` request. Once initialized, reads use the
+/// lock-free `OnceLock` fast path.
+struct LazyAiRecap {
+    db: Arc<SqliteStore>,
+    database_path: PathBuf,
+    service: OnceLock<AiRecapService>,
+    initialization: Mutex<()>,
+    #[cfg(test)]
+    initialization_count: AtomicUsize,
+}
+
+impl LazyAiRecap {
+    fn new(db: Arc<SqliteStore>, database_path: PathBuf) -> Self {
+        Self {
+            db,
+            database_path,
+            service: OnceLock::new(),
+            initialization: Mutex::new(()),
+            #[cfg(test)]
+            initialization_count: AtomicUsize::new(0),
+        }
+    }
+
+    fn get(&self) -> &AiRecapService {
+        if let Some(service) = self.service.get() {
+            return service;
+        }
+        let _initialization = self.lock_initialization();
+        self.service.get_or_init(|| self.initialize())
+    }
+
+    fn initialize(&self) -> AiRecapService {
+        #[cfg(test)]
+        self.initialization_count.fetch_add(1, Ordering::Relaxed);
+
+        let report_store: Arc<dyn AiReportStore> =
+            match SqliteAiReportStore::open(self.database_path.clone()) {
+                Ok(store) => Arc::new(store),
+                Err(_) => {
+                    tracing::warn!("AI report storage unavailable; AI reports disabled");
+                    Arc::new(UnavailableAiReportStore)
+                }
+            };
+        AiRecapService::new(
+            Arc::new(SqliteAggregateUsageSource::new(self.db.clone())),
+            report_store,
+        )
+    }
+
+    fn clear_reports(&self) -> Result<(), AiReportStoreError> {
+        let _initialization = self.lock_initialization();
+        if let Some(service) = self.service.get() {
+            service.clear_reports()
+        } else {
+            // Clearing user data is an explicit privacy action. Remove any
+            // persisted reports immediately without constructing or caching
+            // the AI service; a later first AI access still initializes once.
+            SqliteAiReportStore::open(self.database_path.clone())?.clear_latest_reports()
+        }
+    }
+
+    fn lock_initialization(&self) -> MutexGuard<'_, ()> {
+        match self.initialization.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    #[cfg(test)]
+    fn initialization_count(&self) -> usize {
+        self.initialization_count.load(Ordering::Acquire)
+    }
+}
+
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
-    ai_recap: AiRecapService,
+    ai_recap: LazyAiRecap,
     monitor: std::sync::Mutex<Option<EventSourceHandle>>,
     paused: std::sync::atomic::AtomicBool,
 }
@@ -152,16 +232,6 @@ impl TimeTraceApi {
             DataStore::upsert_startup_entries(&*db, &entries);
         }
 
-        // Initialize feature-local AI persistence before the monitor starts.
-        // AI failure is isolated and never prevents tracking or the shell.
-        let report_store: Arc<dyn AiReportStore> = match SqliteAiReportStore::open(database_path) {
-            Ok(store) => Arc::new(store),
-            Err(_) => {
-                tracing::warn!("AI report storage unavailable; AI reports disabled");
-                Arc::new(UnavailableAiReportStore)
-            }
-        };
-
         // Start background monitor.
         let config = AppConfig::load();
         let initially_paused = !config.auto_start_tracking;
@@ -178,10 +248,9 @@ impl TimeTraceApi {
         if initially_paused {
             handle.pause();
         }
-        let ai_recap = AiRecapService::new(
-            Arc::new(SqliteAggregateUsageSource::new(db.clone())),
-            report_store,
-        );
+        // Keep the AI schema, report load, and second SQLite connection off
+        // the application startup path until an AI-facing API is requested.
+        let ai_recap = LazyAiRecap::new(db.clone(), database_path);
         let api = TimeTraceApi {
             db,
             ai_recap,
@@ -238,7 +307,7 @@ impl TimeTraceApi {
     /// Redacted report-provider state; never exposes credential data.
     #[frb(sync)]
     pub fn ai_recap_status(&self) -> AiRecapStatusDto {
-        self.ai_recap.status()
+        self.ai_recap.get().status()
     }
 
     /// Reads only the bounded in-process result cache; performs no network I/O.
@@ -249,13 +318,13 @@ impl TimeTraceApi {
         start: String,
         end: String,
     ) -> Option<AiRecapDto> {
-        self.ai_recap.latest(&scope, &start, &end)
+        self.ai_recap.get().latest(&scope, &start, &end)
     }
 
     /// Reads at most one persisted report per type, newest first, without network I/O.
     #[frb(sync)]
     pub fn get_latest_ai_reports(&self) -> Vec<AiRecapDto> {
-        self.ai_recap.latest_reports()
+        self.ai_recap.get().latest_reports()
     }
 
     /// Securely creates or replaces a credential for one closed provider.
@@ -264,17 +333,17 @@ impl TimeTraceApi {
         provider_id: String,
         api_key: String,
     ) -> AiRecapSettingsReplyDto {
-        self.ai_recap.save_api_key(provider_id, api_key)
+        self.ai_recap.get().save_api_key(provider_id, api_key)
     }
 
     /// Explicitly imports a provider's legacy environment key into secure storage.
     pub fn import_ai_recap_environment_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
-        self.ai_recap.import_environment_api_key(provider_id)
+        self.ai_recap.get().import_environment_api_key(provider_id)
     }
 
     /// Removes one provider's secure key; its environment fallback may become active.
     pub fn delete_ai_recap_api_key(&self, provider_id: String) -> AiRecapSettingsReplyDto {
-        self.ai_recap.delete_api_key(provider_id)
+        self.ai_recap.get().delete_api_key(provider_id)
     }
 
     /// Atomically saves a validated provider/model selection.
@@ -283,12 +352,12 @@ impl TimeTraceApi {
         provider_id: String,
         model_id: String,
     ) -> AiRecapSettingsReplyDto {
-        self.ai_recap.set_provider_selection(provider_id, model_id)
+        self.ai_recap.get().set_provider_selection(provider_id, model_id)
     }
 
     /// Explicitly tests the selected provider without sending usage aggregates.
     pub fn test_ai_recap_connection(&self) -> AiRecapConnectionReplyDto {
-        self.ai_recap.test_connection()
+        self.ai_recap.get().test_connection()
     }
 
     /// Explicitly generates a report on a normal FRB worker thread.
@@ -298,7 +367,7 @@ impl TimeTraceApi {
         start: String,
         end: String,
     ) -> AiRecapGenerateReplyDto {
-        self.ai_recap.generate(scope, start, end)
+        self.ai_recap.get().generate(scope, start, end)
     }
 
     /// Reports whether a database read has entered its non-panicking fallback.
@@ -690,7 +759,83 @@ fn safe_path_variable(name: &str) -> Option<String> {
 }
 #[cfg(test)]
 mod tests {
-    use super::{clean_exe_path, csv_field};
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Barrier};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use rusqlite::Connection;
+    use timetrace_core::SqliteStore;
+
+    use super::{LazyAiRecap, clean_exe_path, csv_field};
+
+    fn temporary_database_path(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "timetrace-api-{label}-{}-{nonce}.sqlite",
+            std::process::id()
+        ))
+    }
+
+    fn ai_table_count(path: &Path) -> i64 {
+        Connection::open(path)
+            .expect("inspect database")
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' \
+                 AND name IN ('ai_report_settings', 'ai_latest_reports')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count AI tables")
+    }
+
+    fn remove_database_files(path: &Path) {
+        for candidate in [
+            path.to_path_buf(),
+            path.with_extension("sqlite-wal"),
+            path.with_extension("sqlite-shm"),
+        ] {
+            let _ = std::fs::remove_file(candidate);
+        }
+    }
+
+    #[test]
+    fn ai_service_is_lazy_and_concurrent_first_access_initializes_once() {
+        let path = temporary_database_path("lazy-ai");
+        let db = Arc::new(SqliteStore::open(path.clone()).expect("open main database"));
+        let lazy = Arc::new(LazyAiRecap::new(db.clone(), path.clone()));
+
+        assert_eq!(lazy.initialization_count(), 0);
+        assert_eq!(ai_table_count(&path), 0);
+        lazy.clear_reports().expect("clear persisted reports");
+        assert_eq!(lazy.initialization_count(), 0);
+        assert_eq!(ai_table_count(&path), 2);
+
+        let worker_count = 8;
+        let barrier = Arc::new(Barrier::new(worker_count));
+        let workers = (0..worker_count)
+            .map(|_| {
+                let lazy = lazy.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    assert!(lazy.get().status().service_available);
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in workers {
+            worker.join().expect("AI initialization worker");
+        }
+
+        assert_eq!(lazy.initialization_count(), 1);
+        assert_eq!(ai_table_count(&path), 2);
+
+        drop(lazy);
+        drop(db);
+        remove_database_files(&path);
+    }
 
     #[test]
     fn spaced_unquoted_path_kept_intact() {

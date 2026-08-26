@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/features/ai_recap/application/ai_credential_port.dart';
+import 'package:timetrace_app/src/features/ai_recap/domain/ai_diary_preferences.dart';
 import 'package:timetrace_app/src/features/ai_recap/domain/ai_recap_models.dart';
 import 'package:timetrace_app/src/features/ai_recap/presentation/ai_recap_settings_section.dart';
 import 'package:timetrace_app/src/features/ai_recap/providers/ai_credential_provider.dart';
+import 'package:timetrace_app/src/features/ai_recap/providers/ai_diary_preferences_provider.dart';
 
 void main() {
   group('AiCredentialController', () {
@@ -99,9 +101,12 @@ void main() {
         find.byKey(const ValueKey('ai-provider-selector')),
         findsOneWidget,
       );
-      expect(find.text('服务提供方'), findsOneWidget);
+      expect(find.text('生成方式'), findsOneWidget);
       expect(find.textContaining('使用你的 API Key'), findsOneWidget);
-      expect(find.byType(Card), findsNothing);
+      expect(
+        find.byKey(const ValueKey('ai-provider-deepseek-card')),
+        findsOneWidget,
+      );
       expect(find.text('未配置'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
@@ -144,6 +149,9 @@ void main() {
 
       expect(find.text('环境变量'), findsOneWidget);
       expect(port.importCalls, 0);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-import-environment-button')),
+      );
       await tester.tap(
         find.byKey(const ValueKey('ai-import-environment-button')),
       );
@@ -195,9 +203,7 @@ void main() {
       await _pumpSection(tester, port);
 
       expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('DeepSeek').last);
+      await tester.tap(find.byKey(const ValueKey('ai-provider-deepseek-card')));
       await tester.pumpAndSettle();
 
       expect(port.modelUpdates, [AiRecapModel.flash]);
@@ -211,16 +217,12 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('本地总结（免费）').last);
+      await tester.tap(find.byKey(const ValueKey('ai-provider-local-card')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
       expect(find.byKey(const ValueKey('ai-fixed-model')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('ai-provider-selector')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('DeepSeek').last);
+      await tester.tap(find.byKey(const ValueKey('ai-provider-deepseek-card')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('ai-api-key-field')), findsOneWidget);
       expect(port.modelUpdates, [
@@ -287,16 +289,144 @@ void main() {
       connectionButton.onPressed!();
       await tester.pumpAndSettle();
       expect(port.connectionTestCalls, 1);
-      expect(find.text('连接成功，可以生成报告。'), findsOneWidget);
+      expect(find.text('连接成功，可以生成回顾。'), findsOneWidget);
       expect(find.textContaining('不会发送任何使用数据'), findsOneWidget);
+    });
+
+    testWidgets('disabled state hides service and cover controls', (
+      tester,
+    ) async {
+      final storage = _FakeAiDiaryPreferencesStorage(
+        const AiDiaryPreferences(enabled: false).toStorage(),
+      );
+      await _pumpSection(tester, _FakeCredentialPort(), storage: storage);
+
+      expect(find.text('智能回顾'), findsOneWidget);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('ai-recap-enabled-switch')),
+            )
+            .value,
+        isFalse,
+      );
+      expect(find.byKey(const ValueKey('ai-provider-selector')), findsNothing);
+      expect(find.byKey(const ValueKey('ai-api-key-field')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('ai-diary-cover-settings')),
+        findsNothing,
+      );
+      expect(find.text('日记封面'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('ai-recap-enabled-switch')));
+      await tester.pumpAndSettle();
+
+      expect(storage.values[AiDiaryPreferences.enabledKey], isTrue);
+      expect(
+        find.byKey(const ValueKey('ai-provider-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ai-diary-cover-settings')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('offers four built-in covers and a no-cover choice', (
+      tester,
+    ) async {
+      final storage = _FakeAiDiaryPreferencesStorage(
+        const AiDiaryPreferences(enabled: true).toStorage(),
+      );
+      await _pumpSection(tester, _FakeCredentialPort(), storage: storage);
+
+      for (final coverId in <String>[
+        'night_focus',
+        'warm_afternoon',
+        'rainy_evening',
+        'spring_morning',
+      ]) {
+        expect(find.byKey(ValueKey('ai-cover-$coverId')), findsOneWidget);
+      }
+      expect(
+        find.byKey(const ValueKey('ai-pick-custom-cover-button')),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-no-cover-choice')),
+      );
+      await tester.tap(find.byKey(const ValueKey('ai-no-cover-choice')));
+      await tester.pumpAndSettle();
+      expect(
+        storage.values[AiDiaryPreferences.coverSourceKey],
+        AiDiaryCoverSource.none.storageValue,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-cover-spring_morning')),
+      );
+      await tester.tap(find.byKey(const ValueKey('ai-cover-spring_morning')));
+      await tester.pumpAndSettle();
+      expect(
+        storage.values[AiDiaryPreferences.coverSourceKey],
+        AiDiaryCoverSource.builtIn.storageValue,
+      );
+      expect(
+        storage.values[AiDiaryPreferences.builtInCoverIdKey],
+        'spring_morning',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('custom cover status is closed and can be removed', (
+      tester,
+    ) async {
+      final storage = _FakeAiDiaryPreferencesStorage(
+        const AiDiaryPreferences(
+          enabled: true,
+          coverSource: AiDiaryCoverSource.custom,
+          customCoverPath: r'C:\private\must-not-appear.png',
+        ).toStorage(),
+      );
+      await _pumpSection(tester, _FakeCredentialPort(), storage: storage);
+
+      expect(find.textContaining(r'C:\private'), findsNothing);
+      expect(find.text('正在使用已安全复制的自定义封面'), findsOneWidget);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('ai-remove-custom-cover-button')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('ai-remove-custom-cover-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        storage.values[AiDiaryPreferences.coverSourceKey],
+        AiDiaryCoverSource.none.storageValue,
+      );
+      expect(find.text('自定义封面已移除。'), findsOneWidget);
+      expect(find.textContaining(r'C:\private'), findsNothing);
     });
   });
 }
 
-Future<void> _pumpSection(WidgetTester tester, AiCredentialPort port) async {
+Future<void> _pumpSection(
+  WidgetTester tester,
+  AiCredentialPort port, {
+  _FakeAiDiaryPreferencesStorage? storage,
+}) async {
+  final preferencesStorage =
+      storage ??
+      _FakeAiDiaryPreferencesStorage(
+        const AiDiaryPreferences(enabled: true).toStorage(),
+      );
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [aiCredentialPortProvider.overrideWithValue(port)],
+      overrides: [
+        aiCredentialPortProvider.overrideWithValue(port),
+        aiDiaryPreferencesStorageProvider.overrideWithValue(preferencesStorage),
+      ],
       child: const MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
@@ -308,6 +438,21 @@ Future<void> _pumpSection(WidgetTester tester, AiCredentialPort port) async {
     ),
   );
   await tester.pump();
+}
+
+class _FakeAiDiaryPreferencesStorage implements AiDiaryPreferencesStorage {
+  _FakeAiDiaryPreferencesStorage(Map<String, dynamic> initialValues)
+    : values = Map<String, dynamic>.from(initialValues);
+
+  final Map<String, dynamic> values;
+
+  @override
+  Map<String, dynamic> read() => Map<String, dynamic>.from(values);
+
+  @override
+  void update(Map<String, dynamic> nextValues) {
+    values.addAll(nextValues);
+  }
 }
 
 class _FakeCredentialPort implements AiCredentialPort {
