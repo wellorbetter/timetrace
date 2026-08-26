@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/macos-minimal-ui]
   pull_request:
 
 jobs:
@@ -22,6 +22,22 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - run: cd app && flutter pub get
       - run: cd app && flutter analyze --no-fatal-infos
       - run: cd app && flutter test
       - run: cd app && flutter build windows --release
+
+  macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Rust core and bridge tests
+        run: cargo test -p timetrace-core -p timetrace-bridge
+      - name: Build signed macOS bundle
+        run: |
+          chmod +x scripts/build_macos.sh
+          ./scripts/build_macos.sh
