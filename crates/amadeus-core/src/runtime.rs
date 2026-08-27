@@ -2,11 +2,15 @@ use chrono::{DateTime, Utc};
 
 use crate::consolidation::EpisodeConsolidator;
 use crate::context::{AgentContext, ContextComposer, WorkingContext};
+use crate::evolution::{
+    EvolutionCandidate, EvolutionDecision, EvolutionPolicy, EvolutionStatus,
+};
 use crate::identity::IdentityMemory;
 use crate::memory::{LivedMemoryStore, MemoryCore, MemoryError};
 use crate::perception::PerceptionEvent;
 use crate::persona::{PersonaPack, PersonaState, PersonaStateDelta};
 use crate::skills::SkillRegistry;
+use crate::state::{RuntimeStateSnapshot, RUNTIME_STATE_SCHEMA_VERSION};
 use crate::trigger::{TriggerEngine, TriggeredAction};
 
 #[derive(Debug, Default)]
@@ -19,9 +23,9 @@ pub struct RuntimeEffect {
 /// Persistent-agent runtime independent from any particular UI or model.
 ///
 /// Perception updates working context immediately, completed activity becomes
-/// lived memory, and triggers can produce proactive actions. Cognition/model
-/// routing is intentionally attached above this layer so the agent can keep
-/// observing and remembering while offline.
+/// lived memory, and triggers can produce proactive actions. Canonical identity
+/// remains outside mutable runtime state; only post-activation persona dynamics,
+/// triggers and evolution history are snapshotted/restored.
 pub struct AmadeusRuntime<S: LivedMemoryStore> {
     identity: IdentityMemory,
     cognitive_principles: Vec<String>,
@@ -32,6 +36,8 @@ pub struct AmadeusRuntime<S: LivedMemoryStore> {
     context_composer: ContextComposer,
     skills: SkillRegistry,
     triggers: TriggerEngine,
+    evolution_policy: EvolutionPolicy,
+    evolutions: Vec<EvolutionCandidate>,
 }
 
 impl<S: LivedMemoryStore> AmadeusRuntime<S> {
@@ -46,6 +52,8 @@ impl<S: LivedMemoryStore> AmadeusRuntime<S> {
             context_composer: ContextComposer::default(),
             skills: SkillRegistry::default(),
             triggers: TriggerEngine::default(),
+            evolution_policy: EvolutionPolicy::default(),
+            evolutions: Vec::new(),
         }
     }
 
@@ -137,6 +145,36 @@ impl<S: LivedMemoryStore> AmadeusRuntime<S> {
         }
     }
 
+    /// Snapshot only post-activation mutable state. Identity/canonical memory is
+    /// structurally impossible to include in this value.
+    pub fn snapshot_state(&self) -> RuntimeStateSnapshot {
+        RuntimeStateSnapshot {
+            schema_version: RUNTIME_STATE_SCHEMA_VERSION,
+            persona_state: self.persona_state.clone(),
+            triggers: self.triggers.definitions().to_vec(),
+            evolutions: self.evolutions.clone(),
+        }
+    }
+
+    pub fn restore_state(&mut self, snapshot: RuntimeStateSnapshot) {
+        self.persona_state = snapshot.persona_state;
+        self.triggers.replace_definitions(snapshot.triggers);
+        self.evolutions = snapshot.evolutions;
+    }
+
+    pub fn propose_evolution(&mut self, mut candidate: EvolutionCandidate) -> EvolutionDecision {
+        let decision = self.evolution_policy.decide(&candidate);
+        if decision == EvolutionDecision::AutoAccept {
+            candidate.status = EvolutionStatus::Accepted;
+        }
+        self.evolutions.push(candidate);
+        decision
+    }
+
+    pub fn evolutions(&self) -> &[EvolutionCandidate] {
+        &self.evolutions
+    }
+
     pub fn identity(&self) -> &IdentityMemory {
         &self.identity
     }
@@ -187,9 +225,11 @@ mod tests {
     use chrono::DateTime;
 
     use super::*;
+    use crate::evolution::{EvolutionDomain, EvolutionRisk};
     use crate::identity::IdentityMemory;
     use crate::memory::SqliteLivedMemoryStore;
     use crate::perception::ComputerActivity;
+    use crate::trigger::{Trigger, TriggerAction, TriggerCondition};
 
     fn at(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp(seconds, 0).unwrap()
@@ -237,5 +277,42 @@ mod tests {
         );
         let context = runtime.compose_context("Editor", at(110)).unwrap();
         assert_eq!(context.working.current_activity.unwrap().display_name, "Editor");
+    }
+
+    #[test]
+    fn state_round_trip_preserves_lived_persona_and_triggers_not_identity() {
+        let identity = IdentityMemory::from_persona_pack("self", "Self", None, vec![]);
+        let store = SqliteLivedMemoryStore::open_in_memory().unwrap();
+        let mut runtime = AmadeusRuntime::new(identity.clone(), store);
+        runtime.apply_persona_delta(PersonaStateDelta {
+            familiarity: 0.4,
+            ..PersonaStateDelta::default()
+        });
+        runtime.triggers_mut().add(Trigger {
+            id: "long-work".into(),
+            enabled: true,
+            condition: TriggerCondition::ContinuousComputerActivity { min_seconds: 7200 },
+            action: TriggerAction::ConsiderInitiative { reason: "long work".into() },
+            cooldown_seconds: 3600,
+        });
+        runtime.propose_evolution(EvolutionCandidate {
+            id: "debug-flow".into(),
+            domain: EvolutionDomain::Skill,
+            risk: EvolutionRisk::Low,
+            summary: "Prefer log-first debugging".into(),
+            evidence: vec!["Repeated success".into()],
+            confidence: 0.95,
+            created_at: at(100),
+            status: EvolutionStatus::Proposed,
+        });
+        let snapshot = runtime.snapshot_state();
+
+        let store2 = SqliteLivedMemoryStore::open_in_memory().unwrap();
+        let mut restored = AmadeusRuntime::new(identity.clone(), store2);
+        restored.restore_state(snapshot);
+        assert_eq!(restored.identity(), &identity);
+        assert_eq!(restored.persona_state().familiarity(), 0.4);
+        assert_eq!(restored.triggers().definitions().len(), 1);
+        assert_eq!(restored.evolutions().len(), 1);
     }
 }
