@@ -9,6 +9,8 @@ use crate::perception::{ComputerActivity, PerceptionEvent};
 
 #[derive(Debug, Error)]
 pub enum MemoryError {
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
     #[error("sqlite: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error("serialization: {0}")]
@@ -17,7 +19,6 @@ pub enum MemoryError {
     Timestamp(#[from] chrono::ParseError),
 }
 
-/// One contiguous foreground span inside a larger computer episode.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivitySpan {
     pub activity: ComputerActivity,
@@ -25,11 +26,6 @@ pub struct ActivitySpan {
     pub ended_at: DateTime<Utc>,
 }
 
-/// A lived computer episode.
-///
-/// Multiple app/window switches stay inside one episode. Idle/gap boundaries
-/// finish it. Semantic summarization, project inference and reflection happen
-/// later; raw window switches never become long-term memories directly.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerEpisode {
     pub started_at: DateTime<Utc>,
@@ -61,7 +57,6 @@ struct OpenEpisode {
     spans: Vec<ActivitySpan>,
 }
 
-/// Converts perception events into human-scale computer episodes.
 #[derive(Debug, Default)]
 pub struct EpisodeBuilder {
     open: Option<OpenEpisode>,
@@ -134,8 +129,6 @@ impl EpisodeBuilder {
     }
 }
 
-/// Runtime-written memory categories. Canonical/self memory does not appear in
-/// this enum on purpose: identity has a separate protected storage path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LivedMemoryKind {
     Conversation,
@@ -214,7 +207,6 @@ pub trait LivedMemoryStore {
     fn recent_memories(&self, limit: usize) -> Result<Vec<LivedMemory>, MemoryError>;
 }
 
-/// SQLite persistence owned by Amadeus, independent from TimeTrace storage.
 pub struct SqliteLivedMemoryStore {
     conn: Connection,
 }
@@ -329,7 +321,6 @@ impl LivedMemoryStore for SqliteLivedMemoryStore {
     }
 }
 
-/// Coordinates perception-to-episode persistence.
 pub struct MemoryCore<S: LivedMemoryStore> {
     store: S,
     episode_builder: EpisodeBuilder,
