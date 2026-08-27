@@ -2,6 +2,9 @@
 //!
 //! Shared library crate containing all business logic.
 
+pub mod amadeus_adapter;
+pub mod amadeus_host;
+pub mod amadeus_skills;
 pub mod config;
 pub mod contracts;
 pub mod engine;
@@ -9,6 +12,16 @@ pub mod error;
 pub mod paths;
 pub mod storage;
 
+pub use amadeus_adapter::{adapt_tracked_event, AmadeusMemorySink, FanoutEventSink};
+pub use amadeus_host::{
+    amadeus_converse, configure_openai_compatible_model, handle_triggered_actions,
+    persist_amadeus_state, recent_amadeus_memories, search_amadeus_memories,
+    shared_amadeus_runtime, take_pending_initiatives, take_pending_skill_approvals,
+    AmadeusHostError, PendingInitiative, PendingSkillApproval, SharedAmadeusRuntime,
+};
+pub use amadeus_skills::{
+    ensure_amadeus_skills, host_skill_runtime_available, run_amadeus_skill,
+};
 pub use config::AppConfig;
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
 pub use contracts::idle::IdleDetector;
@@ -25,8 +38,6 @@ pub use paths::{
     APP_DIR_NAME,
 };
 
-// Windows-only compatibility aliases for the legacy TUI/egui frontends. New
-// cross-platform code should use the neutral Platform* names above.
 #[cfg(target_os = "windows")]
 pub use engine::idle_win32::Win32IdleDetector;
 #[cfg(target_os = "windows")]

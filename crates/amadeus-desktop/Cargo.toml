@@ -1,24 +1,17 @@
 [package]
-name = "timetrace-core"
+name = "amadeus-desktop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Shared core for TimeTrace: contracts, engine, storage"
+description = "Native Windows/macOS computer perception for Amadeus"
 
 [dependencies]
 amadeus-core = { path = "../amadeus-core" }
-sysinfo.workspace = true
-rusqlite.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 chrono.workspace = true
 tracing.workspace = true
-thiserror.workspace = true
-dirs.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows.workspace = true
-winreg.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3.2", features = ["NSWorkspace", "NSRunningApplication"] }
