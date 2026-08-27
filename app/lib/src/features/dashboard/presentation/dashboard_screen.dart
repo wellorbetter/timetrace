@@ -7,18 +7,15 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
 
-/// Single-page dashboard (概览 + 日历日记 merged):
-/// stats → data carousel (柱状图/饼图/汇总) → calendar → app list → journal.
-/// The carousel holds data displays; the calendar is a permanent element
-/// whose day selection drives the summary and journal.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -29,7 +26,6 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('概览')),
       body: asyncState.when(
-        // 切换日期范围时保留旧数据直到新数据到达，避免全屏重绘/闪白。
         skipLoadingOnReload: true,
         loading: () => const Center(
           child: Column(
@@ -77,28 +73,19 @@ class _DashboardBody extends ConsumerStatefulWidget {
 }
 
 class _DashboardBodyState extends ConsumerState<_DashboardBody> {
-  /// Shared app selection: bar chart + app list stay in sync.
   int? _selected;
   List<PageDto>? _pages;
   bool _loadingPages = false;
   final List<GlobalKey> _rowKeys = [];
-
-  /// Apps shown in the charts (totalSeconds > 0), same order as charts.
   List<AppUsageItem> _visibleApps = const [];
 
-  /// Carousel state + shared calendar day.
-  /// Infinite paging: the controller starts at a large aligned page so
-  /// wrap-around (last → first) is a normal one-page step, no sweep.
   static const int _kCarouselBase = 200000;
   late final int _carouselInit;
   late final PageController _carouselCtrl;
   int _carouselAbs = 0;
   int _carouselIndex = 0;
-
-  /// 页码指示器：切页只更新它，不重建整页。
   final ValueNotifier<int> _carouselDot = ValueNotifier<int>(0);
 
-  /// 左侧日历卡片实际高度（动态测量），右侧轮播与之等高对齐。
   final GlobalKey _calendarKey = GlobalKey();
   double _calendarH = 0;
 
@@ -110,7 +97,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     _carouselInit = (_kCarouselBase ~/ pageCount) * pageCount;
     _carouselCtrl = PageController(initialPage: _carouselInit);
     _carouselAbs = _carouselInit;
-    // Calendar heatmap → 时段分布 page: jump there and select the hour.
+
     ref.listenManual(hourlyFocusProvider, (prev, next) {
       if (next == null) return;
       final orderNow = ref.read(dashboardOrderProvider);
@@ -126,14 +113,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     super.dispose();
   }
 
-  /// Jump to a real carousel page using the shortest direction.
   void _goToReal(int realIdx, {bool animate = false}) {
     final order = ref.read(dashboardOrderProvider);
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
+
     final delta = (realIdx - _carouselIndex + pageCount) % pageCount;
     final target = _carouselAbs + delta;
     if (target == _carouselAbs) return;
+
     if (animate) {
       _carouselCtrl.animateToPage(
         target,
@@ -145,40 +133,41 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     }
   }
 
-  /// Select/deselect an app and load its page breakdown. `fromAppsPage`
-  /// enables the follow-up scroll only when the row is already visible,
-  /// so chart clicks never fight with the page transition.
   void _selectApp(int i, {bool fromAppsPage = false}) {
     if (i < 0 || i >= _visibleApps.length) return;
     final deselecting = _selected == i;
+
     setState(() {
       _selected = deselecting ? null : i;
       _pages = null;
       _loadingPages = !deselecting;
     });
     if (deselecting) return;
+
     try {
       final api = ref.read(apiProvider);
-      final sel = ref.read(dashboardRangeProvider);
-      final d = sel.effectiveDay;
-      final end =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final selectedRange = ref.read(dashboardRangeProvider);
+      final day = selectedRange.effectiveDay;
+      final date =
+          '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
       final pages = api.getWindowTitles(
         appName: _visibleApps[i].appName,
-        date: end,
+        date: date,
       );
       if (!mounted) return;
+
       setState(() {
         _pages = pages;
         _loadingPages = false;
       });
+
       if (fromAppsPage) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || i >= _rowKeys.length) return;
-          final ctx = _rowKeys[i].currentContext;
-          if (ctx != null) {
+          final rowContext = _rowKeys[i].currentContext;
+          if (rowContext != null) {
             Scrollable.ensureVisible(
-              ctx,
+              rowContext,
               duration: TimeTraceMotion.normal,
               curve: TimeTraceMotion.standard,
               alignment: 0.2,
@@ -186,16 +175,16 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           }
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _loadingPages = false);
     }
   }
 
-  /// Select an app by its (normalized) name, then jump to the apps page.
   void _selectAppByName(String name) {
-    final idx = _visibleApps.indexWhere((a) => a.appName == name);
+    final idx = _visibleApps.indexWhere((app) => app.appName == name);
     if (idx < 0) return;
     if (_selected != idx) _selectApp(idx);
+
     final order = ref.read(dashboardOrderProvider);
     final appsIdx = order.indexOf('apps');
     if (appsIdx >= 0) {
@@ -204,14 +193,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     }
   }
 
-  /// 跳页后滚动应用列表，让选中行可见（仅应用列表页已就绪时）。
   void _scrollToRow(int i) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || i >= _rowKeys.length) return;
-      final ctx = _rowKeys[i].currentContext;
-      if (ctx != null) {
+      final rowContext = _rowKeys[i].currentContext;
+      if (rowContext != null) {
         Scrollable.ensureVisible(
-          ctx,
+          rowContext,
           duration: TimeTraceMotion.normal,
           curve: TimeTraceMotion.standard,
           alignment: 0.2,
@@ -220,8 +208,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
-  /// 测量日历卡片高度，让右侧轮播与之对齐（月份 4~6 行、日记
-  /// 自定义区间行出现/隐藏都会改变高度，每次 build 后重新测量）。
   void _measureCalendar() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -232,9 +218,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
-  /// 日记范围随顶部范围 chips 合并（移除日历卡片内重复选择器）。
-  DiaryRange _diaryRangeFor(DateRangeSelection sel) {
-    switch (sel.range) {
+  DiaryRange _diaryRangeFor(DateRangeSelection selection) {
+    switch (selection.range) {
       case DateRange.today:
       case DateRange.yesterday:
       case DateRange.custom:
@@ -246,7 +231,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     }
   }
 
-  /// One carousel page for a real view key.
   Widget _buildPage(
     String key, {
     required DateTime day,
@@ -259,7 +243,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           : AppChartSection(
               apps: apps,
               selected: _selected,
-              // Clicking a bar also jumps to the apps page (sessions).
               onSelect: (i) {
                 _selectApp(i);
                 final appsIdx = order.indexOf('apps');
@@ -287,19 +270,21 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               },
             ),
       'summary' => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(TimeTraceSpace.sm),
-            child: DaySummaryPanel(date: day),
+          padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
+          child: Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(TimeTraceSpace.sm),
+              child: DaySummaryPanel(date: day),
+            ),
           ),
         ),
-      ),
       'apps' => apps.isEmpty
           ? _placeholder('暂无使用数据')
           : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xxs),
+              padding: const EdgeInsets.symmetric(
+                horizontal: TimeTraceSpace.xxs,
+              ),
               child: SingleChildScrollView(
                 child: AppListSection(
                   apps: apps,
@@ -313,8 +298,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             ),
       _ => const SizedBox.shrink(),
     };
-    // PageView 某些布局阶段会给页面无界高度，统一兜底，
-    // 避免 Expanded/LayoutBuilder 报 Infinity 错误。
+
     return LayoutBuilder(
       builder: (context, constraints) => SizedBox(
         width: double.infinity,
@@ -327,6 +311,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget _placeholder(String text) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -352,10 +337,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget build(BuildContext context) {
     final state = widget.state;
     final apps = state.apps
-        .where((a) => a.totalSeconds > 0)
+        .where((app) => app.totalSeconds > 0)
         .toList(growable: false);
-    final sel = ref.watch(dashboardRangeProvider);
-    final calDay = sel.effectiveDay;
+    final selection = ref.watch(dashboardRangeProvider);
+    final calendarDay = selection.effectiveDay;
+
     _visibleApps = apps;
     _measureCalendar();
 
@@ -371,7 +357,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = screenSizeOf(constraints);
+        final screenSize = screenSizeOf(constraints);
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
 
@@ -384,7 +370,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             child: ListView(
               padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
               children: [
-                // Range controls stay lightweight; they are filters, not cards.
                 Wrap(
                   spacing: TimeTraceSpace.xs,
                   runSpacing: TimeTraceSpace.xs,
@@ -395,23 +380,18 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ('本周', DateRange.week),
                       ('本月', DateRange.month),
                     ])
-                      Consumer(
-                        builder: (context, ref, _) {
-                          final selected =
-                              ref.watch(dashboardRangeProvider).range == range;
-                          return ChoiceChip(
-                            label: Text(label),
-                            selected: selected,
-                            onSelected: (_) => ref
-                                .read(dashboardRangeProvider.notifier)
-                                .select(range),
-                          );
-                        },
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: selection.range == range,
+                        onSelected: (_) => ref
+                            .read(dashboardRangeProvider.notifier)
+                            .select(range),
                       ),
                   ],
                 ),
+                const SizedBox(height: TimeTraceSpace.sm),
+                DashboardSummaryStrip(state: state, apps: apps),
                 const SizedBox(height: TimeTraceSpace.md),
-                // First-launch hint when the current range has no data yet.
                 if (apps.isEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: TimeTraceSpace.md),
@@ -419,8 +399,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     decoration: BoxDecoration(
                       color: scheme.primaryContainer.withValues(alpha: 0.34),
                       border: Border.all(color: scheme.outlineVariant),
-                      borderRadius:
-                          BorderRadius.circular(TimeTraceRadius.surface),
+                      borderRadius: BorderRadius.circular(
+                        TimeTraceRadius.surface,
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -439,16 +420,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ],
                     ),
                   ),
-                // ── Data area: calendar (left) + ordered carousel (right) ──
                 LayoutBuilder(
-                  builder: (context, con) {
-                    final narrow =
-                        con.maxWidth < TimeTraceLayout.compactBreakpoint;
+                  builder: (context, innerConstraints) {
+                    final narrow = innerConstraints.maxWidth <
+                        TimeTraceLayout.compactBreakpoint;
                     final order = ref.watch(dashboardOrderProvider);
                     final pageCount = order.length;
-                    final carouselH = narrow
+                    final carouselHeight = narrow
                         ? 330.0
-                        : (size.twoColumn ? 400.0 : 360.0);
+                        : (screenSize.twoColumn ? 400.0 : 360.0);
 
                     final carousel = Column(
                       children: [
@@ -473,11 +453,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   },
                                   itemCount: _carouselInit * 2,
                                   itemBuilder: (context, i) => _KeepAlivePage(
-                                    // 每页独立绘制层，切页滑动时只移动已缓存的画布。
                                     child: RepaintBoundary(
                                       child: _buildPage(
                                         order[i % pageCount],
-                                        day: calDay,
+                                        day: calendarDay,
                                         order: order,
                                         apps: apps,
                                       ),
@@ -497,7 +476,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           ),
                         ),
                         const SizedBox(height: TimeTraceSpace.xs),
-                        // Thin page marks read more quietly than large carousel dots.
                         ValueListenableBuilder<int>(
                           valueListenable: _carouselDot,
                           builder: (context, dot, _) => Row(
@@ -531,7 +509,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ],
                     );
 
-                    // Calendar block (left column / top on narrow).
                     final calendar = Card(
                       key: _calendarKey,
                       child: Padding(
@@ -554,9 +531,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   ),
                                 ),
                                 const Spacer(),
-                                // 范围与顶部 chips 合并：这里只显示当前范围。
                                 Text(
-                                  switch (sel.range) {
+                                  switch (selection.range) {
                                     DateRange.today => '今天',
                                     DateRange.yesterday => '昨天',
                                     DateRange.week => '本周',
@@ -571,10 +547,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             ),
                             const SizedBox(height: TimeTraceSpace.xs),
                             CalendarGrid(
-                              selected: calDay,
-                              onSelected: (d) => ref
+                              selected: calendarDay,
+                              onSelected: (day) => ref
                                   .read(dashboardRangeProvider.notifier)
-                                  .selectDay(d),
+                                  .selectDay(day),
                               rowHeight: narrow ? 48 : 52,
                             ),
                           ],
@@ -585,14 +561,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     if (narrow) {
                       return Column(
                         children: [
-                          SizedBox(height: carouselH, child: carousel),
+                          SizedBox(height: carouselHeight, child: carousel),
                           const SizedBox(height: TimeTraceSpace.md),
                           calendar,
                         ],
                       );
                     }
 
-                    // Wide: calendar LEFT, carousel RIGHT — align their heights.
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -601,7 +576,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         Expanded(
                           flex: 7,
                           child: SizedBox(
-                            height: _calendarH > 0 ? _calendarH : carouselH,
+                            height: _calendarH > 0
+                                ? _calendarH
+                                : carouselHeight,
                             child: carousel,
                           ),
                         ),
@@ -610,12 +587,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   },
                 ),
                 const SizedBox(height: TimeTraceSpace.md),
-                // Diary has no outer card; posts/editor carry their own surface.
                 Padding(
                   padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
                   child: DiarySection(
-                    date: calDay,
-                    range: _diaryRangeFor(sel),
+                    date: calendarDay,
+                    range: _diaryRangeFor(selection),
                   ),
                 ),
               ],
@@ -627,7 +603,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   }
 }
 
-/// Keeps a carousel page alive so swiping back doesn't rebuild heavy charts.
 class _KeepAlivePage extends StatefulWidget {
   const _KeepAlivePage({required this.child});
 
