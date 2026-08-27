@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/amadeus-core",
     "crates/core",
     "crates/tui",
     "crates/gui",
