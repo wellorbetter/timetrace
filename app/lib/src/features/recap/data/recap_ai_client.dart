@@ -44,8 +44,14 @@ class RecapAiClient {
         'model': settings.model.trim(),
         'temperature': 0.35,
         'messages': [
-          {'role': 'system', 'content': _systemPrompt},
-          {'role': 'user', 'content': _userPrompt(local)},
+          {
+            'role': 'system',
+            'content': _systemPrompt,
+          },
+          {
+            'role': 'user',
+            'content': _userPrompt(local, settings),
+          },
         ],
       };
       request.write(jsonEncode(body));
@@ -117,23 +123,18 @@ class RecapAiClient {
       return (
         headline.trim(),
         summary.trim(),
-        insights
-            .whereType<String>()
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .take(5)
-            .toList(),
+        insights.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty).take(5).toList(),
       );
     } catch (_) {
       return null;
     }
   }
 
-  String _userPrompt(RecapResult local) => '''
+  String _userPrompt(RecapResult local, RecapAiSettings settings) => '''
 下面是 TimeTrace 从本机记录计算出的事实快照，以及本地规则生成的基线回顾。
 
 事实快照：
-${local.snapshot.toPrettyJson()}
+${local.snapshot.toPrettyJson(includeDiaryEntries: settings.includeDiaryEntries)}
 
 本地基线：
 headline: ${local.headline}
@@ -151,7 +152,7 @@ const _systemPrompt = '''
 1. 只使用输入事实，不推断未提供的项目、任务、情绪、意图或工作成果。
 2. 所有数字必须与事实快照一致；不要重新计算后改写数字含义。
 3. “active/focus ratio”只是活动占比，不得称为生产力、效率、努力程度或健康评分。
-4. 可以基于 diary_entries 提供的文字补充上下文，但不得扩写其中没有的信息。
+4. 只有输入明确包含 diary_entries 时，才可以使用日记文字补充上下文；否则不得推断日记内容。
 5. 语气简洁、自然、客观，默认中文。
 6. headline 一句话；summary 1–3 句；insights 最多 5 条，每条尽量给出具体事实。
 7. 如果数据不足，明确说数据不足，不要补全故事。
