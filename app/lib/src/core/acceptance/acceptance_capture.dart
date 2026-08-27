@@ -142,7 +142,7 @@ class AcceptanceCapture {
     if (scrollable == null || bestExtent < 20) return;
 
     final position = scrollable.position;
-    final clamped = fraction.clamp(0.0, 1.0);
+    final clamped = fraction.clamp(0.0, 1.0).toDouble();
     final target = position.minScrollExtent + bestExtent * clamped;
     if (!animate) {
       position.jumpTo(target);
