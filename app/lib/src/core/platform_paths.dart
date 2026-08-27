@@ -25,8 +25,17 @@ class PlatformPaths {
   static String get appLog => child('app.log');
   static String get uiPreferences => child('ui_config.json');
   static String get csvExport => child('export.csv');
+  static String get diaryImagesDirectory => child('diary_images');
+
+  static String diaryImage(String fileName) =>
+      '$diaryImagesDirectory${Platform.pathSeparator}$fileName';
 
   static void ensureDirectory() {
     Directory(appSupportDirectory).createSync(recursive: true);
+  }
+
+  static void ensureDiaryImagesDirectory() {
+    ensureDirectory();
+    Directory(diaryImagesDirectory).createSync(recursive: true);
   }
 }
