@@ -76,6 +76,9 @@ class TimetraceTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: Colors.transparent,
       dividerColor: scheme.outlineVariant,
+      hoverColor: scheme.primary.withValues(alpha: 0.045),
+      focusColor: scheme.primary.withValues(alpha: 0.08),
+      highlightColor: Colors.transparent,
       visualDensity: VisualDensity.compact,
     );
 
@@ -122,6 +125,20 @@ class TimetraceTheme {
 
     return base.copyWith(
       textTheme: textTheme,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: scheme.primary,
+        selectionColor: scheme.primary.withValues(alpha: 0.18),
+        selectionHandleColor: scheme.primary,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(
+          scheme.outline.withValues(alpha: 0.42),
+        ),
+        thickness: const WidgetStatePropertyAll(6),
+        radius: const Radius.circular(8),
+        crossAxisMargin: 2,
+        mainAxisMargin: 4,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface.withValues(alpha: 0.94),
         foregroundColor: scheme.onSurface,
