@@ -66,8 +66,6 @@ TITLES = {
     ],
 }
 
-# A realistic workday: interleaved apps, short breaks, a lunch gap, and a final
-# review block. Durations are minutes; gaps intentionally break focus streaks.
 BASE_TIMELINE = [
     (9, 5, "Visual Studio Code", 38),
     (9, 45, "Google Chrome", 11),
@@ -84,7 +82,7 @@ BASE_TIMELINE = [
     (14, 0, "Visual Studio Code", 37),
     (14, 39, "Google Chrome", 12),
     (14, 53, "Visual Studio Code", 26),
-    # short break
+    # short break: 15:19 -> 15:31
     (15, 31, "Figma", 17),
     (15, 50, "Visual Studio Code", 29),
     (16, 21, "Obsidian", 10),
@@ -120,13 +118,8 @@ def insert_session(
         VALUES (?, ?, ?, ?, ?, ?, 0, ?)
         """,
         (
-            APPS[app_name],
-            app_name,
-            title,
-            start.isoformat(),
-            end.isoformat(),
-            duration_seconds,
-            day.isoformat(),
+            APPS[app_name], app_name, title, start.isoformat(), end.isoformat(),
+            duration_seconds, day.isoformat(),
         ),
     )
     session_id = cur.lastrowid
@@ -138,14 +131,29 @@ def insert_session(
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            session_id,
-            app_name,
-            title,
-            start.isoformat(),
-            end.isoformat(),
-            duration_seconds,
-            day.isoformat(),
+            session_id, app_name, title, start.isoformat(), end.isoformat(),
+            duration_seconds, day.isoformat(),
         ),
+    )
+
+
+def insert_idle(
+    cur: sqlite3.Cursor,
+    day: dt.date,
+    hour: int,
+    minute: int,
+    duration_minutes: int,
+) -> None:
+    start = dt.datetime.combine(day, dt.time(hour, minute))
+    end = start + dt.timedelta(minutes=duration_minutes)
+    cur.execute(
+        """
+        INSERT INTO usage_sessions
+        (app_path, app_name, window_title, started_at, ended_at,
+         duration_secs, is_idle, date)
+        VALUES ('', '__IDLE__', NULL, ?, ?, ?, 1, ?)
+        """,
+        (start.isoformat(), end.isoformat(), duration_minutes * 60, day.isoformat()),
     )
 
 
@@ -204,15 +212,11 @@ def main() -> None:
     today = dt.datetime.now().astimezone().date()
     total_sessions = 0
 
-    # Two full weeks make week/month comparisons and the calendar visibly
-    # meaningful. Small deterministic duration/time shifts avoid clone days.
     for day_offset in range(13, -1, -1):
         day = today - dt.timedelta(days=day_offset)
         weekday = day.weekday()
         variant = (13 - day_offset) % 5
 
-        # Weekends are intentionally lighter rather than empty, which gives
-        # the calendar/trend views a believable rhythm.
         if weekday >= 5:
             timeline = [
                 (10, 18, "Google Chrome", 18),
@@ -227,11 +231,17 @@ def main() -> None:
             timeline = BASE_TIMELINE
 
         for index, (hour, minute, app_name, base_minutes) in enumerate(timeline):
-            # Keep deltas small enough not to overlap the next scheduled block.
             duration = max(5, base_minutes + ((variant + index) % 3 - 1) * 2)
             start = dt.datetime.combine(day, dt.time(hour, minute))
             insert_session(cur, day, start, app_name, duration, index + variant)
             total_sessions += 1
+
+        if weekday >= 5:
+            insert_idle(cur, day, 11, 49, 155)
+        else:
+            insert_idle(cur, day, 12, 9, 65)
+            insert_idle(cur, day, 15, 19, 12)
+        total_sessions += 1 if weekday >= 5 else 2
 
         evening = dt.datetime.combine(day, dt.time(20, 20))
         daily_text = (
@@ -267,6 +277,10 @@ def main() -> None:
         "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions WHERE date = ? AND is_idle = 0",
         (today.isoformat(),),
     ).fetchone()[0]
+    idle_today = cur.execute(
+        "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions WHERE date = ? AND is_idle = 1",
+        (today.isoformat(),),
+    ).fetchone()[0]
     today_sessions = cur.execute(
         "SELECT COUNT(*) FROM usage_sessions WHERE date = ? AND is_idle = 0",
         (today.isoformat(),),
@@ -275,8 +289,9 @@ def main() -> None:
 
     print(
         "seeded acceptance demo database: "
-        f"{db} (14 days, {total_sessions} sessions, today={today_sessions} sessions, "
-        f"active={active_today // 3600}h{(active_today % 3600) // 60:02d}m)"
+        f"{db} (14 days, {total_sessions} sessions, today={today_sessions} active sessions, "
+        f"active={active_today // 3600}h{(active_today % 3600) // 60:02d}m, "
+        f"idle={idle_today // 60}m)"
     )
 
 
