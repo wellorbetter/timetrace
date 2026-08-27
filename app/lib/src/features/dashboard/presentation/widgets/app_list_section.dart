@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/format.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// App distribution list — every row fully expanded (no internal scroll),
-/// tap a row to expand its page breakdown INLINE below the row.
+/// Desktop app distribution list. Rows stay dense and aligned; details expand
+/// inline without introducing another nested card surface.
 class AppListSection extends StatelessWidget {
   const AppListSection({
     required this.apps,
@@ -27,41 +28,58 @@ class AppListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(TimeTraceSpace.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Text('应用分布', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  '应用分布',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const Spacer(),
-                Text('${apps.length} 个应用 · 点击行查看页面会话',
-                    style: TextStyle(fontSize: 10, color: scheme.outline)),
+                Text(
+                  '${apps.length} 个应用 · 点击查看页面会话',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-            // All rows, fully expanded — no scrolling needed
+            const SizedBox(height: TimeTraceSpace.xs),
             for (var i = 0; i < apps.length; i++)
               Column(
                 key: rowKeys[i],
                 children: [
                   _AppRow(
                     app: apps[i],
-                    isSel: selected == i,
+                    isSelected: selected == i,
                     onTap: () => onSelect(i),
                   ),
-                  // Inline page breakdown — right below the tapped row
                   AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
+                    duration: TimeTraceMotion.normal,
+                    curve: TimeTraceMotion.standard,
                     child: selected == i
-                        ? _PageDetail(pages: pages, loading: loading, scheme: scheme)
+                        ? _PageDetail(
+                            pages: pages,
+                            loading: loading,
+                            scheme: scheme,
+                          )
                         : const SizedBox.shrink(),
                   ),
-                  if (i < apps.length - 1) const Divider(height: 1),
+                  if (i < apps.length - 1)
+                    Divider(
+                      height: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.65),
+                    ),
                 ],
               ),
           ],
@@ -72,64 +90,100 @@ class AppListSection extends StatelessWidget {
 }
 
 class _AppRow extends StatelessWidget {
-  const _AppRow({required this.app, required this.isSel, required this.onTap});
+  const _AppRow({
+    required this.app,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   final AppUsageItem app;
-  final bool isSel;
+  final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final color = appColor(app.appName);
+    final total = app.totalSeconds <= 0 ? 1 : app.totalSeconds;
+    final activeRatio = (app.activeSeconds / total).clamp(0.0, 1.0);
+
     return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+      child: AnimatedContainer(
+        duration: TimeTraceMotion.fast,
+        curve: TimeTraceMotion.standard,
+        padding: const EdgeInsets.symmetric(
+          horizontal: TimeTraceSpace.xs,
+          vertical: TimeTraceSpace.xs,
+        ),
         decoration: BoxDecoration(
-          color: isSel ? scheme.secondaryContainer.withValues(alpha: 0.5) : null,
-          borderRadius: BorderRadius.circular(6),
+          color: isSelected
+              ? scheme.primaryContainer.withValues(alpha: 0.46)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
         ),
         child: Row(
           children: [
-            if (app.exePath != null)
-              AppIcon(exePath: app.exePath!, size: 22)
+            if (app.exePath != null && app.exePath!.isNotEmpty)
+              AppIcon(exePath: app.exePath!, size: 24)
             else
-              Icon(Icons.apps, size: 18, color: appColor(app.appName)),
-            const SizedBox(width: 8),
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+                ),
+                child: Icon(Icons.apps_rounded, size: 14, color: color),
+              ),
+            const SizedBox(width: TimeTraceSpace.xs),
             Expanded(
               child: Text(
                 app.appName,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            // Mini progress bar
-            SizedBox(
-              width: 90,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: app.activeSeconds /
-                      (app.activeSeconds +
-                          (app.totalSeconds > app.activeSeconds
-                              ? app.totalSeconds - app.activeSeconds
-                              : 1)),
-                  minHeight: 5,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  color: appColor(app.appName),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              app.activeLabel,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            SizedBox(
+              width: 82,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: activeRatio,
+                  minHeight: 4,
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  color: color.withValues(alpha: 0.82),
+                ),
+              ),
             ),
-            const SizedBox(width: 4),
-            Icon(
-              isSel ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              size: 16,
-              color: scheme.outline,
+            const SizedBox(width: TimeTraceSpace.xs),
+            SizedBox(
+              width: 56,
+              child: Text(
+                app.activeLabel,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: TimeTraceSpace.xxs),
+            AnimatedRotation(
+              turns: isSelected ? 0.5 : 0,
+              duration: TimeTraceMotion.fast,
+              curve: TimeTraceMotion.standard,
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 17,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -138,7 +192,8 @@ class _AppRow extends StatelessWidget {
   }
 }
 
-/// Inline page breakdown for the selected app (Edge → bilibili/github).
+/// Inline page breakdown for the selected app. A narrow accent rail carries the
+/// hierarchy instead of another card nested inside the app list card.
 class _PageDetail extends StatefulWidget {
   const _PageDetail({
     required this.pages,
@@ -160,113 +215,152 @@ class _PageDetailState extends State<_PageDetail> {
   @override
   void didUpdateWidget(covariant _PageDetail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset expansion when the selection changes to another app.
     if (oldWidget.pages != widget.pages) _showAll = false;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final pages = widget.pages;
-    final loading = widget.loading;
     final scheme = widget.scheme;
-    if (loading) {
+
+    if (widget.loading) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.symmetric(vertical: TimeTraceSpace.sm),
         child: Center(
           child: SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator(strokeWidth: 1.8),
           ),
         ),
       );
     }
-    final list = pages;
-    if (list == null) return const SizedBox.shrink();
-    if (list.isEmpty) {
+    if (pages == null) return const SizedBox.shrink();
+    if (pages.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(32, 4, 8, 4),
-        child: Text('该应用无页面数据',
-            style: TextStyle(fontSize: 11, color: scheme.outline)),
+        padding: const EdgeInsets.fromLTRB(
+          TimeTraceSpace.xl,
+          TimeTraceSpace.xxs,
+          TimeTraceSpace.xs,
+          TimeTraceSpace.xs,
+        ),
+        child: Text(
+          '该应用无页面数据',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
       );
     }
-    final maxSec = list.map((p) => p.seconds).fold<int>(1, (m, v) => v > m ? v : m);
-    final shown = (_showAll ? list : list.take(5)).toList();
-    final more = list.length - shown.length;
+
+    final maxSeconds = pages
+        .map((page) => page.seconds)
+        .fold<int>(1, (max, value) => value > max ? value : max);
+    final shown = (_showAll ? pages : pages.take(5)).toList();
+    final more = pages.length - shown.length;
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(32, 4, 8, 4),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.fromLTRB(
+        TimeTraceSpace.xl,
+        TimeTraceSpace.xxs,
+        TimeTraceSpace.xs,
+        TimeTraceSpace.xs,
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        TimeTraceSpace.sm,
+        TimeTraceSpace.xs,
+        TimeTraceSpace.xs,
+        TimeTraceSpace.xs,
+      ),
       decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(8),
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.22),
+        border: Border(
+          left: BorderSide(
+            color: scheme.primary.withValues(alpha: 0.52),
+            width: 2,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('页面会话',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.primary)),
-          const SizedBox(height: 6),
-          for (final p in shown)
+          Text(
+            '页面会话',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: TimeTraceSpace.xs),
+          for (final page in shown)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(vertical: TimeTraceSpace.xxs),
               child: Row(
                 children: [
-                  Icon(Icons.web_outlined, size: 12, color: scheme.outline),
-                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.web_outlined,
+                    size: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: TimeTraceSpace.xxs),
                   Expanded(
                     child: Text(
-                      p.title.isEmpty ? '(主窗口)' : p.title,
+                      page.title.isEmpty ? '(主窗口)' : page.title,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    width: 50,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: (p.seconds / maxSec).clamp(0.02, 1.0),
-                        minHeight: 4,
-                        backgroundColor: scheme.surfaceContainerHighest,
-                        color: scheme.primary.withValues(alpha: 0.7),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurface,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(formatDuration(p.seconds.toInt()),
-                      style:
-                          TextStyle(fontSize: 10, color: scheme.outline)),
+                  const SizedBox(width: TimeTraceSpace.xs),
+                  SizedBox(
+                    width: 48,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: (page.seconds / maxSeconds).clamp(0.02, 1.0),
+                        minHeight: 3,
+                        backgroundColor: scheme.outlineVariant,
+                        color: scheme.primary.withValues(alpha: 0.52),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: TimeTraceSpace.xs),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      formatDuration(page.seconds.toInt()),
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-          if (more > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: InkWell(
-                onTap: () => setState(() => _showAll = !_showAll),
-                borderRadius: BorderRadius.circular(6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                        _showAll
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        size: 14,
-                        color: scheme.primary),
-                    const SizedBox(width: 2),
-                    Text(
-                      _showAll ? '收起' : '展开全部 $more 个页面',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ],
+          if (more > 0 || _showAll)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showAll = !_showAll),
+                icon: Icon(
+                  _showAll
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 14,
+                ),
+                label: Text(
+                  _showAll ? '收起' : '展开全部 $more 个页面',
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurfaceVariant,
+                  textStyle: theme.textTheme.labelSmall,
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TimeTraceSpace.xs,
+                  ),
                 ),
               ),
             ),
