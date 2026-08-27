@@ -60,7 +60,11 @@ class DashboardSummaryStrip extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900 ? 4 : 2;
+        final columns = switch (constraints.maxWidth) {
+          >= 900 => 4,
+          >= 520 => 2,
+          _ => 1,
+        };
         final gap = TimeTraceSpace.sm;
         final width =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -72,6 +76,7 @@ class DashboardSummaryStrip extends StatelessWidget {
             for (final item in items)
               SizedBox(
                 width: width,
+                height: 108,
                 child: _SummaryCard(metric: item),
               ),
           ],
@@ -129,10 +134,10 @@ class _SummaryCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Icon(metric.icon, size: 16, color: accent),
+                Icon(metric.icon, size: 15, color: accent),
               ],
             ),
-            const SizedBox(height: TimeTraceSpace.xs),
+            const Spacer(),
             Text(
               metric.value,
               maxLines: 1,
@@ -148,10 +153,10 @@ class _SummaryCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 16,
+                  width: 14,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.72),
+                    color: accent.withValues(alpha: 0.68),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
