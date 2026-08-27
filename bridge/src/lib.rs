@@ -1,6 +1,7 @@
-//! TimeTrace Flutter bridge — generated bindings live in frb_generated.rs.
+//! TimeTrace / Amadeus Flutter bridge — generated bindings live in frb_generated.rs.
 
 mod api;
+pub mod amadeus_api;
 pub mod frb_generated;
 
 #[cfg(target_os = "windows")]
@@ -12,3 +13,4 @@ pub mod icons {
 }
 
 pub use api::*;
+pub use amadeus_api::*;
