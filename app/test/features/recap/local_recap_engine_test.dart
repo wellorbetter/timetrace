@@ -37,8 +37,16 @@ void main() {
       idleSeconds: 3600,
       previousActiveSeconds: 2 * 3600,
       topApps: const [
-        RecapAppFact(name: 'Android Studio', activeSeconds: 2 * 3600, idleSeconds: 0),
-        RecapAppFact(name: 'Terminal', activeSeconds: 3600, idleSeconds: 0),
+        RecapAppFact(
+          name: 'Android Studio',
+          activeSeconds: 2 * 3600,
+          idleSeconds: 0,
+        ),
+        RecapAppFact(
+          name: 'Terminal',
+          activeSeconds: 3600,
+          idleSeconds: 0,
+        ),
       ],
       sessionCount: 14,
       contextSwitches: 8,
@@ -54,5 +62,31 @@ void main() {
     expect(result.insights.join(' '), contains('14:00'));
     expect(result.insights.join(' '), contains('50%'));
     expect(result.insights.join(' '), isNot(contains('生产力评分 80')));
+  });
+
+  test('AI serialization can exclude diary text while preserving count', () {
+    final snapshot = RecapSnapshot(
+      label: '今天',
+      start: DateTime(2026, 8, 27),
+      end: DateTime(2026, 8, 27),
+      activeSeconds: 3600,
+      idleSeconds: 0,
+      previousActiveSeconds: 0,
+      topApps: const [],
+      sessionCount: 1,
+      contextSwitches: 0,
+      longestActiveStreakSeconds: 3600,
+      peakHour: 10,
+      peakHourActiveSeconds: 3600,
+      diaryEntries: const ['这段文字默认不应发送给外部模型'],
+    );
+
+    final localJson = snapshot.toJson();
+    final aiJson = snapshot.toJson(includeDiaryEntries: false);
+
+    expect(localJson['diary_entries'], isNotNull);
+    expect(aiJson['diary_entries'], isNull);
+    expect(aiJson['diary_entry_count'], 1);
+    expect(aiJson.toString(), isNot(contains('这段文字默认不应发送给外部模型')));
   });
 }
