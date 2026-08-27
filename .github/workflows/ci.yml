@@ -91,8 +91,8 @@ jobs:
           printf '%s\n' \
             'TimeTrace macOS self-use preview' \
             '' \
-            '1. Double-click “Install TimeTrace.command”.' \
-            '2. If macOS asks whether Terminal may run the script, allow it.' \
+            '1. Try double-clicking “Install TimeTrace.command”.' \
+            '2. If macOS blocks the installer itself, right-click it and choose Open once.' \
             '3. The installer copies TimeTrace to /Applications (or ~/Applications when needed),' \
             "   removes only TimeTrace.app's quarantine attribute, verifies the bundle signature," \
             '   creates the Application Support directory, and launches the app.' \
