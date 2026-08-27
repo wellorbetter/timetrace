@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:timetrace_app/src/features/recap/presentation/recap_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
 /// Quiet desktop shell with a narrow, explicit sidebar rather than a mobile-
@@ -34,6 +35,11 @@ class AppShell extends ConsumerWidget {
         ): () => context.go('/dashboard'),
         SingleActivator(
           LogicalKeyboardKey.digit2,
+          meta: useMeta,
+          control: !useMeta,
+        ): () => context.go('/recap'),
+        SingleActivator(
+          LogicalKeyboardKey.digit3,
           meta: useMeta,
           control: !useMeta,
         ): () => context.go('/settings'),
@@ -76,11 +82,20 @@ class AppShell extends ConsumerWidget {
                           ),
                           const SizedBox(height: TimeTraceSpace.xxs),
                           _SidebarDestination(
+                            icon: Icons.auto_awesome_outlined,
+                            selectedIcon: Icons.auto_awesome_rounded,
+                            label: '回顾',
+                            shortcut: '${shortcutPrefix}2',
+                            selected: selectedIndex == 1,
+                            onTap: () => context.go('/recap'),
+                          ),
+                          const SizedBox(height: TimeTraceSpace.xxs),
+                          _SidebarDestination(
                             icon: Icons.tune_outlined,
                             selectedIcon: Icons.tune_rounded,
                             label: '设置',
                             shortcut: useMeta ? '⌘,' : 'Ctrl+,',
-                            selected: selectedIndex == 1,
+                            selected: selectedIndex == 2,
                             onTap: () => context.go('/settings'),
                           ),
                           const Spacer(),
@@ -286,7 +301,7 @@ class _LocalStatus extends StatelessWidget {
   }
 }
 
-const _paths = ['/dashboard', '/settings'];
+const _paths = ['/dashboard', '/recap', '/settings'];
 
 int _indexOf(BuildContext context) {
   final location = GoRouterState.of(context).uri.path;
@@ -302,6 +317,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+          GoRoute(path: '/recap', builder: (_, _) => const RecapScreen()),
           GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),
