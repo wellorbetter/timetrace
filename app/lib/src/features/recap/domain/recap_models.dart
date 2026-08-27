@@ -66,7 +66,7 @@ class RecapSnapshot {
       ? 0
       : topAppSeconds / activeSeconds;
 
-  Map<String, Object?> toJson() => {
+  Map<String, Object?> toJson({bool includeDiaryEntries = true}) => {
     'range': {
       'label': label,
       'start': _date(start),
@@ -83,10 +83,14 @@ class RecapSnapshot {
     'peak_hour': peakHour,
     'peak_hour_active_seconds': peakHourActiveSeconds,
     'top_apps': topApps.map((e) => e.toJson()).toList(),
-    'diary_entries': diaryEntries,
+    'diary_entry_count': diaryEntries.length,
+    if (includeDiaryEntries) 'diary_entries': diaryEntries,
   };
 
-  String toPrettyJson() => const JsonEncoder.withIndent('  ').convert(toJson());
+  String toPrettyJson({bool includeDiaryEntries = true}) =>
+      const JsonEncoder.withIndent('  ').convert(
+        toJson(includeDiaryEntries: includeDiaryEntries),
+      );
 
   static String _date(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
