@@ -88,18 +88,18 @@ jobs:
           ditto "$APP_PATH" "$PACKAGE_DIR/TimeTrace.app"
           cp scripts/install_macos.command "$PACKAGE_DIR/Install TimeTrace.command"
           chmod +x "$PACKAGE_DIR/Install TimeTrace.command"
-          cat > "$PACKAGE_DIR/README.txt" <<'EOF'
-TimeTrace macOS self-use preview
-
-1. Double-click “Install TimeTrace.command”.
-2. If macOS asks whether Terminal may run the script, allow it.
-3. The installer copies TimeTrace to /Applications (or ~/Applications when needed),
-   removes only TimeTrace.app's quarantine attribute, verifies the bundle signature,
-   creates the Application Support directory, and launches the app.
-
-This preview does NOT disable Gatekeeper globally.
-A public no-warning distribution still requires Apple Developer ID notarization.
-EOF
+          printf '%s\n' \
+            'TimeTrace macOS self-use preview' \
+            '' \
+            '1. Double-click “Install TimeTrace.command”.' \
+            '2. If macOS asks whether Terminal may run the script, allow it.' \
+            '3. The installer copies TimeTrace to /Applications (or ~/Applications when needed),' \
+            "   removes only TimeTrace.app's quarantine attribute, verifies the bundle signature," \
+            '   creates the Application Support directory, and launches the app.' \
+            '' \
+            'This preview does NOT disable Gatekeeper globally.' \
+            'A public no-warning distribution still requires Apple Developer ID notarization.' \
+            > "$PACKAGE_DIR/README.txt"
           ditto -c -k --sequesterRsrc --keepParent "$PACKAGE_DIR" "$RUNNER_TEMP/TimeTrace-macOS.zip"
       - uses: actions/upload-artifact@v4
         with:
