@@ -1,0 +1,18 @@
+[package]
+name = "amadeus-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native Windows/macOS computer perception for Amadeus"
+
+[dependencies]
+amadeus-core = { path = "../amadeus-core" }
+chrono.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", features = ["NSWorkspace", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSURL"] }
