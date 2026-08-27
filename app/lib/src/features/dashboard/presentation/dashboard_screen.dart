@@ -10,6 +10,7 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart' as diary;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
@@ -218,16 +219,16 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
-  DiaryRange _diaryRangeFor(DateRangeSelection selection) {
+  diary.DiaryRange _diaryRangeFor(DateRangeSelection selection) {
     switch (selection.range) {
       case DateRange.today:
       case DateRange.yesterday:
       case DateRange.custom:
-        return DiaryRange.day;
+        return diary.DiaryRange.day;
       case DateRange.week:
-        return DiaryRange.week;
+        return diary.DiaryRange.week;
       case DateRange.month:
-        return DiaryRange.month;
+        return diary.DiaryRange.month;
     }
   }
 
@@ -589,7 +590,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 const SizedBox(height: TimeTraceSpace.md),
                 Padding(
                   padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
-                  child: DiarySection(
+                  child: diary.DiarySection(
                     date: calendarDay,
                     range: _diaryRangeFor(selection),
                   ),
