@@ -166,6 +166,7 @@ class AcceptanceCapture {
     var index = 0;
 
     while (DateTime.now().isBefore(deadline)) {
+      final frameStarted = DateTime.now();
       final renderObject = boundaryKey.currentContext?.findRenderObject();
       if (renderObject is RenderRepaintBoundary) {
         final image = await renderObject.toImage(pixelRatio: 1);
@@ -184,7 +185,12 @@ class AcceptanceCapture {
           image.dispose();
         }
       }
-      await Future<void>.delayed(frameInterval);
+
+      final elapsed = DateTime.now().difference(frameStarted);
+      final remaining = frameInterval - elapsed;
+      if (remaining > Duration.zero) {
+        await Future<void>.delayed(remaining);
+      }
     }
 
     return index;
