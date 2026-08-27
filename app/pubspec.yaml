@@ -14,7 +14,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_rust_bridge: 2.12.0
   fl_chart: ^1.2.0
-  lottie: ^3.3.3
   flutter_riverpod: ^3.3.2
   go_router: ^17.3.0
   freezed_annotation: ^3.1.0
@@ -40,4 +39,3 @@ flutter:
   assets:
     - assets/icon.ico
     - assets/icon_preview.png
-    - assets/lottie/empty_state.json
