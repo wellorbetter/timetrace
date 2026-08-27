@@ -16,8 +16,16 @@ abstract final class TimeTraceSpace {
 }
 
 abstract final class TimeTraceRadius {
+  /// Compact controls, chips, thumbnail corners and small inline surfaces.
   static const double control = 9;
+
+  /// Cards, editors and other larger content surfaces.
   static const double surface = 14;
+
+  // Semantic aliases keep widgets readable without introducing more radius
+  // values: the design system still has exactly two corner scales.
+  static const double small = control;
+  static const double card = surface;
 }
 
 abstract final class TimeTraceLayout {
