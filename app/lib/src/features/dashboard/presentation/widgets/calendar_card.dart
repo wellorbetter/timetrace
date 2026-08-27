@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import 'package:timetrace_app/src/core/platform_paths.dart';
 import 'package:timetrace_app/src/core/widgets/image_album.dart';
 import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
@@ -85,18 +86,18 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       final result =
           await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
-      final dir = Platform.environment['APPDATA'] ?? '.';
-      final targetDir = Directory('$dir\\TimeTrace\\diary_images');
-      targetDir.createSync(recursive: true);
+      PlatformPaths.ensureDiaryImagesDirectory();
       final dateStr = calFmt(widget.date);
       final api = ref.read(apiProvider);
       final added = <String>[];
-      for (final f in result.files) {
+      for (var index = 0; index < result.files.length; index++) {
+        final f = result.files[index];
         final src = f.path;
         if (src == null) continue;
         final ext = src.split('.').last;
-        final dest =
-            '${targetDir.path}\\${dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final fileName =
+            '${dateStr}_${DateTime.now().microsecondsSinceEpoch}_$index.$ext';
+        final dest = PlatformPaths.diaryImage(fileName);
         File(src).copySync(dest);
         api.addDiaryImage(date: dateStr, path: dest);
         added.add(dest);
@@ -224,7 +225,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Diary: single title row (title · date · range label) ──
         Row(
           children: [
             Icon(Icons.edit_note, size: 16, color: scheme.primary),
@@ -235,7 +235,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     fontSize: 14,
                     color: scheme.primary)),
             const Spacer(),
-            // Date + range label together, on the right
             Text('${calFmt(widget.date)}',
                 style: TextStyle(fontSize: 11, color: scheme.outline)),
             const SizedBox(width: 6),
@@ -258,7 +257,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           ],
         ),
         const SizedBox(height: 8),
-        // ── Editor: tone + soft shadow instead of a hard border ──
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -282,7 +280,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 onAutoSave: _autosave,
                 onPublish: _publish,
               ),
-              // Draft badge: autosaved but not published yet
               if (_editingId == null &&
                   draft != null &&
                   draft.trim().isNotEmpty)
@@ -315,7 +312,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     ],
                   ),
                 ),
-              // Staged images for the new post (removable)
               if (_staged.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
@@ -357,7 +353,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   ],
                 ),
               ],
-              // Add image — small icon button, tooltip on hover
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: IconButton(
@@ -373,7 +368,6 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           ),
         ),
         const SizedBox(height: 10),
-        // ── Posts — grouped by day (collapsible), each item has 👁 toggles ──
         if (inRange.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -421,20 +415,16 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     );
   }
 
-  /// Group posts by day, days newest first, posts newest first.
   List<(String, List<DiaryEntryDto>)> _groupByDay(List<DiaryEntryDto> posts) {
     final map = <String, List<DiaryEntryDto>>{};
     for (final e in posts) {
       map.putIfAbsent(e.date, () => []).add(e);
     }
     final days = map.keys.toList()..sort((a, b) => b.compareTo(a));
-    return [
-      for (final d in days) (d, map[d]!),
-    ];
+    return [for (final d in days) (d, map[d]!)];
   }
 }
 
-/// Day group header: date + count, tap to collapse/expand the whole day.
 class _DayGroup extends StatelessWidget {
   const _DayGroup({
     required this.dateStr,
@@ -463,7 +453,6 @@ class _DayGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group header — tap to collapse/expand
         InkWell(
           onTap: onToggleGroup,
           borderRadius: BorderRadius.circular(8),
@@ -493,7 +482,6 @@ class _DayGroup extends StatelessWidget {
             ),
           ),
         ),
-        // Day's posts (collapse animation)
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
@@ -520,11 +508,6 @@ class _DayGroup extends StatelessWidget {
   }
 }
 
-/// One diary post: text + its own images, each with an 👁 toggle
-/// (visibility / visibility_off) — hide/show independently.
-/// One diary post (朋友圈): text + own images. Tapping ✎ edits INLINE —
-/// text becomes a field, images expand as a grid with per-image ✕ and a
-/// trailing + to add more. 👁 toggles hide/show when not editing.
 class _PostCard extends ConsumerStatefulWidget {
   const _PostCard({
     required this.id,
@@ -554,8 +537,8 @@ class _PostCardState extends ConsumerState<_PostCard> {
   bool _textVisible = true;
   bool _imagesVisible = true;
   late TextEditingController _editCtrl;
-  List<String> _editImages = []; // existing images (removable while editing)
-  List<String> _newImages = []; // uploaded during this edit session
+  List<String> _editImages = [];
+  List<String> _newImages = [];
 
   @override
   void initState() {
@@ -571,13 +554,11 @@ class _PostCardState extends ConsumerState<_PostCard> {
       _textVisible = true;
       _imagesVisible = true;
     }
-    // Entering edit mode: snapshot images for inline management.
     if (widget.editing && !oldWidget.editing) {
       _editCtrl.text = widget.content;
       _editImages = List.of(widget.images);
       _newImages = [];
     }
-    // Exiting edit mode (saved/cancelled elsewhere): reset new additions.
     if (!widget.editing && oldWidget.editing) {
       _newImages = [];
     }
@@ -604,17 +585,17 @@ class _PostCardState extends ConsumerState<_PostCard> {
       final result =
           await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
-      final dir = Platform.environment['APPDATA'] ?? '.';
-      final targetDir = Directory('$dir\\TimeTrace\\diary_images');
-      targetDir.createSync(recursive: true);
+      PlatformPaths.ensureDiaryImagesDirectory();
       final api = ref.read(apiProvider);
       final added = <String>[];
-      for (final f in result.files) {
+      for (var index = 0; index < result.files.length; index++) {
+        final f = result.files[index];
         final src = f.path;
         if (src == null) continue;
         final ext = src.split('.').last;
-        final dest =
-            '${targetDir.path}\\${widget.dateStr}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final fileName =
+            '${widget.dateStr}_${DateTime.now().microsecondsSinceEpoch}_$index.$ext';
+        final dest = PlatformPaths.diaryImage(fileName);
         File(src).copySync(dest);
         api.addDiaryImage(date: widget.dateStr, path: dest);
         added.add(dest);
@@ -637,7 +618,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
       }
     }
     ref.invalidate(calendarDataProvider);
-    if (mounted) widget.onEdit(); // toggles edit off (same id)
+    if (mounted) widget.onEdit();
   }
 
   @override
@@ -649,7 +630,6 @@ class _PostCardState extends ConsumerState<_PostCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      // 扁平化卡片：去掉浮动阴影改用细边框，视觉更干净，编辑态换高亮边框。
       elevation: 0,
       color: editing
           ? widget.scheme.primaryContainer.withValues(alpha: 0.45)
@@ -667,7 +647,6 @@ class _PostCardState extends ConsumerState<_PostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Text: inline field while editing, 👁 toggle otherwise ──
             if (editing)
               TextField(
                 controller: _editCtrl,
@@ -721,7 +700,6 @@ class _PostCardState extends ConsumerState<_PostCard> {
                             fontStyle: FontStyle.italic,
                             color: widget.scheme.outline)),
               ),
-            // ── Images: edit = expanded grid with ✕ + add; else 👁 toggle ──
             if (widget.images.isNotEmpty || editing) ...[
               const SizedBox(height: 6),
               if (editing)
@@ -747,7 +725,6 @@ class _PostCardState extends ConsumerState<_PostCard> {
                               color: widget.scheme.outline)),
                 ),
             ],
-            // ── Actions ──
             const SizedBox(height: 4),
             Divider(
                 height: 1,
@@ -764,9 +741,8 @@ class _PostCardState extends ConsumerState<_PostCard> {
                           onPressed: widget.onDelete,
                         ),
                         const Spacer(),
-                        // Save/cancel on the RIGHT — same side as ✎
                         TextButton(
-                          onPressed: widget.onEdit, // toggle off
+                          onPressed: widget.onEdit,
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -835,7 +811,6 @@ class _PostCardState extends ConsumerState<_PostCard> {
   }
 }
 
-/// Editing image grid: expanded thumbnails with per-image ✕ + trailing add.
 class _EditImageGrid extends StatelessWidget {
   const _EditImageGrid({
     required this.images,
@@ -891,7 +866,6 @@ class _EditImageGrid extends StatelessWidget {
               ],
             ),
           ),
-        // Add-more tile
         InkWell(
           onTap: onAdd,
           borderRadius: BorderRadius.circular(8),
@@ -912,7 +886,6 @@ class _EditImageGrid extends StatelessWidget {
   }
 }
 
-
 class DaySummaryPanel extends ConsumerWidget {
   const DaySummaryPanel({required this.date});
 
@@ -931,20 +904,17 @@ class DaySummaryPanel extends ConsumerWidget {
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
-            // 汇总页固定展示当日视图（热力图 + 使用记录），周/月由应用分布页承载。
             Text('当日汇总',
                 style: TextStyle(fontSize: 11, color: scheme.outline)),
           ],
         ),
         const SizedBox(height: 8),
-        // 内容区填满剩余高度，超长时内部滚动。
         Expanded(child: _DaySummary(date: date)),
       ],
     );
   }
 }
 
-/// Day view: AGGREGATED sessions (same app merged) + heatmap.
 class _DaySummary extends ConsumerStatefulWidget {
   const _DaySummary({required this.date});
 
@@ -967,17 +937,15 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
     }
   }
 
-  /// Merge consecutive same-app sessions into one aggregated row.
   List<_AggRow> _aggregate(List<DaySessionDto> sessions) {
     final rows = <String, _AggRow>{};
     for (final s in sessions) {
-      if (s.isIdle) continue; // drop away/empty
+      if (s.isIdle) continue;
       final agg = rows[s.appName] ?? _AggRow(
           appName: s.appName,
           firstStart: s.startedAt,
           seconds: 0,
           sessions: 0);
-      // 首次使用时间取最早一次开始时间。
       if (s.startedAt.compareTo(agg.firstStart) < 0) {
         agg.firstStart = s.startedAt;
       }
@@ -1040,13 +1008,10 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
               Text('当天暂无记录',
                   style: TextStyle(fontSize: 12, color: scheme.outline))
             else
-              // 列表占满剩余高度：超过才隐藏，展开后内部滚动。
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     const rowH = 24.0;
-                    // PageView can hand a page unbounded height on some
-                    // layout passes; never let Infinity reach toInt().
                     final maxH = constraints.maxHeight.isFinite
                         ? constraints.maxHeight
                         : 0.0;
@@ -1089,7 +1054,6 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
   }
 }
 
-/// Aggregated session row (app + first start + total duration + count).
 class _AggRow {
   _AggRow({
     required this.appName,
@@ -1151,7 +1115,6 @@ class _AggRowTile extends StatelessWidget {
   }
 }
 
-/// Diary editor (full-width, below calendar) — Material 3 style.
 class _HourlyHeatmap extends ConsumerWidget {
   const _HourlyHeatmap({required this.date});
 
@@ -1195,7 +1158,6 @@ class _HourlyHeatmap extends ConsumerWidget {
                         child: Tooltip(
                           message: '${i}时 · ${formatDuration(hours[i])}',
                           child: GestureDetector(
-                            // 联动：点击热力条→时段分布页选中该小时。
                             onTap: hours[i] > 0
                                 ? () => ref
                                       .read(hourlyFocusProvider.notifier)
@@ -1204,9 +1166,9 @@ class _HourlyHeatmap extends ConsumerWidget {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: hours[i] == 0
-                                        ? scheme.surfaceContainerHighest
-: scheme.primary.withValues(
-                                          alpha: 0.2 + 0.8 * (hours[i] / max)),
+                                    ? scheme.surfaceContainerHighest
+                                    : scheme.primary.withValues(
+                                        alpha: 0.2 + 0.8 * (hours[i] / max)),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -1235,5 +1197,4 @@ class _HourlyHeatmap extends ConsumerWidget {
       },
     );
   }
-
 }
