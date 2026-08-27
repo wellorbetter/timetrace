@@ -1,0 +1,146 @@
+name: macOS Demo Recording
+
+on:
+  workflow_dispatch:
+
+jobs:
+  record-macos-demo:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build signed macOS release app
+        run: |
+          chmod +x scripts/build_macos.sh
+          ./scripts/build_macos.sh
+
+      - name: Install FFmpeg when missing
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          ffmpeg -version | head -n1
+
+      - name: Seed disposable demo data
+        run: |
+          DEMO_DB="$HOME/Library/Application Support/TimeTrace/time.db"
+          python3 scripts/seed_acceptance_demo.py --db "$DEMO_DB"
+          test -s "$DEMO_DB"
+
+      - name: Record deterministic Flutter render-tree demo
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
+
+          FRAME_DIR="$RUNNER_TEMP/timetrace-macos-frames"
+          VIDEO="$RUNNER_TEMP/timetrace-macos-demo.mp4"
+          mkdir -p "$FRAME_DIR"
+
+          TIMETRACE_ACCEPTANCE_CAPTURE_DIR="$FRAME_DIR" \
+            "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-demo.log" 2>&1 &
+          APP_PID=$!
+
+          for _ in $(seq 1 70); do
+            if [[ -f "$FRAME_DIR/capture.done" ]]; then
+              break
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/timetrace-macos-demo.log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          test -f "$FRAME_DIR/capture.done"
+          test -f "$FRAME_DIR/capture.json"
+          FRAME_COUNT="$(find "$FRAME_DIR" -name 'frame-*.png' | wc -l | tr -d ' ')"
+          test "$FRAME_COUNT" -ge 60
+
+          ffmpeg -y -loglevel warning \
+            -framerate 5 -i "$FRAME_DIR/frame-%05d.png" \
+            -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p \
+            -movflags +faststart "$VIDEO"
+
+          kill "$APP_PID" || true
+          wait "$APP_PID" || true
+
+          test -s "$VIDEO"
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/macos-render-capture.json"
+
+      - name: Try native macOS screen recording
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
+          VIDEO="$RUNNER_TEMP/timetrace-macos-native.mp4"
+
+          "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-native.log" 2>&1 &
+          APP_PID=$!
+          sleep 7
+          osascript -e 'tell application "TimeTrace" to activate' || true
+
+          # Hosted macOS runners can deny Screen Recording via TCC. Keep this
+          # as a best-effort title-bar-inclusive recording; the render-tree
+          # video above is the deterministic fallback and is required.
+          ffmpeg -y -loglevel warning -f avfoundation -framerate 20 \
+            -i 'Capture screen 0:none' -t 22 \
+            -c:v libx264 -preset ultrafast -pix_fmt yuv420p "$VIDEO" \
+            >"$RUNNER_TEMP/ffmpeg-macos-native.log" 2>&1 &
+          FFMPEG_PID=$!
+
+          sleep 2
+          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "," using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "1" using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
+          wait "$FFMPEG_PID" || true
+          kill "$APP_PID" || true
+          wait "$APP_PID" || true
+
+          if [[ -s "$VIDEO" ]]; then
+            ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          else
+            printf '%s\n' \
+              'native_video_unavailable=true' \
+              'GitHub-hosted macOS denied native Screen Recording; use timetrace-macos-demo.mp4.' \
+              > "$RUNNER_TEMP/macos-native-status.txt"
+          fi
+
+      - name: Verify native application state
+        run: |
+          DATA_DIR="$HOME/Library/Application Support/TimeTrace"
+          test -s "$DATA_DIR/time.db"
+          test -f "$DATA_DIR/app.log"
+          grep -q 'TimeTraceApi initialized' "$DATA_DIR/app.log"
+          if grep -q 'API init FAILED' "$DATA_DIR/app.log"; then
+            cat "$DATA_DIR/app.log" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TimeTrace-macOS-Demo
+          path: |
+            ${{ runner.temp }}/timetrace-macos-demo.mp4
+            ${{ runner.temp }}/timetrace-macos-native.mp4
+            ${{ runner.temp }}/timetrace-macos-demo.log
+            ${{ runner.temp }}/timetrace-macos-native.log
+            ${{ runner.temp }}/ffmpeg-macos-native.log
+            ${{ runner.temp }}/macos-native-status.txt
+            ${{ runner.temp }}/macos-render-capture.json
+          if-no-files-found: warn
