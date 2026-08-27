@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 
-/// Reusable stat chip. Keep the treatment quiet: a subtle tint and compact
-/// typography are enough to carry status without turning every value into a
-/// decorative badge.
+/// Reusable stat chip. Keep the treatment quiet: color marks the datum while
+/// text stays neutral, so several chips can coexist without competing.
 class StatChip extends StatelessWidget {
   const StatChip({
     required this.label,
@@ -18,14 +17,20 @@ class StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: TimeTraceSpace.xs,
         vertical: TimeTraceSpace.xxs,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.065),
         borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.8),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -42,9 +47,8 @@ class StatChip extends StatelessWidget {
           const SizedBox(width: TimeTraceSpace.xxs),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
             ),
           ),
