@@ -2,6 +2,14 @@ name: macOS Demo Recording
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - feature/ai-recap
+    paths:
+      - '.github/workflows/macos_demo_recording.yml'
+      - 'app/lib/src/app.dart'
+      - 'app/lib/src/core/acceptance/**'
+      - 'scripts/seed_acceptance_demo.py'
 
 jobs:
   record-macos-demo:
