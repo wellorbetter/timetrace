@@ -17,7 +17,10 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final railColor =
+        theme.navigationRailTheme.backgroundColor ?? scheme.surface;
     final useMeta = Platform.isMacOS;
 
     return CallbackShortcuts(
@@ -45,68 +48,139 @@ class AppShell extends ConsumerWidget {
             children: [
               SizedBox(
                 width: TimeTraceLayout.railWidth,
-                child: NavigationRail(
-                  selectedIndex: _indexOf(context),
-                  onDestinationSelected: (i) => context.go(_paths[i]),
-                  labelType: NavigationRailLabelType.all,
-                  minWidth: 72,
-                  groupAlignment: -1,
-                  leading: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      TimeTraceSpace.xs,
-                      TimeTraceSpace.md,
-                      TimeTraceSpace.xs,
-                      TimeTraceSpace.lg,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
+                child: ColoredBox(
+                  color: railColor,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: NavigationRail(
+                          selectedIndex: _indexOf(context),
+                          onDestinationSelected: (i) => context.go(_paths[i]),
+                          labelType: NavigationRailLabelType.all,
+                          minWidth: 72,
+                          groupAlignment: -1,
+                          leading: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              TimeTraceSpace.xs,
+                              TimeTraceSpace.md,
+                              TimeTraceSpace.xs,
+                              TimeTraceSpace.lg,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(
+                                      TimeTraceRadius.control,
+                                    ),
+                                    border: Border.all(
+                                      color: scheme.outlineVariant,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.timelapse_rounded,
+                                    size: 20,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: TimeTraceSpace.xs),
+                                Text(
+                                  'TimeTrace',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    letterSpacing: 0.15,
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          destinations: const [
+                            NavigationRailDestination(
+                              icon: Tooltip(
+                                message: '概览 · ⌘/Ctrl 1',
+                                child: Icon(Icons.space_dashboard_outlined),
+                              ),
+                              selectedIcon: Icon(Icons.space_dashboard_rounded),
+                              label: Text('概览'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Tooltip(
+                                message: '设置 · ⌘/Ctrl ,',
+                                child: Icon(Icons.tune_outlined),
+                              ),
+                              selectedIcon: Icon(Icons.tune_rounded),
+                              label: Text('设置'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          TimeTraceSpace.xs,
+                          TimeTraceSpace.xs,
+                          TimeTraceSpace.xs,
+                          TimeTraceSpace.sm,
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: TimeTraceSpace.xs,
+                            vertical: TimeTraceSpace.xs,
+                          ),
                           decoration: BoxDecoration(
-                            color: scheme.primaryContainer,
-                            borderRadius:
-                                BorderRadius.circular(TimeTraceRadius.control),
-                            border: Border.all(color: scheme.outlineVariant),
+                            color: scheme.surface.withValues(alpha: 0.48),
+                            borderRadius: BorderRadius.circular(
+                              TimeTraceRadius.control,
+                            ),
+                            border: Border.all(
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.75,
+                              ),
+                            ),
                           ),
-                          child: Icon(
-                            Icons.timelapse_rounded,
-                            size: 20,
-                            color: scheme.primary,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: scheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: TimeTraceSpace.xxs),
+                                  Text(
+                                    '本地记录',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: scheme.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                Platform.isMacOS ? 'macOS' : 'Windows',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 9,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: TimeTraceSpace.xs),
-                        Text(
-                          'TimeTrace',
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 0.15,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Tooltip(
-                        message: '概览 · ⌘/Ctrl 1',
-                        child: Icon(Icons.space_dashboard_outlined),
-                      ),
-                      selectedIcon: Icon(Icons.space_dashboard_rounded),
-                      label: Text('概览'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Tooltip(
-                        message: '设置 · ⌘/Ctrl ,',
-                        child: Icon(Icons.tune_outlined),
-                      ),
-                      selectedIcon: Icon(Icons.tune_rounded),
-                      label: Text('设置'),
-                    ),
-                  ],
                 ),
               ),
               VerticalDivider(
