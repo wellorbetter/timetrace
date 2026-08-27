@@ -4,6 +4,7 @@
 
 pub mod amadeus_adapter;
 pub mod amadeus_host;
+pub mod amadeus_skills;
 pub mod config;
 pub mod contracts;
 pub mod engine;
@@ -17,6 +18,9 @@ pub use amadeus_host::{
     persist_amadeus_state, recent_amadeus_memories, search_amadeus_memories,
     shared_amadeus_runtime, take_pending_initiatives, AmadeusHostError,
     PendingInitiative, SharedAmadeusRuntime,
+};
+pub use amadeus_skills::{
+    ensure_amadeus_skills, host_skill_runtime_available, run_amadeus_skill,
 };
 pub use config::AppConfig;
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
