@@ -3,6 +3,7 @@
 //! Shared library crate containing all business logic.
 
 pub mod amadeus_adapter;
+pub mod amadeus_host;
 pub mod config;
 pub mod contracts;
 pub mod engine;
@@ -11,6 +12,10 @@ pub mod paths;
 pub mod storage;
 
 pub use amadeus_adapter::{adapt_tracked_event, AmadeusMemorySink, FanoutEventSink};
+pub use amadeus_host::{
+    persist_amadeus_state, shared_amadeus_runtime, AmadeusHostError,
+    SharedAmadeusRuntime,
+};
 pub use config::AppConfig;
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
 pub use contracts::idle::IdleDetector;
