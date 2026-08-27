@@ -1,0 +1,282 @@
+name: Desktop Acceptance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: acceptance-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ubuntu-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Linux desktop test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev \
+            libayatana-appindicator3-dev libxss-dev \
+            xvfb openbox xdotool ffmpeg dbus-x11
+      - name: Rust workspace on Ubuntu
+        run: cargo test --workspace
+      - name: Build Linux release bundle
+        run: |
+          chmod +x scripts/build_linux.sh
+          ./scripts/build_linux.sh
+      - name: Native Ubuntu Xvfb smoke + walkthrough recording
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          Xvfb :99 -screen 0 1440x900x24 -ac +extension RANDR +extension RENDER +extension XFIXES &
+          XVFB_PID=$!
+          sleep 2
+          openbox >/tmp/openbox.log 2>&1 &
+          OPENBOX_PID=$!
+          eval "$(dbus-launch --sh-syntax)"
+
+          BUNDLE_DIR="$(find app/build/linux -type d -path '*/release/bundle' -print -quit)"
+          test -n "$BUNDLE_DIR"
+          APP_BIN="$(find "$BUNDLE_DIR" -maxdepth 1 -type f -executable -print -quit)"
+          test -n "$APP_BIN"
+
+          ffmpeg -y -loglevel warning -f x11grab -framerate 24 -video_size 1440x900 \
+            -i :99.0 -c:v libx264 -preset ultrafast -pix_fmt yuv420p \
+            "$RUNNER_TEMP/timetrace-ubuntu.mp4" >/tmp/ffmpeg-linux.log 2>&1 &
+          FFMPEG_PID=$!
+
+          "$APP_BIN" >"$RUNNER_TEMP/timetrace-linux-smoke.log" 2>&1 &
+          APP_PID=$!
+          sleep 9
+          kill -0 "$APP_PID"
+
+          WINDOW_ID="$(xdotool search --name 'TimeTrace' 2>/dev/null | head -n1 || true)"
+          test -n "$WINDOW_ID"
+          xdotool windowactivate --sync "$WINDOW_ID"
+          xdotool key --window "$WINDOW_ID" ctrl+2
+          sleep 4
+          xdotool key --window "$WINDOW_ID" ctrl+comma
+          sleep 4
+          xdotool key --window "$WINDOW_ID" ctrl+1
+          sleep 4
+          xdotool key --window "$WINDOW_ID" ctrl+2
+          sleep 4
+
+          DATA_DIR="$HOME/.local/share/TimeTrace"
+          test -s "$DATA_DIR/time.db"
+          test -f "$DATA_DIR/app.log"
+          grep -q 'TimeTraceApi initialized' "$DATA_DIR/app.log"
+          grep -q 'tray initialized (linux)' "$DATA_DIR/app.log"
+          if grep -q 'API init FAILED' "$DATA_DIR/app.log"; then
+            cat "$DATA_DIR/app.log" >&2
+            exit 1
+          fi
+
+          kill "$APP_PID" || true
+          wait "$APP_PID" || true
+          kill -INT "$FFMPEG_PID" || true
+          wait "$FFMPEG_PID" || true
+          kill "$OPENBOX_PID" || true
+          kill "$XVFB_PID" || true
+          test -s "$RUNNER_TEMP/timetrace-ubuntu.mp4"
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$RUNNER_TEMP/timetrace-ubuntu.mp4"
+      - name: Package Linux bundle
+        run: |
+          BUNDLE_DIR="$(find app/build/linux -type d -path '*/release/bundle' -print -quit)"
+          tar -C "$(dirname "$BUNDLE_DIR")" -czf "$RUNNER_TEMP/TimeTrace-Ubuntu.tar.gz" "$(basename "$BUNDLE_DIR")"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TimeTrace-Ubuntu-Acceptance
+          path: |
+            ${{ runner.temp }}/TimeTrace-Ubuntu.tar.gz
+            ${{ runner.temp }}/timetrace-ubuntu.mp4
+            ${{ runner.temp }}/timetrace-linux-smoke.log
+          if-no-files-found: error
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build Windows release and Rust bridge
+        shell: pwsh
+        run: |
+          cargo build -p timetrace-bridge --release
+          Push-Location app
+          flutter pub get
+          flutter build windows --release
+          Pop-Location
+          $bundle = Get-ChildItem app/build/windows -Recurse -Directory | Where-Object { $_.Name -eq 'Release' -and (Test-Path (Join-Path $_.FullName 'timetrace_app.exe')) } | Select-Object -First 1
+          if (-not $bundle) { throw 'Windows release bundle not found' }
+          Copy-Item target/release/timetrace_bridge.dll (Join-Path $bundle.FullName 'timetrace_bridge.dll') -Force
+          Set-Content -Path "$env:RUNNER_TEMP/windows-bundle.txt" -Value $bundle.FullName
+      - name: Ensure FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg -y --no-progress
+          }
+          ffmpeg -version | Select-Object -First 1
+      - name: Native Windows smoke + recording probe
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Get-Content "$env:RUNNER_TEMP/windows-bundle.txt"
+          $exe = Join-Path $bundle 'timetrace_app.exe'
+          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows.mp4'
+          $fflog = Join-Path $env:RUNNER_TEMP 'ffmpeg-windows.log'
+
+          $ffmpeg = Start-Process ffmpeg -ArgumentList @(
+            '-y','-loglevel','warning','-f','gdigrab','-framerate','20',
+            '-i','desktop','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',
+            $video
+          ) -RedirectStandardError $fflog -PassThru -WindowStyle Hidden
+
+          $app = Start-Process $exe -WorkingDirectory $bundle -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) { throw "TimeTrace exited with $($app.ExitCode)" }
+
+          $shell = New-Object -ComObject WScript.Shell
+          [void]$shell.AppActivate('TimeTrace')
+          Start-Sleep -Seconds 1
+          $shell.SendKeys('^2')
+          Start-Sleep -Seconds 4
+          $shell.SendKeys('^,')
+          Start-Sleep -Seconds 4
+          $shell.SendKeys('^1')
+          Start-Sleep -Seconds 4
+          $shell.SendKeys('^2')
+          Start-Sleep -Seconds 4
+
+          $dataDir = Join-Path $env:APPDATA 'TimeTrace'
+          if (-not (Test-Path (Join-Path $dataDir 'time.db'))) { throw 'time.db missing' }
+          if (-not (Test-Path (Join-Path $dataDir 'app.log'))) { throw 'app.log missing' }
+          $log = Get-Content (Join-Path $dataDir 'app.log') -Raw
+          if ($log -notmatch 'TimeTraceApi initialized') { throw 'Rust API init marker missing' }
+          if ($log -match 'API init FAILED') { throw 'Rust API initialization failed' }
+
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          Stop-Process -Id $ffmpeg.Id -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          if (Test-Path $video) {
+            ffprobe -v error -show_entries format=duration,size -of default=nw=1 $video
+          }
+      - name: Record Windows acceptance status
+        if: always()
+        shell: pwsh
+        run: |
+          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows.mp4'
+          if (Test-Path $video -PathType Leaf) {
+            $size = (Get-Item $video).Length
+            "native_video_bytes=$size" | Set-Content "$env:RUNNER_TEMP/windows-acceptance.txt"
+          } else {
+            'native_video_unavailable=true' | Set-Content "$env:RUNNER_TEMP/windows-acceptance.txt"
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TimeTrace-Windows-Acceptance
+          path: |
+            ${{ runner.temp }}/timetrace-windows.mp4
+            ${{ runner.temp }}/ffmpeg-windows.log
+            ${{ runner.temp }}/windows-acceptance.txt
+          if-no-files-found: warn
+
+  macos-native:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build signed macOS bundle
+        run: |
+          chmod +x scripts/build_macos.sh
+          ./scripts/build_macos.sh
+      - name: Install FFmpeg
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+      - name: Native macOS smoke + recording probe
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
+          VIDEO="$RUNNER_TEMP/timetrace-macos.mp4"
+
+          "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-smoke.log" 2>&1 &
+          APP_PID=$!
+          sleep 9
+          kill -0 "$APP_PID"
+
+          ffmpeg -y -loglevel warning -f avfoundation -framerate 20 -i '0:none' \
+            -t 22 -c:v libx264 -preset ultrafast -pix_fmt yuv420p "$VIDEO" \
+            >"$RUNNER_TEMP/ffmpeg-macos.log" 2>&1 &
+          FFMPEG_PID=$!
+          sleep 2
+          osascript -e 'tell application "TimeTrace" to activate' || true
+          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "," using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "1" using command down' || true
+          sleep 4
+          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
+          wait "$FFMPEG_PID" || true
+
+          DATA_DIR="$HOME/Library/Application Support/TimeTrace"
+          test -s "$DATA_DIR/time.db"
+          test -f "$DATA_DIR/app.log"
+          grep -q 'TimeTraceApi initialized' "$DATA_DIR/app.log"
+          grep -q 'tray initialized (macos)' "$DATA_DIR/app.log"
+          if grep -q 'API init FAILED' "$DATA_DIR/app.log"; then
+            cat "$DATA_DIR/app.log" >&2
+            exit 1
+          fi
+          kill "$APP_PID" || true
+          wait "$APP_PID" || true
+          if [[ -s "$VIDEO" ]]; then
+            ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          fi
+      - name: Record macOS acceptance status
+        if: always()
+        run: |
+          VIDEO="$RUNNER_TEMP/timetrace-macos.mp4"
+          if [[ -s "$VIDEO" ]]; then
+            echo "native_video_bytes=$(stat -f%z "$VIDEO")" > "$RUNNER_TEMP/macos-acceptance.txt"
+          else
+            printf '%s\n' \
+              'native_video_unavailable=true' \
+              'GitHub-hosted macOS may gate Screen Recording through TCC.' \
+              > "$RUNNER_TEMP/macos-acceptance.txt"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TimeTrace-macOS-Acceptance
+          path: |
+            ${{ runner.temp }}/timetrace-macos.mp4
+            ${{ runner.temp }}/timetrace-macos-smoke.log
+            ${{ runner.temp }}/ffmpeg-macos.log
+            ${{ runner.temp }}/macos-acceptance.txt
+          if-no-files-found: warn
