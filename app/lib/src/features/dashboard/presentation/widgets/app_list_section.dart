@@ -40,7 +40,7 @@ class AppListSection extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '应用分布',
+                  '应用排行',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -60,6 +60,7 @@ class AppListSection extends StatelessWidget {
                 key: rowKeys[i],
                 children: [
                   _AppRow(
+                    rank: i + 1,
                     app: apps[i],
                     isSelected: selected == i,
                     onTap: () => onSelect(i),
@@ -91,11 +92,13 @@ class AppListSection extends StatelessWidget {
 
 class _AppRow extends StatelessWidget {
   const _AppRow({
+    required this.rank,
     required this.app,
     required this.isSelected,
     required this.onTap,
   });
 
+  final int rank;
   final AppUsageItem app;
   final bool isSelected;
   final VoidCallback onTap;
@@ -126,6 +129,17 @@ class _AppRow extends StatelessWidget {
         ),
         child: Row(
           children: [
+            SizedBox(
+              width: 24,
+              child: Text(
+                rank.toString().padLeft(2, '0'),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            const SizedBox(width: TimeTraceSpace.xxs),
             if (app.exePath != null && app.exePath!.isNotEmpty)
               AppIcon(exePath: app.exePath!, size: 24)
             else
@@ -151,7 +165,7 @@ class _AppRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 82,
+              width: 90,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: LinearProgressIndicator(
@@ -164,13 +178,14 @@ class _AppRow extends StatelessWidget {
             ),
             const SizedBox(width: TimeTraceSpace.xs),
             SizedBox(
-              width: 56,
+              width: 60,
               child: Text(
                 app.activeLabel,
                 textAlign: TextAlign.right,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: scheme.onSurface,
                   fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
@@ -334,6 +349,7 @@ class _PageDetailState extends State<_PageDetail> {
                       textAlign: TextAlign.right,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: scheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
@@ -351,9 +367,7 @@ class _PageDetailState extends State<_PageDetail> {
                       : Icons.expand_more_rounded,
                   size: 14,
                 ),
-                label: Text(
-                  _showAll ? '收起' : '展开全部 $more 个页面',
-                ),
+                label: Text(_showAll ? '收起' : '展开全部 $more 个页面'),
                 style: TextButton.styleFrom(
                   foregroundColor: scheme.onSurfaceVariant,
                   textStyle: theme.textTheme.labelSmall,
