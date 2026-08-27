@@ -17,9 +17,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -56,7 +54,7 @@ jobs:
             "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-demo.log" 2>&1 &
           APP_PID=$!
 
-          for _ in $(seq 1 70); do
+          for _ in $(seq 1 80); do
             if [[ -f "$FRAME_DIR/capture.done" ]]; then
               break
             fi
@@ -70,10 +68,11 @@ jobs:
           test -f "$FRAME_DIR/capture.done"
           test -f "$FRAME_DIR/capture.json"
           FRAME_COUNT="$(find "$FRAME_DIR" -name 'frame-*.png' | wc -l | tr -d ' ')"
-          test "$FRAME_COUNT" -ge 60
+          test "$FRAME_COUNT" -ge 180
 
           ffmpeg -y -loglevel warning \
-            -framerate 5 -i "$FRAME_DIR/frame-%05d.png" \
+            -framerate 10 -i "$FRAME_DIR/frame-%05d.png" \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" \
             -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p \
             -movflags +faststart "$VIDEO"
 
@@ -81,7 +80,7 @@ jobs:
           wait "$APP_PID" || true
 
           test -s "$VIDEO"
-          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/macos-render-capture.json"
 
       - name: Try native macOS screen recording
@@ -98,9 +97,8 @@ jobs:
           sleep 7
           osascript -e 'tell application "TimeTrace" to activate' || true
 
-          # Hosted macOS runners can deny Screen Recording via TCC. Keep this
-          # as a best-effort title-bar-inclusive recording; the render-tree
-          # video above is the deterministic fallback and is required.
+          # This is acceptance evidence only. The deterministic render-tree
+          # video above is the README-quality artifact and never requires TCC.
           ffmpeg -y -loglevel warning -f avfoundation -framerate 20 \
             -i 'Capture screen 0:none' -t 22 \
             -c:v libx264 -preset ultrafast -pix_fmt yuv420p "$VIDEO" \
