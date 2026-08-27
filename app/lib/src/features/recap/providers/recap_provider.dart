@@ -47,16 +47,16 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
   @override
   Future<RecapState> build() async {
     final selection = ref.watch(dashboardRangeProvider);
-    final settings = ref.watch(recapAiSettingsProvider).valueOrNull ??
-        const RecapAiSettings();
+    final settings =
+        ref.watch(recapAiSettingsProvider).value ?? const RecapAiSettings();
     return _load(selection, settings);
   }
 
   Future<void> refresh() async {
     final selection = ref.read(dashboardRangeProvider);
-    final settings = ref.read(recapAiSettingsProvider).valueOrNull ??
-        const RecapAiSettings();
-    state = const AsyncLoading<RecapState>().copyWithPrevious(state);
+    final settings =
+        ref.read(recapAiSettingsProvider).value ?? const RecapAiSettings();
+    state = const AsyncLoading();
     state = await AsyncValue.guard(() => _load(selection, settings));
   }
 
@@ -100,7 +100,10 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
       end: _date(previousEnd),
     );
     final apps = api.getUsageSplit(start: startText, end: endText).toList()
-      ..sort((a, b) => b.activeSeconds.toInt().compareTo(a.activeSeconds.toInt()));
+      ..sort(
+        (a, b) =>
+            b.activeSeconds.toInt().compareTo(a.activeSeconds.toInt()),
+      );
     final topApps = apps
         .where((app) => app.activeSeconds.toInt() > 0)
         .take(5)
@@ -115,7 +118,10 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
 
     final diary = api
         .getDiaryEntriesDetailed(start: startText, end: endText)
-        .where((entry) => entry.status == 'published' && entry.content.trim().isNotEmpty)
+        .where(
+          (entry) =>
+              entry.status == 'published' && entry.content.trim().isNotEmpty,
+        )
         .take(8)
         .map((entry) => _truncate(entry.content.trim(), 600))
         .toList(growable: false);
@@ -183,7 +189,7 @@ final recapProvider = AsyncNotifierProvider.autoDispose<RecapNotifier, RecapStat
   String? previousApp;
 
   for (final session in sessions) {
-    final duration = session.durationSecs.toInt().clamp(0, 24 * 3600);
+    final duration = session.durationSecs.toInt().clamp(0, 24 * 3600).toInt();
     if (session.isIdle) {
       if (currentStreak > longestStreak) longestStreak = currentStreak;
       currentStreak = 0;
