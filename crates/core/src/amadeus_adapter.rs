@@ -8,7 +8,10 @@ use amadeus_core::{ComputerActivity, PerceptionEvent};
 use chrono::Utc;
 use tracing::warn;
 
-use crate::amadeus_host::{shared_amadeus_runtime, AmadeusHostError, SharedAmadeusRuntime};
+use crate::amadeus_host::{
+    handle_triggered_actions, shared_amadeus_runtime, AmadeusHostError,
+    SharedAmadeusRuntime,
+};
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 
 pub fn adapt_tracked_event(event: &TrackedEvent) -> PerceptionEvent {
@@ -86,14 +89,28 @@ impl AmadeusMemorySink {
 
 impl EventSink for AmadeusMemorySink {
     fn accept(&mut self, event: TrackedEvent) {
-        match self.runtime.lock() {
-            Ok(mut runtime) => {
-                if let Err(error) = runtime.ingest_perception(adapt_tracked_event(&event)) {
+        let triggered_actions = match self.runtime.lock() {
+            Ok(mut runtime) => match runtime.ingest_perception(adapt_tracked_event(&event)) {
+                Ok(effect) => effect.triggered_actions,
+                Err(error) => {
                     warn!("Amadeus runtime ingest failed: {error}");
+                    return;
                 }
+            },
+            Err(_) => {
+                warn!("Amadeus runtime lock poisoned during perception ingest");
+                return;
             }
-            Err(_) => warn!("Amadeus runtime lock poisoned during perception ingest"),
-        }
+        };
+        // Do model/skill work only after releasing the runtime lock. Initiative
+        // generation needs to re-enter the same shared runtime to compose context.
+        handle_triggered_actions(triggered_actions);
+    }
+}
+
+impl Drop for AmadeusMemorySink {
+    fn drop(&mut self) {
+        self.flush();
     }
 }
 
