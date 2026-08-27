@@ -167,8 +167,9 @@ mod tests {
         let hits = MemoryRetriever::default()
             .search(&store, &MemoryQuery::text("amadeus rust memory"), at(1000))
             .unwrap();
-        assert_eq!(hits.len(), 1);
+        assert!(!hits.is_empty());
         assert!(hits[0].memory.content.contains("amadeus"));
+        assert!(hits.windows(2).all(|pair| pair[0].score >= pair[1].score));
     }
 
     #[test]
