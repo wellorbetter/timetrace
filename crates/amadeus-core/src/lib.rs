@@ -27,6 +27,7 @@ pub mod retrieval;
 pub mod runtime;
 pub mod skill_runtime;
 pub mod skills;
+pub mod state;
 pub mod trigger;
 
 pub use cognition::{CognitionEngine, CognitionInput};
@@ -51,7 +52,10 @@ pub use model::{
     ChatMessage, ChatRole, FixedModelProvider, ModelError, ModelProvider,
     ModelPurpose, ModelRequest, ModelResponse, ModelRoute, ModelRouter,
 };
-pub use paths::{data_dir, ensure_data_dir, memory_database_path, AMADEUS_DIR_NAME};
+pub use paths::{
+    data_dir, ensure_data_dir, memory_database_path, model_config_path,
+    persona_pack_path, runtime_state_path, AMADEUS_DIR_NAME,
+};
 pub use perception::{ComputerActivity, PerceptionEvent};
 pub use persona::{
     PersonaPack, PersonaPackError, PersonaPackMetadata, PersonaState,
@@ -65,6 +69,10 @@ pub use skill_runtime::{
 };
 pub use skills::{
     SkillDescriptor, SkillRegistry, SkillRegistryError, SkillRisk, SkillSource,
+};
+pub use state::{
+    JsonRuntimeStateStore, RuntimeStateError, RuntimeStateSnapshot,
+    RUNTIME_STATE_SCHEMA_VERSION,
 };
 pub use trigger::{
     Trigger, TriggerAction, TriggerCondition, TriggerEngine, TriggeredAction,
