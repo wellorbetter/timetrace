@@ -18,6 +18,7 @@ pub mod conversation;
 pub mod evolution;
 pub mod http_model;
 pub mod identity;
+pub mod initiative;
 pub mod mcp;
 pub mod mcp_skill;
 pub mod memory;
@@ -43,6 +44,7 @@ pub use evolution::{
 };
 pub use http_model::{OpenAiCompatibleProvider, OpenAiCompatibleProviderConfig};
 pub use identity::{CanonicalMemory, IdentityMemory};
+pub use initiative::{InitiativeError, InitiativeMessage, InitiativeService};
 pub use mcp::{
     McpClient, McpError, McpImplementation, McpToolDefinition, McpToolResult,
     McpTransport, ModernStdioTransport, MCP_PROTOCOL_VERSION,
