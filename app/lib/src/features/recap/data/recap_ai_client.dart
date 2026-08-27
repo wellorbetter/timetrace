@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -43,14 +44,8 @@ class RecapAiClient {
         'model': settings.model.trim(),
         'temperature': 0.35,
         'messages': [
-          {
-            'role': 'system',
-            'content': _systemPrompt,
-          },
-          {
-            'role': 'user',
-            'content': _userPrompt(local),
-          },
+          {'role': 'system', 'content': _systemPrompt},
+          {'role': 'user', 'content': _userPrompt(local)},
         ],
       };
       request.write(jsonEncode(body));
@@ -122,7 +117,12 @@ class RecapAiClient {
       return (
         headline.trim(),
         summary.trim(),
-        insights.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty).take(5).toList(),
+        insights
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .take(5)
+            .toList(),
       );
     } catch (_) {
       return null;
