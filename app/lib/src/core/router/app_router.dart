@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
-/// Quiet desktop shell: a compact navigation rail with strong alignment and
-/// almost no decorative chrome. Content, not navigation, stays dominant.
+/// Quiet desktop shell: a compact, top-aligned navigation rail with strong
+/// alignment and almost no decorative chrome. Content stays dominant.
 class AppShell extends ConsumerWidget {
   const AppShell({required this.child, super.key});
 
@@ -14,6 +14,7 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: Row(
         children: [
@@ -24,9 +25,11 @@ class AppShell extends ConsumerWidget {
               onDestinationSelected: (i) => context.go(_paths[i]),
               labelType: NavigationRailLabelType.all,
               minWidth: 72,
-              groupAlignment: -0.55,
+              // Navigation is an anchor on desktop, not a vertically floating
+              // mobile control. Keep destinations attached to the top.
+              groupAlignment: -1,
               leading: Padding(
-                padding: const EdgeInsets.only(top: 18, bottom: 30),
+                padding: const EdgeInsets.fromLTRB(8, 18, 8, 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
