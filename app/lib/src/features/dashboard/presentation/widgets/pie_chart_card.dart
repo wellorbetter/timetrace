@@ -1,11 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/core/format.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Donut chart — top 5 apps + aggregated 其他 (no tiny-slice seams).
-/// Compact center text, legend matches slices exactly.
+/// Donut chart — top five apps plus an aggregated remainder. The chart stays
+/// deliberately quiet so the labels and proportions remain the focus.
 class PieChartCard extends StatelessWidget {
   const PieChartCard({required this.apps, super.key});
 
@@ -13,7 +14,8 @@ class PieChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final total = apps
         .fold<int>(0, (s, a) => s + a.activeSeconds)
         .clamp(1, 1 << 62);
@@ -23,24 +25,28 @@ class PieChartCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(TimeTraceSpace.sm),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final legendRows = top.length + (restSec > 0 ? 1 : 0);
             final legendH = legendRows * 18.0;
-            // Reserve title, gap, divider, legend rows and vertical padding
-            // for the donut; shrink it so it never overlaps the legend.
-            final reserved = 12.0 * 2 + 20.0 + 8.0 + 8.0 + legendH + 4.0;
+            final reserved = 24.0 + 20.0 + 8.0 + legendH + 8.0;
             final diameter = (constraints.maxHeight - reserved)
                 .clamp(90.0, 160.0)
                 .toDouble();
             final centerSpaceRadius = diameter * 0.31;
             final radius = diameter / 2 - centerSpaceRadius;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('占比', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                Text(
+                  '占比',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: TimeTraceSpace.xs),
                 Expanded(
                   child: Center(
                     child: SizedBox(
@@ -80,9 +86,8 @@ class PieChartCard extends StatelessWidget {
                             children: [
                               Text(
                                 formatDuration(total),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                   color: scheme.onSurface,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
@@ -91,9 +96,8 @@ class PieChartCard extends StatelessWidget {
                               ),
                               Text(
                                 '活跃',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: scheme.outline,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -103,78 +107,69 @@ class PieChartCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Divider(height: 8),
-                // Legend — top 5 + 其他
+                const Divider(height: TimeTraceSpace.xs),
                 for (final app in top)
-                  SizedBox(
-                    height: 18,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: appColor(app.appName),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            app.appName,
-                            style: const TextStyle(fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          '${(app.activeSeconds / total * 100).round()}%',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: scheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
+                  _LegendRow(
+                    color: appColor(app.appName),
+                    label: app.appName,
+                    percent: (app.activeSeconds / total * 100).round(),
                   ),
                 if (restSec > 0)
-                  SizedBox(
-                    height: 18,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: scheme.surfaceContainerHighest,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text(
-                            '其他',
-                            style: TextStyle(fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          '${(restSec / total * 100).round()}%',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: scheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
+                  _LegendRow(
+                    color: scheme.surfaceContainerHighest,
+                    label: '其他',
+                    percent: (restSec / total * 100).round(),
                   ),
               ],
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _LegendRow extends StatelessWidget {
+  const _LegendRow({
+    required this.color,
+    required this.label,
+    required this.percent,
+  });
+
+  final Color color;
+  final String label;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return SizedBox(
+      height: 18,
+      child: Row(
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: TimeTraceSpace.xs),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            '$percent%',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
       ),
     );
   }
