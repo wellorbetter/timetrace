@@ -14,12 +14,15 @@
 pub mod cognition;
 pub mod consolidation;
 pub mod context;
+pub mod conversation;
 pub mod evolution;
+pub mod http_model;
 pub mod identity;
 pub mod mcp;
 pub mod mcp_skill;
 pub mod memory;
 pub mod model;
+pub mod model_config;
 pub mod paths;
 pub mod perception;
 pub mod persona;
@@ -33,10 +36,12 @@ pub mod trigger;
 pub use cognition::{CognitionEngine, CognitionInput};
 pub use consolidation::{ConsolidationPolicy, EpisodeConsolidator, EpisodeDigest};
 pub use context::{AgentContext, ContextComposer, PersonaStateSnapshot, WorkingContext};
+pub use conversation::{ConversationError, ConversationService, ConversationTurn};
 pub use evolution::{
     EvolutionCandidate, EvolutionDecision, EvolutionDomain, EvolutionPolicy,
     EvolutionRisk, EvolutionStatus,
 };
+pub use http_model::{OpenAiCompatibleProvider, OpenAiCompatibleProviderConfig};
 pub use identity::{CanonicalMemory, IdentityMemory};
 pub use mcp::{
     McpClient, McpError, McpImplementation, McpToolDefinition, McpToolResult,
@@ -51,6 +56,10 @@ pub use memory::{
 pub use model::{
     ChatMessage, ChatRole, FixedModelProvider, ModelError, ModelProvider,
     ModelPurpose, ModelRequest, ModelResponse, ModelRoute, ModelRouter,
+};
+pub use model_config::{
+    ModelConfigError, ModelRuntimeConfig, PurposeRouteConfig,
+    MODEL_CONFIG_SCHEMA_VERSION,
 };
 pub use paths::{
     data_dir, ensure_data_dir, memory_database_path, model_config_path,
