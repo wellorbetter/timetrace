@@ -54,28 +54,28 @@ class AcceptanceCapture {
       frameInterval: frameInterval,
     );
 
-    await _showRoute(router, '/dashboard');
+    await _showRoute(router, boundaryKey, '/dashboard');
     await _hold(const Duration(milliseconds: 2200));
     await _scrollPrimary(boundaryKey, 0.55);
     await _hold(const Duration(milliseconds: 2200));
     await _scrollPrimary(boundaryKey, 1.0);
     await _hold(const Duration(milliseconds: 1800));
 
-    await _showRoute(router, '/recap');
+    await _showRoute(router, boundaryKey, '/recap');
     await _hold(const Duration(milliseconds: 2800));
     await _scrollPrimary(boundaryKey, 0.52);
     await _hold(const Duration(milliseconds: 2400));
     await _scrollPrimary(boundaryKey, 1.0);
     await _hold(const Duration(milliseconds: 2200));
 
-    await _showRoute(router, '/settings');
+    await _showRoute(router, boundaryKey, '/settings');
     await _hold(const Duration(milliseconds: 2200));
     await _scrollPrimary(boundaryKey, 0.46);
     await _hold(const Duration(milliseconds: 2200));
     await _scrollPrimary(boundaryKey, 1.0);
     await _hold(const Duration(milliseconds: 2200));
 
-    await _showRoute(router, '/recap');
+    await _showRoute(router, boundaryKey, '/recap');
     await _hold(const Duration(milliseconds: 1800));
     await _scrollPrimary(boundaryKey, 0.60);
     await _hold(const Duration(milliseconds: 2200));
@@ -97,28 +97,23 @@ class AcceptanceCapture {
     await doneFile.writeAsString('ok\n', flush: true);
   }
 
-  static Future<void> _showRoute(GoRouter router, String route) async {
+  static Future<void> _showRoute(
+    GoRouter router,
+    GlobalKey boundaryKey,
+    String route,
+  ) async {
     router.go(route);
-    // Let route/layout transitions finish before locating the page Scrollable.
     await Future<void>.delayed(const Duration(milliseconds: 650));
-    await _scrollToTop();
+    await _scrollPrimary(boundaryKey, 0.0, animate: false);
   }
 
   static Future<void> _hold(Duration duration) => Future<void>.delayed(duration);
 
-  static ScrollableState? _activeVerticalScrollable;
-
-  static Future<void> _scrollToTop() async {
-    final scrollable = _activeVerticalScrollable;
-    if (scrollable == null || !scrollable.position.hasContentDimensions) return;
-    await scrollable.position.animateTo(
-      scrollable.position.minScrollExtent,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  static Future<void> _scrollPrimary(GlobalKey boundaryKey, double fraction) async {
+  static Future<void> _scrollPrimary(
+    GlobalKey boundaryKey,
+    double fraction, {
+    bool animate = true,
+  }) async {
     final rootContext = boundaryKey.currentContext;
     if (rootContext is! Element) return;
 
@@ -145,11 +140,15 @@ class AcceptanceCapture {
     rootContext.visitChildren(visit);
     final scrollable = best;
     if (scrollable == null || bestExtent < 20) return;
-    _activeVerticalScrollable = scrollable;
 
     final position = scrollable.position;
     final clamped = fraction.clamp(0.0, 1.0);
     final target = position.minScrollExtent + bestExtent * clamped;
+    if (!animate) {
+      position.jumpTo(target);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      return;
+    }
     await position.animateTo(
       target,
       duration: const Duration(milliseconds: 650),
