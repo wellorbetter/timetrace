@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 
 class StatCard extends StatelessWidget {
   const StatCard({
@@ -22,10 +23,14 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+
     return Expanded(
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          padding: const EdgeInsets.symmetric(
+            horizontal: TimeTraceSpace.md,
+            vertical: TimeTraceSpace.sm,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -33,12 +38,13 @@ class StatCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(9),
+                  color: color.withValues(alpha: 0.09),
+                  borderRadius:
+                      BorderRadius.circular(TimeTraceRadius.control),
                 ),
                 child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: TimeTraceSpace.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
