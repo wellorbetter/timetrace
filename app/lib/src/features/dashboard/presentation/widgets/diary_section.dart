@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +12,6 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/core/widgets/image_album.dart';
 import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
-import 'package:timetrace_app/src/features/calendar/providers/calendar_provider.dart';
 
 enum DiaryRange { day, week, month }
 
