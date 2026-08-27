@@ -41,6 +41,8 @@ jobs:
           channel: stable
       - name: Rust core and bridge tests
         run: cargo test -p timetrace-core -p timetrace-bridge
+      - name: Validate self-use installer
+        run: bash -n scripts/install_macos.command
       - name: Build signed macOS bundle
         run: |
           chmod +x scripts/build_macos.sh
@@ -76,11 +78,29 @@ jobs:
 
           kill "$PID" || true
           wait "$PID" || true
-      - name: Package macOS app
+      - name: Package macOS self-use installer
         run: |
           APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/TimeTrace-macOS.zip"
+          PACKAGE_DIR="$RUNNER_TEMP/TimeTrace-macOS"
+          rm -rf "$PACKAGE_DIR"
+          mkdir -p "$PACKAGE_DIR"
+          ditto "$APP_PATH" "$PACKAGE_DIR/TimeTrace.app"
+          cp scripts/install_macos.command "$PACKAGE_DIR/Install TimeTrace.command"
+          chmod +x "$PACKAGE_DIR/Install TimeTrace.command"
+          cat > "$PACKAGE_DIR/README.txt" <<'EOF'
+TimeTrace macOS self-use preview
+
+1. Double-click “Install TimeTrace.command”.
+2. If macOS asks whether Terminal may run the script, allow it.
+3. The installer copies TimeTrace to /Applications (or ~/Applications when needed),
+   removes only TimeTrace.app's quarantine attribute, verifies the bundle signature,
+   creates the Application Support directory, and launches the app.
+
+This preview does NOT disable Gatekeeper globally.
+A public no-warning distribution still requires Apple Developer ID notarization.
+EOF
+          ditto -c -k --sequesterRsrc --keepParent "$PACKAGE_DIR" "$RUNNER_TEMP/TimeTrace-macOS.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: TimeTrace-macOS
