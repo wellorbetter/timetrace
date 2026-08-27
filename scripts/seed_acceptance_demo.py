@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Seed a disposable TimeTrace database for desktop demo recordings.
+"""Seed a deterministic, disposable TimeTrace database for desktop demos.
 
-This script is never invoked by the shipped application. Acceptance workflows
-point it at the runner user's throw-away TimeTrace data directory so screenshots
-and videos exercise the real production UI with representative local data.
+The shipped application never invokes this script. CI points it at the runner's
+throw-away TimeTrace directory so screenshots/videos exercise the production UI
+with rich but clearly synthetic data.
 """
 
 from __future__ import annotations
@@ -14,17 +14,139 @@ import sqlite3
 from pathlib import Path
 
 
-APPS = [
-    ("Visual Studio Code", "/Applications/Visual Studio Code.app", 52),
-    ("Google Chrome", "/Applications/Google Chrome.app", 23),
-    ("Terminal", "/Applications/Utilities/Terminal.app", 14),
-    ("Android Studio", "/Applications/Android Studio.app", 8),
-    ("Finder", "/System/Library/CoreServices/Finder.app", 3),
+APPS = {
+    "Visual Studio Code": "demo://vscode",
+    "Google Chrome": "demo://chrome",
+    "Terminal": "demo://terminal",
+    "Android Studio": "demo://android-studio",
+    "Figma": "demo://figma",
+    "Obsidian": "demo://obsidian",
+    "Slack": "demo://slack",
+    "Finder": "demo://files",
+}
+
+TITLES = {
+    "Visual Studio Code": [
+        "TimeTrace · dashboard_screen.dart",
+        "TimeTrace · recap_provider.dart",
+        "TimeTrace · desktop acceptance workflow",
+        "TimeTrace · README.md",
+    ],
+    "Google Chrome": [
+        "GitHub · TimeTrace pull requests",
+        "GitHub Actions · Desktop Acceptance",
+        "Flutter desktop documentation",
+        "Rust docs · rusqlite",
+    ],
+    "Terminal": [
+        "cargo test --workspace",
+        "flutter analyze --no-fatal-infos",
+        "git diff --stat",
+        "ffprobe timetrace-demo.mp4",
+    ],
+    "Android Studio": [
+        "TimeTrace · desktop runner",
+        "Flutter DevTools · TimeTrace",
+    ],
+    "Figma": [
+        "TimeTrace · desktop UI review",
+        "TimeTrace · recap layout",
+    ],
+    "Obsidian": [
+        "TimeTrace release notes",
+        "Daily engineering notes",
+    ],
+    "Slack": [
+        "#desktop-release",
+        "#product-review",
+    ],
+    "Finder": [
+        "TimeTrace artifacts",
+        "Screenshots",
+    ],
+}
+
+# A realistic workday: interleaved apps, short breaks, a lunch gap, and a final
+# review block. Durations are minutes; gaps intentionally break focus streaks.
+BASE_TIMELINE = [
+    (9, 5, "Visual Studio Code", 38),
+    (9, 45, "Google Chrome", 11),
+    (9, 58, "Terminal", 9),
+    (10, 9, "Visual Studio Code", 31),
+    (10, 42, "Slack", 7),
+    (10, 51, "Visual Studio Code", 27),
+    (11, 20, "Google Chrome", 13),
+    (11, 35, "Terminal", 8),
+    (11, 45, "Visual Studio Code", 24),
+    # lunch / away: 12:09 -> 13:14
+    (13, 14, "Android Studio", 32),
+    (13, 48, "Terminal", 10),
+    (14, 0, "Visual Studio Code", 37),
+    (14, 39, "Google Chrome", 12),
+    (14, 53, "Visual Studio Code", 26),
+    # short break
+    (15, 31, "Figma", 17),
+    (15, 50, "Visual Studio Code", 29),
+    (16, 21, "Obsidian", 10),
+    (16, 33, "Google Chrome", 12),
+    (16, 47, "Terminal", 9),
+    (16, 58, "Visual Studio Code", 34),
+    (17, 34, "Slack", 8),
+    (17, 44, "Finder", 6),
+    (17, 52, "Figma", 13),
+    (18, 7, "Visual Studio Code", 26),
+    (18, 35, "Terminal", 7),
+    (18, 44, "Google Chrome", 9),
 ]
 
 
-def iso(local_date: dt.date, hour: int, minute: int) -> str:
-    return dt.datetime.combine(local_date, dt.time(hour, minute)).isoformat()
+def insert_session(
+    cur: sqlite3.Cursor,
+    day: dt.date,
+    start: dt.datetime,
+    app_name: str,
+    duration_minutes: int,
+    title_index: int,
+) -> None:
+    duration_seconds = duration_minutes * 60
+    end = start + dt.timedelta(seconds=duration_seconds)
+    titles = TITLES[app_name]
+    title = titles[title_index % len(titles)]
+    cur.execute(
+        """
+        INSERT INTO usage_sessions
+        (app_path, app_name, window_title, started_at, ended_at,
+         duration_secs, is_idle, date)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        """,
+        (
+            APPS[app_name],
+            app_name,
+            title,
+            start.isoformat(),
+            end.isoformat(),
+            duration_seconds,
+            day.isoformat(),
+        ),
+    )
+    session_id = cur.lastrowid
+    cur.execute(
+        """
+        INSERT INTO page_visits
+        (session_id, app_name, window_title, started_at, ended_at,
+         duration_secs, date)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            session_id,
+            app_name,
+            title,
+            start.isoformat(),
+            end.isoformat(),
+            duration_seconds,
+            day.isoformat(),
+        ),
+    )
 
 
 def main() -> None:
@@ -75,95 +197,87 @@ def main() -> None:
         """
     )
 
-    # Idempotent on a fresh or retried runner.
     cur.execute("DELETE FROM page_visits")
     cur.execute("DELETE FROM usage_sessions")
     cur.execute("DELETE FROM diary_entries")
 
     today = dt.datetime.now().astimezone().date()
-    base_total = 7 * 3600 + 20 * 60
+    total_sessions = 0
 
-    for day_offset in range(6, -1, -1):
+    # Two full weeks make week/month comparisons and the calendar visibly
+    # meaningful. Small deterministic duration/time shifts avoid clone days.
+    for day_offset in range(13, -1, -1):
         day = today - dt.timedelta(days=day_offset)
-        # Slightly different total every day so weekly/monthly trend visuals are
-        # populated without making the fixture random.
-        total = base_total - day_offset * 17 * 60
-        cursor_minutes = 9 * 60 + 10
-        session_no = 0
+        weekday = day.weekday()
+        variant = (13 - day_offset) % 5
 
-        for app_name, app_path, share in APPS:
-            app_seconds = max(12 * 60, total * share // 100)
-            # Split each app into multiple visits to create realistic context
-            # switches and page-level details.
-            parts = 3 if share >= 14 else 2
-            part_seconds = app_seconds // parts
-            for part in range(parts):
-                hour, minute = divmod(cursor_minutes, 60)
-                start = dt.datetime.combine(day, dt.time(hour % 24, minute))
-                end = start + dt.timedelta(seconds=part_seconds)
-                title = {
-                    "Visual Studio Code": "TimeTrace — Visual Studio Code",
-                    "Google Chrome": "GitHub · TimeTrace pull requests",
-                    "Terminal": "cargo test --workspace",
-                    "Android Studio": "TimeTrace desktop acceptance",
-                    "Finder": "TimeTrace artifacts",
-                }[app_name]
-                cur.execute(
-                    """
-                    INSERT INTO usage_sessions
-                    (app_path, app_name, window_title, started_at, ended_at,
-                     duration_secs, is_idle, date)
-                    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
-                    """,
-                    (
-                        app_path,
-                        app_name,
-                        title,
-                        start.isoformat(),
-                        end.isoformat(),
-                        part_seconds,
-                        day.isoformat(),
-                    ),
-                )
-                session_id = cur.lastrowid
-                cur.execute(
-                    """
-                    INSERT INTO page_visits
-                    (session_id, app_name, window_title, started_at, ended_at,
-                     duration_secs, date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        session_id,
-                        app_name,
-                        title,
-                        start.isoformat(),
-                        end.isoformat(),
-                        part_seconds,
-                        day.isoformat(),
-                    ),
-                )
-                session_no += 1
-                cursor_minutes += max(18, part_seconds // 60) + 6
+        # Weekends are intentionally lighter rather than empty, which gives
+        # the calendar/trend views a believable rhythm.
+        if weekday >= 5:
+            timeline = [
+                (10, 18, "Google Chrome", 18),
+                (10, 40, "Obsidian", 16),
+                (11, 1, "Visual Studio Code", 35 + variant * 2),
+                (11, 39, "Terminal", 8),
+                (14, 30, "Figma", 18),
+                (14, 51, "Visual Studio Code", 28),
+                (15, 22, "Google Chrome", 13),
+            ]
+        else:
+            timeline = BASE_TIMELINE
 
-        diary = (
-            "继续完善 TimeTrace：整理桌面端体验、检查统计与日记时间线，"
-            "并验证 AI Recap 的本地事实回顾。"
-            if day == today
-            else "完成一轮桌面端开发与测试，记录当天的主要工作和时间分配。"
+        for index, (hour, minute, app_name, base_minutes) in enumerate(timeline):
+            # Keep deltas small enough not to overlap the next scheduled block.
+            duration = max(5, base_minutes + ((variant + index) % 3 - 1) * 2)
+            start = dt.datetime.combine(day, dt.time(hour, minute))
+            insert_session(cur, day, start, app_name, duration, index + variant)
+            total_sessions += 1
+
+        evening = dt.datetime.combine(day, dt.time(20, 20))
+        daily_text = (
+            "完成 TimeTrace 的桌面端迭代：上午集中在统计与交互，下午处理跨平台验收，"
+            "晚上复盘构建结果并整理下一步。"
         )
-        now = dt.datetime.combine(day, dt.time(20, 30)).isoformat()
         cur.execute(
             """
             INSERT INTO diary_entries(date, content, created_at, updated_at, status)
             VALUES (?, ?, ?, ?, 'published')
             """,
-            (day.isoformat(), diary, now, now),
+            (day.isoformat(), daily_text, evening.isoformat(), evening.isoformat()),
         )
 
+        if day == today:
+            morning = dt.datetime.combine(day, dt.time(12, 12))
+            cur.execute(
+                """
+                INSERT INTO diary_entries(date, content, created_at, updated_at, status)
+                VALUES (?, ?, ?, ?, 'published')
+                """,
+                (
+                    day.isoformat(),
+                    "上午把 AI Recap 的事实层和桌面概览重新核了一遍，重点检查数据是否能解释真实工作节奏。",
+                    morning.isoformat(),
+                    morning.isoformat(),
+                ),
+            )
+
     conn.commit()
+
+    active_today = cur.execute(
+        "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions WHERE date = ? AND is_idle = 0",
+        (today.isoformat(),),
+    ).fetchone()[0]
+    today_sessions = cur.execute(
+        "SELECT COUNT(*) FROM usage_sessions WHERE date = ? AND is_idle = 0",
+        (today.isoformat(),),
+    ).fetchone()[0]
     conn.close()
-    print(f"seeded acceptance demo database: {db}")
+
+    print(
+        "seeded acceptance demo database: "
+        f"{db} (14 days, {total_sessions} sessions, today={today_sessions} sessions, "
+        f"active={active_today // 3600}h{(active_today % 3600) // 60:02d}m)"
+    )
 
 
 if __name__ == "__main__":
