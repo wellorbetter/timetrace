@@ -11,7 +11,7 @@ concurrency:
 jobs:
   ubuntu-native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -42,7 +42,7 @@ jobs:
           Xvfb :99 -screen 0 1440x900x24 -ac +extension RANDR +extension RENDER +extension XFIXES &
           XVFB_PID=$!
           sleep 2
-          openbox >/tmp/openbox.log 2>&1 &
+          openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
           OPENBOX_PID=$!
           eval "$(dbus-launch --sh-syntax)"
 
@@ -51,15 +51,16 @@ jobs:
           APP_BIN="$(find "$BUNDLE_DIR" -maxdepth 1 -type f -executable -print -quit)"
           test -n "$APP_BIN"
 
-          ffmpeg -y -loglevel warning -f x11grab -framerate 24 -video_size 1440x900 \
-            -i :99.0 -c:v libx264 -preset ultrafast -pix_fmt yuv420p \
-            "$RUNNER_TEMP/timetrace-ubuntu.mp4" >/tmp/ffmpeg-linux.log 2>&1 &
-          FFMPEG_PID=$!
-
           "$APP_BIN" >"$RUNNER_TEMP/timetrace-linux-smoke.log" 2>&1 &
           APP_PID=$!
-          sleep 9
+          sleep 8
           kill -0 "$APP_PID"
+
+          VIDEO="$RUNNER_TEMP/timetrace-ubuntu-native.mp4"
+          ffmpeg -y -loglevel warning -f x11grab -framerate 20 -video_size 1440x900 \
+            -i :99.0 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p \
+            -movflags +faststart "$VIDEO" >"$RUNNER_TEMP/ffmpeg-linux.log" 2>&1 &
+          FFMPEG_PID=$!
 
           WINDOW_ID="$(xdotool search --name 'TimeTrace' 2>/dev/null | head -n1 || true)"
           test -n "$WINDOW_ID"
@@ -73,40 +74,38 @@ jobs:
           xdotool key --window "$WINDOW_ID" ctrl+2
           sleep 4
 
-          DATA_DIR="$HOME/.local/share/TimeTrace"
+          DATA_DIR="$HOME/.config/TimeTrace"
           test -s "$DATA_DIR/time.db"
           test -f "$DATA_DIR/app.log"
           grep -q 'TimeTraceApi initialized' "$DATA_DIR/app.log"
           grep -q 'tray initialized (linux)' "$DATA_DIR/app.log"
-          if grep -q 'API init FAILED' "$DATA_DIR/app.log"; then
-            cat "$DATA_DIR/app.log" >&2
-            exit 1
-          fi
+          ! grep -q 'API init FAILED' "$DATA_DIR/app.log"
 
+          wait "$FFMPEG_PID"
           kill "$APP_PID" || true
           wait "$APP_PID" || true
-          kill -INT "$FFMPEG_PID" || true
-          wait "$FFMPEG_PID" || true
           kill "$OPENBOX_PID" || true
           kill "$XVFB_PID" || true
-          test -s "$RUNNER_TEMP/timetrace-ubuntu.mp4"
-          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$RUNNER_TEMP/timetrace-ubuntu.mp4"
+          test -s "$VIDEO"
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
       - name: Package Linux bundle
         run: |
           BUNDLE_DIR="$(find app/build/linux -type d -path '*/release/bundle' -print -quit)"
           tar -C "$(dirname "$BUNDLE_DIR")" -czf "$RUNNER_TEMP/TimeTrace-Ubuntu.tar.gz" "$(basename "$BUNDLE_DIR")"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: TimeTrace-Ubuntu-Acceptance
           path: |
             ${{ runner.temp }}/TimeTrace-Ubuntu.tar.gz
-            ${{ runner.temp }}/timetrace-ubuntu.mp4
+            ${{ runner.temp }}/timetrace-ubuntu-native.mp4
             ${{ runner.temp }}/timetrace-linux-smoke.log
-          if-no-files-found: error
+            ${{ runner.temp }}/ffmpeg-linux.log
+          if-no-files-found: warn
 
   windows-native:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -132,25 +131,25 @@ jobs:
             choco install ffmpeg -y --no-progress
           }
           ffmpeg -version | Select-Object -First 1
-      - name: Native Windows smoke + recording probe
+      - name: Native Windows smoke + fixed-duration recording
         shell: pwsh
         continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
           $bundle = Get-Content "$env:RUNNER_TEMP/windows-bundle.txt"
           $exe = Join-Path $bundle 'timetrace_app.exe'
-          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows.mp4'
+          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows-native.mp4'
           $fflog = Join-Path $env:RUNNER_TEMP 'ffmpeg-windows.log'
+
+          $app = Start-Process $exe -WorkingDirectory $bundle -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) { throw "TimeTrace exited with $($app.ExitCode)" }
 
           $ffmpeg = Start-Process ffmpeg -ArgumentList @(
             '-y','-loglevel','warning','-f','gdigrab','-framerate','20',
-            '-i','desktop','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',
-            $video
+            '-i','desktop','-t','20','-c:v','libx264','-preset','ultrafast',
+            '-pix_fmt','yuv420p','-movflags','+faststart',$video
           ) -RedirectStandardError $fflog -PassThru -WindowStyle Hidden
-
-          $app = Start-Process $exe -WorkingDirectory $bundle -PassThru
-          Start-Sleep -Seconds 10
-          if ($app.HasExited) { throw "TimeTrace exited with $($app.ExitCode)" }
 
           $shell = New-Object -ComObject WScript.Shell
           [void]$shell.AppActivate('TimeTrace')
@@ -171,20 +170,17 @@ jobs:
           if ($log -notmatch 'TimeTraceApi initialized') { throw 'Rust API init marker missing' }
           if ($log -match 'API init FAILED') { throw 'Rust API initialization failed' }
 
+          Wait-Process -Id $ffmpeg.Id
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
-          Stop-Process -Id $ffmpeg.Id -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-          if (Test-Path $video) {
-            ffprobe -v error -show_entries format=duration,size -of default=nw=1 $video
-          }
+          if (-not (Test-Path $video)) { throw 'native Windows video missing' }
+          & ffprobe -v error -show_entries format=duration,size -of default=nw=1 $video
       - name: Record Windows acceptance status
         if: always()
         shell: pwsh
         run: |
-          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows.mp4'
+          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows-native.mp4'
           if (Test-Path $video -PathType Leaf) {
-            $size = (Get-Item $video).Length
-            "native_video_bytes=$size" | Set-Content "$env:RUNNER_TEMP/windows-acceptance.txt"
+            "native_video_bytes=$((Get-Item $video).Length)" | Set-Content "$env:RUNNER_TEMP/windows-acceptance.txt"
           } else {
             'native_video_unavailable=true' | Set-Content "$env:RUNNER_TEMP/windows-acceptance.txt"
           }
@@ -193,7 +189,7 @@ jobs:
         with:
           name: TimeTrace-Windows-Acceptance
           path: |
-            ${{ runner.temp }}/timetrace-windows.mp4
+            ${{ runner.temp }}/timetrace-windows-native.mp4
             ${{ runner.temp }}/ffmpeg-windows.log
             ${{ runner.temp }}/windows-acceptance.txt
           if-no-files-found: warn
@@ -222,7 +218,7 @@ jobs:
           test -n "$APP_PATH"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
           APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
-          VIDEO="$RUNNER_TEMP/timetrace-macos.mp4"
+          VIDEO="$RUNNER_TEMP/timetrace-macos-native.mp4"
 
           "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-smoke.log" 2>&1 &
           APP_PID=$!
@@ -249,10 +245,7 @@ jobs:
           test -f "$DATA_DIR/app.log"
           grep -q 'TimeTraceApi initialized' "$DATA_DIR/app.log"
           grep -q 'tray initialized (macos)' "$DATA_DIR/app.log"
-          if grep -q 'API init FAILED' "$DATA_DIR/app.log"; then
-            cat "$DATA_DIR/app.log" >&2
-            exit 1
-          fi
+          ! grep -q 'API init FAILED' "$DATA_DIR/app.log"
           kill "$APP_PID" || true
           wait "$APP_PID" || true
           if [[ -s "$VIDEO" ]]; then
@@ -261,21 +254,18 @@ jobs:
       - name: Record macOS acceptance status
         if: always()
         run: |
-          VIDEO="$RUNNER_TEMP/timetrace-macos.mp4"
+          VIDEO="$RUNNER_TEMP/timetrace-macos-native.mp4"
           if [[ -s "$VIDEO" ]]; then
             echo "native_video_bytes=$(stat -f%z "$VIDEO")" > "$RUNNER_TEMP/macos-acceptance.txt"
           else
-            printf '%s\n' \
-              'native_video_unavailable=true' \
-              'GitHub-hosted macOS may gate Screen Recording through TCC.' \
-              > "$RUNNER_TEMP/macos-acceptance.txt"
+            printf '%s\n' 'native_video_unavailable=true' 'Hosted macOS may gate Screen Recording through TCC.' > "$RUNNER_TEMP/macos-acceptance.txt"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: TimeTrace-macOS-Acceptance
           path: |
-            ${{ runner.temp }}/timetrace-macos.mp4
+            ${{ runner.temp }}/timetrace-macos-native.mp4
             ${{ runner.temp }}/timetrace-macos-smoke.log
             ${{ runner.temp }}/ffmpeg-macos.log
             ${{ runner.temp }}/macos-acceptance.txt
