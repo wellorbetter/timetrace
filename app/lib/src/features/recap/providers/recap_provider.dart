@@ -177,7 +177,10 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
   }
 }
 
-final recapProvider = AsyncNotifierProvider.autoDispose<RecapNotifier, RecapState>(
+// Keep the latest recap alive across Overview ↔ Recap navigation so the same
+// range does not trigger a second paid model request merely because a route
+// changed. Range/settings changes still rebuild it, and Refresh forces a new run.
+final recapProvider = AsyncNotifierProvider<RecapNotifier, RecapState>(
   RecapNotifier.new,
 );
 
