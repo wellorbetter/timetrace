@@ -38,7 +38,7 @@ abstract final class TimeTraceLayout {
 
   /// Narrow desktop sidebar: enough room for readable labels and shortcuts,
   /// without turning TimeTrace into a wide enterprise admin shell.
-  static const double railWidth = 168;
+  static const double sidebarWidth = 168;
   static const double compactBreakpoint = 760;
 
   static EdgeInsets pagePadding(double availableWidth) => EdgeInsets.fromLTRB(
