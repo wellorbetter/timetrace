@@ -134,7 +134,7 @@ class TimetraceTheme {
         thumbColor: WidgetStatePropertyAll(
           scheme.outline.withValues(alpha: 0.42),
         ),
-        thickness: const WidgetStatePropertyAll(6),
+        thickness: const WidgetStatePropertyAll(6.0),
         radius: const Radius.circular(8),
         crossAxisMargin: 2,
         mainAxisMargin: 4,
