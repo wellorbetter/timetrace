@@ -85,7 +85,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       _dirty = true;
       _saved = false;
     });
-    _saveTimer = Timer(const Duration(milliseconds: 900), _autosave);
+    _saveTimer = Timer(
+      const Duration(milliseconds: 900),
+      () => _autosave(),
+    );
   }
 
   Future<void> _autosave() async {
