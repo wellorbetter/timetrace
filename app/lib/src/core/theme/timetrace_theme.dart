@@ -145,7 +145,7 @@ class TimetraceTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        toolbarHeight: 54,
+        toolbarHeight: 50,
         titleSpacing: TimeTraceSpace.lg,
         titleTextStyle: textTheme.titleLarge,
         surfaceTintColor: Colors.transparent,
@@ -191,6 +191,34 @@ class TimetraceTheme {
           color: scheme.onSurfaceVariant,
           fontSize: 12,
           fontWeight: FontWeight.w500,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          minimumSize: const WidgetStatePropertyAll(Size(0, 34)),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
+          ),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: scheme.outlineVariant),
+          ),
+          shape: WidgetStatePropertyAll(controlShape),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.primaryContainer;
+            }
+            return Colors.transparent;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.onPrimaryContainer;
+            }
+            return scheme.onSurfaceVariant;
+          }),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
