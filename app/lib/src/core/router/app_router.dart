@@ -49,7 +49,7 @@ class AppShell extends ConsumerWidget {
           body: Row(
             children: [
               SizedBox(
-                width: TimeTraceLayout.railWidth,
+                width: TimeTraceLayout.sidebarWidth,
                 child: ColoredBox(
                   color: sidebarColor,
                   child: SafeArea(
