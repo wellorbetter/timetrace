@@ -34,7 +34,9 @@ class RecapScreen extends ConsumerWidget {
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: TimeTraceLayout.dashboardWidth),
+          constraints: const BoxConstraints(
+            maxWidth: TimeTraceLayout.dashboardWidth,
+          ),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
               TimeTraceSpace.xl,
@@ -156,7 +158,7 @@ class _RecapContent extends StatelessWidget {
               Text(
                 result.headline,
                 style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w650,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -0.4,
                 ),
               ),
@@ -203,7 +205,8 @@ class _RecapContent extends StatelessWidget {
             children: [
               for (var i = 0; i < result.insights.length; i++) ...[
                 _InsightRow(index: i + 1, text: result.insights[i]),
-                if (i != result.insights.length - 1) const Divider(height: 24),
+                if (i != result.insights.length - 1)
+                  const Divider(height: 24),
               ],
             ],
           ),
@@ -257,14 +260,22 @@ class _MetricGrid extends StatelessWidget {
         snapshot.longestActiveStreakSeconds > 0
             ? formatRecapDuration(snapshot.longestActiveStreakSeconds)
             : '—',
-        snapshot.longestActiveStreakSeconds > 0 ? '连续非 Idle' : '月视图暂不计算',
+        snapshot.longestActiveStreakSeconds > 0
+            ? '连续非 Idle'
+            : '月视图暂不计算',
       ),
       (
         '应用切换',
         snapshot.sessionCount > 0 ? '${snapshot.contextSwitches}' : '—',
-        snapshot.sessionCount > 0 ? '${snapshot.sessionCount} 个活跃 Session' : '月视图暂不计算',
+        snapshot.sessionCount > 0
+            ? '${snapshot.sessionCount} 个活跃 Session'
+            : '月视图暂不计算',
       ),
-      ('最常用', top?.name ?? '—', top == null ? '暂无数据' : formatRecapDuration(top.activeSeconds)),
+      (
+        '最常用',
+        top?.name ?? '—',
+        top == null ? '暂无数据' : formatRecapDuration(top.activeSeconds),
+      ),
     ];
 
     return LayoutBuilder(
@@ -272,9 +283,11 @@ class _MetricGrid extends StatelessWidget {
         final columns = constraints.maxWidth >= 900
             ? 4
             : constraints.maxWidth >= 520
-                ? 2
-                : 1;
-        final width = (constraints.maxWidth - (columns - 1) * TimeTraceSpace.sm) / columns;
+            ? 2
+            : 1;
+        final width =
+            (constraints.maxWidth - (columns - 1) * TimeTraceSpace.sm) /
+            columns;
         return Wrap(
           spacing: TimeTraceSpace.sm,
           runSpacing: TimeTraceSpace.sm,
@@ -282,7 +295,11 @@ class _MetricGrid extends StatelessWidget {
             for (final item in metrics)
               SizedBox(
                 width: width,
-                child: _MetricCard(title: item.$1, value: item.$2, detail: item.$3),
+                child: _MetricCard(
+                  title: item.$1,
+                  value: item.$2,
+                  detail: item.$3,
+                ),
               ),
           ],
         );
@@ -292,7 +309,11 @@ class _MetricGrid extends StatelessWidget {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.title, required this.value, required this.detail});
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    required this.detail,
+  });
 
   final String title;
   final String value;
@@ -313,20 +334,29 @@ class _MetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          Text(
+            title,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
           const Spacer(),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w650),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             detail,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -335,7 +365,11 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.subtitle, required this.child});
+  const _Section({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
 
   final String title;
   final String subtitle;
@@ -348,9 +382,19 @@ class _Section extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w650)),
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: TimeTraceSpace.sm),
         child,
       ],
@@ -375,10 +419,18 @@ class _InsightRow extends StatelessWidget {
           width: 28,
           child: Text(
             index.toString().padLeft(2, '0'),
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.primary, fontWeight: FontWeight.w700),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        Expanded(child: Text(text, style: theme.textTheme.bodyMedium?.copyWith(height: 1.45))),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+          ),
+        ),
       ],
     );
   }
@@ -400,7 +452,11 @@ class _TopApps extends StatelessWidget {
           : Column(
               children: [
                 for (var i = 0; i < apps.length; i++)
-                  _AppRow(app: apps[i], maxSeconds: apps.first.activeSeconds, rank: i + 1),
+                  _AppRow(
+                    app: apps[i],
+                    maxSeconds: apps.first.activeSeconds,
+                    rank: i + 1,
+                  ),
               ],
             ),
     );
@@ -408,7 +464,11 @@ class _TopApps extends StatelessWidget {
 }
 
 class _AppRow extends StatelessWidget {
-  const _AppRow({required this.app, required this.maxSeconds, required this.rank});
+  const _AppRow({
+    required this.app,
+    required this.maxSeconds,
+    required this.rank,
+  });
 
   final RecapAppFact app;
   final int maxSeconds;
@@ -425,11 +485,20 @@ class _AppRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 32,
-            child: Text(rank.toString().padLeft(2, '0'), style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+            child: Text(
+              rank.toString().padLeft(2, '0'),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
           SizedBox(
             width: 150,
-            child: Text(app.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              app.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(width: TimeTraceSpace.sm),
           Expanded(
@@ -464,24 +533,24 @@ class _RecapError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded),
-            const SizedBox(height: TimeTraceSpace.xs),
-            const Text('生成回顾失败'),
-            TextButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.error_outline_rounded),
+        const SizedBox(height: TimeTraceSpace.xs),
+        const Text('生成回顾失败'),
+        TextButton(onPressed: onRetry, child: const Text('重试')),
+      ],
+    ),
+  );
 }
 
 String _generatedLabel(DateTime time) =>
     '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')} 生成';
 
 Future<void> _showAiSettings(BuildContext context, WidgetRef ref) async {
-  final current = ref.read(recapAiSettingsProvider).valueOrNull ??
-      const RecapAiSettings();
+  final current =
+      ref.read(recapAiSettingsProvider).value ?? const RecapAiSettings();
   final endpoint = TextEditingController(text: current.endpoint);
   final model = TextEditingController(text: current.model);
   final keyEnv = TextEditingController(text: current.apiKeyEnv);
@@ -536,7 +605,10 @@ Future<void> _showAiSettings(BuildContext context, WidgetRef ref) async {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(
               dialogContext,
