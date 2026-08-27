@@ -48,6 +48,20 @@ impl TriggerEngine {
         self.triggers.push(trigger);
     }
 
+    pub fn definitions(&self) -> &[Trigger] {
+        &self.triggers
+    }
+
+    /// Restore persisted trigger definitions without restoring volatile
+    /// observation/cooldown state. After process restart Amadeus must observe
+    /// fresh activity before a trigger can fire again.
+    pub fn replace_definitions(&mut self, triggers: Vec<Trigger>) {
+        self.triggers = triggers;
+        self.active_since = None;
+        self.current_activity = None;
+        self.last_fired.clear();
+    }
+
     pub fn evaluate(&mut self, event: &PerceptionEvent) -> Vec<TriggeredAction> {
         let at = event_time(event);
         self.update_context(event);
@@ -173,5 +187,37 @@ mod tests {
                 at: at(500),
             })
             .is_empty());
+    }
+
+    #[test]
+    fn restoring_definitions_does_not_restore_stale_cooldowns() {
+        let trigger = Trigger {
+            id: "always".into(),
+            enabled: true,
+            condition: TriggerCondition::Always,
+            action: TriggerAction::ConsiderInitiative {
+                reason: "test".into(),
+            },
+            cooldown_seconds: 999,
+        };
+        let mut engine = TriggerEngine::default();
+        engine.add(trigger.clone());
+        assert_eq!(
+            engine.evaluate(&PerceptionEvent::ForegroundChanged {
+                previous: None,
+                current: activity("editor"),
+                at: at(100),
+            }).len(),
+            1
+        );
+        engine.replace_definitions(vec![trigger]);
+        assert_eq!(
+            engine.evaluate(&PerceptionEvent::ForegroundChanged {
+                previous: None,
+                current: activity("editor"),
+                at: at(101),
+            }).len(),
+            1
+        );
     }
 }
