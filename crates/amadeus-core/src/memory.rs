@@ -13,6 +13,8 @@ pub enum MemoryError {
     Sqlite(#[from] rusqlite::Error),
     #[error("serialization: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("timestamp: {0}")]
+    Timestamp(#[from] chrono::ParseError),
 }
 
 /// One contiguous foreground span inside a larger computer episode.
@@ -89,7 +91,6 @@ impl EpisodeBuilder {
             }
             PerceptionEvent::GapDetected { at } => self.finish(at),
             PerceptionEvent::IdleEnded { current, at } => {
-                // Returning from idle always starts a fresh lived episode.
                 let previous = self.finish(at);
                 self.open = Some(OpenEpisode {
                     started_at: at,
@@ -290,7 +291,7 @@ impl LivedMemoryStore for SqliteLivedMemoryStore {
             params![
                 memory.kind.as_str(),
                 memory.source.as_str(),
-                memory.content,
+                &memory.content,
                 memory.salience,
                 memory.created_at.to_rfc3339(),
             ],
@@ -315,9 +316,7 @@ impl LivedMemoryStore for SqliteLivedMemoryStore {
         let mut memories = Vec::new();
         for row in rows {
             let (kind, source, content, salience, created_at) = row?;
-            let created_at = DateTime::parse_from_rfc3339(&created_at)
-                .map(|value| value.with_timezone(&Utc))
-                .map_err(|error| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, error)))?;
+            let created_at = DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc);
             memories.push(LivedMemory {
                 kind: LivedMemoryKind::from_str(&kind),
                 source: LivedMemorySource::from_str(&source),

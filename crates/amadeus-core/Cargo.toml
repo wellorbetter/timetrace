@@ -3,15 +3,13 @@ name = "amadeus-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Persistent digital persona core: identity, perception, and lived memory"
+description = "Persistent digital persona core: identity, perception, memory, skills, triggers, and evolution"
 
 [dependencies]
 chrono.workspace = true
+dirs.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-
-[dev-dependencies]
-tempfile = "3"
