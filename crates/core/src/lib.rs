@@ -13,8 +13,10 @@ pub mod storage;
 
 pub use amadeus_adapter::{adapt_tracked_event, AmadeusMemorySink, FanoutEventSink};
 pub use amadeus_host::{
-    persist_amadeus_state, shared_amadeus_runtime, AmadeusHostError,
-    SharedAmadeusRuntime,
+    amadeus_converse, configure_openai_compatible_model, handle_triggered_actions,
+    persist_amadeus_state, recent_amadeus_memories, search_amadeus_memories,
+    shared_amadeus_runtime, take_pending_initiatives, AmadeusHostError,
+    PendingInitiative, SharedAmadeusRuntime,
 };
 pub use config::AppConfig;
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
