@@ -5,28 +5,41 @@ use std::sync::{Arc, Mutex, OnceLock};
 use amadeus_core::{
     ensure_data_dir, memory_database_path, model_config_path, persona_pack_path,
     runtime_state_path, AmadeusRuntime, CanonicalMemory, ConversationError,
-    ConversationService, ConversationTurn, IdentityMemory, InitiativeError,
-    InitiativeService, JsonRuntimeStateStore, LivedMemory, LivedMemoryStore,
-    MemoryError, MemoryQuery, MemoryRetriever, ModelConfigError,
-    ModelPurpose, ModelRuntimeConfig, OpenAiCompatibleProviderConfig, PersonaPack,
-    PersonaPackMetadata, PurposeRouteConfig, SqliteLivedMemoryStore, Trigger,
+    ConversationService, ConversationTurn, EvolutionCandidate, EvolutionDomain,
+    EvolutionRisk, EvolutionStatus, IdentityMemory, InitiativeError,
+    InitiativeService, JsonRuntimeStateStore, LivedMemory, LivedMemoryKind,
+    LivedMemorySource, LivedMemoryStore, MemoryError, MemoryQuery,
+    MemoryRetriever, ModelConfigError, ModelPurpose, ModelRuntimeConfig,
+    OpenAiCompatibleProviderConfig, PersonaPack, PersonaPackMetadata,
+    PurposeRouteConfig, SkillExecutionError, SqliteLivedMemoryStore, Trigger,
     TriggerAction, TriggerCondition, TriggeredAction, MODEL_CONFIG_SCHEMA_VERSION,
     PERSONA_PACK_SCHEMA_VERSION,
 };
 use chrono::{DateTime, Utc};
+use serde_json::json;
 use thiserror::Error;
+
+use crate::amadeus_skills::run_amadeus_skill;
 
 pub type SharedAmadeusRuntime = Arc<Mutex<AmadeusRuntime<SqliteLivedMemoryStore>>>;
 
 static SHARED_RUNTIME: OnceLock<SharedAmadeusRuntime> = OnceLock::new();
 static STATE_STORE: OnceLock<JsonRuntimeStateStore> = OnceLock::new();
 static PENDING_INITIATIVES: OnceLock<Mutex<VecDeque<PendingInitiative>>> = OnceLock::new();
+static PENDING_SKILL_APPROVALS: OnceLock<Mutex<VecDeque<PendingSkillApproval>>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct PendingInitiative {
     pub reason: String,
     pub text: Option<String>,
     pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingSkillApproval {
+    pub skill_id: String,
+    pub reason: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -64,8 +77,6 @@ pub fn shared_amadeus_runtime() -> Result<SharedAmadeusRuntime, AmadeusHostError
     let snapshot = state_store.load()?;
     runtime.restore_state(snapshot);
 
-    // Give a fresh installation a restrained proactive baseline. Persisted
-    // user definitions win on subsequent launches.
     if runtime.triggers().definitions().is_empty() {
         runtime.triggers_mut().add(Trigger {
             id: "long-continuous-work".into(),
@@ -85,6 +96,7 @@ pub fn shared_amadeus_runtime() -> Result<SharedAmadeusRuntime, AmadeusHostError
     let runtime = Arc::new(Mutex::new(runtime));
     let _ = STATE_STORE.set(state_store);
     let _ = PENDING_INITIATIVES.set(Mutex::new(VecDeque::new()));
+    let _ = PENDING_SKILL_APPROVALS.set(Mutex::new(VecDeque::new()));
     match SHARED_RUNTIME.set(runtime.clone()) {
         Ok(()) => Ok(runtime),
         Err(_) => Ok(SHARED_RUNTIME.get().expect("runtime initialized").clone()),
@@ -174,55 +186,103 @@ pub fn configure_openai_compatible_model(
 
 pub fn handle_triggered_actions(actions: Vec<TriggeredAction>) {
     for triggered in actions {
+        let trigger_id = triggered.trigger_id.clone();
+        let fired_at = triggered.fired_at;
         match triggered.action {
             TriggerAction::ConsiderInitiative { reason } => {
-                let created_at = triggered.fired_at;
-                let pending = match consider_initiative(&reason, created_at) {
+                let pending = match consider_initiative(&reason, fired_at) {
                     Ok(Some(message)) => Some(PendingInitiative {
                         reason,
                         text: Some(message.text),
                         error: None,
-                        created_at,
+                        created_at: fired_at,
                     }),
                     Ok(None) => None,
                     Err(error) => Some(PendingInitiative {
                         reason,
                         text: None,
                         error: Some(error.to_string()),
-                        created_at,
+                        created_at: fired_at,
                     }),
                 };
                 if let Some(pending) = pending {
-                    let queue = PENDING_INITIATIVES.get_or_init(|| Mutex::new(VecDeque::new()));
-                    if let Ok(mut queue) = queue.lock() {
-                        queue.push_back(pending);
-                        while queue.len() > 64 {
-                            queue.pop_front();
-                        }
-                    }
+                    push_bounded(
+                        PENDING_INITIATIVES.get_or_init(|| Mutex::new(VecDeque::new())),
+                        pending,
+                        64,
+                    );
                 }
             }
-            TriggerAction::RunSkill { .. } | TriggerAction::ProposeEvolution { .. } => {
-                // These actions are intentionally not executed implicitly yet;
-                // the skill/evolution layers apply their own approval policies.
+            TriggerAction::RunSkill { skill_id } => {
+                match run_amadeus_skill(skill_id.clone(), json!({}), false) {
+                    Ok(results) => {
+                        if let Ok(runtime) = shared_amadeus_runtime() {
+                            if let Ok(mut runtime) = runtime.lock() {
+                                let content = format!(
+                                    "Trigger {trigger_id} ran skill {skill_id}: {}",
+                                    serde_json::to_string(
+                                        &results.iter().map(|r| &r.output).collect::<Vec<_>>()
+                                    )
+                                    .unwrap_or_default()
+                                );
+                                let _ = runtime.memory_mut().store_mut().append_memory(&LivedMemory {
+                                    kind: LivedMemoryKind::Reflection,
+                                    source: LivedMemorySource::Skill,
+                                    content,
+                                    salience: 0.55,
+                                    created_at: fired_at,
+                                });
+                            }
+                        }
+                    }
+                    Err(SkillExecutionError::ApprovalRequired { .. }) => {
+                        push_bounded(
+                            PENDING_SKILL_APPROVALS
+                                .get_or_init(|| Mutex::new(VecDeque::new())),
+                            PendingSkillApproval {
+                                skill_id,
+                                reason: format!("Requested by trigger {trigger_id}"),
+                                created_at: fired_at,
+                            },
+                            64,
+                        );
+                    }
+                    Err(_) => {}
+                }
+            }
+            TriggerAction::ProposeEvolution { reason } => {
+                if let Ok(runtime) = shared_amadeus_runtime() {
+                    if let Ok(mut runtime) = runtime.lock() {
+                        runtime.propose_evolution(EvolutionCandidate {
+                            id: format!("trigger-{trigger_id}-{}", fired_at.timestamp_millis()),
+                            domain: EvolutionDomain::Behavior,
+                            risk: EvolutionRisk::Low,
+                            summary: reason,
+                            evidence: vec![format!("Triggered by {trigger_id}")],
+                            confidence: 0.5,
+                            created_at: fired_at,
+                            status: EvolutionStatus::Proposed,
+                        });
+                    }
+                }
+                let _ = persist_amadeus_state();
             }
         }
     }
 }
 
 pub fn take_pending_initiatives(limit: usize) -> Vec<PendingInitiative> {
-    let queue = PENDING_INITIATIVES.get_or_init(|| Mutex::new(VecDeque::new()));
-    let Ok(mut queue) = queue.lock() else {
-        return Vec::new();
-    };
-    let mut output = Vec::new();
-    for _ in 0..limit.clamp(1, 32) {
-        let Some(item) = queue.pop_front() else {
-            break;
-        };
-        output.push(item);
-    }
-    output
+    pop_many(
+        PENDING_INITIATIVES.get_or_init(|| Mutex::new(VecDeque::new())),
+        limit.clamp(1, 32),
+    )
+}
+
+pub fn take_pending_skill_approvals(limit: usize) -> Vec<PendingSkillApproval> {
+    pop_many(
+        PENDING_SKILL_APPROVALS.get_or_init(|| Mutex::new(VecDeque::new())),
+        limit.clamp(1, 32),
+    )
 }
 
 fn consider_initiative(
@@ -236,6 +296,29 @@ fn consider_initiative(
     Ok(service.consider(&mut *runtime, reason, now)?)
 }
 
+fn push_bounded<T>(queue: &Mutex<VecDeque<T>>, value: T, max: usize) {
+    if let Ok(mut queue) = queue.lock() {
+        queue.push_back(value);
+        while queue.len() > max {
+            queue.pop_front();
+        }
+    }
+}
+
+fn pop_many<T>(queue: &Mutex<VecDeque<T>>, limit: usize) -> Vec<T> {
+    let Ok(mut queue) = queue.lock() else {
+        return Vec::new();
+    };
+    let mut output = Vec::new();
+    for _ in 0..limit {
+        let Some(item) = queue.pop_front() else {
+            break;
+        };
+        output.push(item);
+    }
+    output
+}
+
 fn load_persona_pack() -> Result<PersonaPack, AmadeusHostError> {
     let path = persona_pack_path();
     if path.exists() {
@@ -244,8 +327,6 @@ fn load_persona_pack() -> Result<PersonaPack, AmadeusHostError> {
     Ok(default_persona_pack())
 }
 
-/// Conservative built-in seed for private development. A richer persona.json
-/// can replace it without touching lived memory or runtime code.
 fn default_persona_pack() -> PersonaPack {
     let identity = IdentityMemory::from_persona_pack(
         "kurisu-dev",
