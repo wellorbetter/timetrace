@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
-/// Quiet desktop shell: a compact, top-aligned navigation rail with strong
-/// alignment and almost no decorative chrome. Content stays dominant.
+/// Quiet desktop shell: compact, top-aligned navigation with almost no
+/// decorative chrome. The content canvas remains the visual focus.
 class AppShell extends ConsumerWidget {
   const AppShell({required this.child, super.key});
 
@@ -19,17 +20,22 @@ class AppShell extends ConsumerWidget {
       body: Row(
         children: [
           SizedBox(
-            width: 96,
+            width: TimeTraceLayout.railWidth,
             child: NavigationRail(
               selectedIndex: _indexOf(context),
               onDestinationSelected: (i) => context.go(_paths[i]),
               labelType: NavigationRailLabelType.all,
               minWidth: 72,
-              // Navigation is an anchor on desktop, not a vertically floating
-              // mobile control. Keep destinations attached to the top.
+              // Desktop navigation is an anchor, not a vertically floating
+              // mobile control. Keep both destinations attached to the top.
               groupAlignment: -1,
               leading: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 18, 8, 24),
+                padding: const EdgeInsets.fromLTRB(
+                  TimeTraceSpace.xs,
+                  TimeTraceSpace.md,
+                  TimeTraceSpace.xs,
+                  TimeTraceSpace.lg,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -38,7 +44,8 @@ class AppShell extends ConsumerWidget {
                       height: 36,
                       decoration: BoxDecoration(
                         color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(TimeTraceRadius.control),
                         border: Border.all(color: scheme.outlineVariant),
                       ),
                       child: Icon(
@@ -47,7 +54,7 @@ class AppShell extends ConsumerWidget {
                         color: scheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: TimeTraceSpace.xs),
                     Text(
                       'TimeTrace',
                       style: TextStyle(
