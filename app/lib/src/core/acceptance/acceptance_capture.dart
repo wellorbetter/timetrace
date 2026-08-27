@@ -34,6 +34,10 @@ class AcceptanceCapture {
     final doneFile = File('${directory.path}${Platform.pathSeparator}capture.done');
     if (await doneFile.exists()) await doneFile.delete();
 
+    // The normal app window setup is intentionally async. Ensure the plugin is
+    // ready here as well so acceptance capture never races the first frame.
+    await windowManager.ensureInitialized();
+
     // Keep every platform at the same deterministic viewport. This makes the
     // README videos comparable and prevents hosted-runner display differences
     // from changing responsive layout.
@@ -86,7 +90,7 @@ class AcceptanceCapture {
 
     while (DateTime.now().isBefore(deadline)) {
       final renderObject = boundaryKey.currentContext?.findRenderObject();
-      if (renderObject is RenderRepaintBoundary && !renderObject.debugNeedsPaint) {
+      if (renderObject is RenderRepaintBoundary) {
         final image = await renderObject.toImage(pixelRatio: 1);
         try {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
