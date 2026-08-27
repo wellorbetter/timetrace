@@ -1,4 +1,7 @@
 #[cfg(target_os = "windows")]
+mod tui;
+
+#[cfg(target_os = "windows")]
 mod windows_app {
     use std::sync::Arc;
     use std::time::Duration;
@@ -9,9 +12,7 @@ mod windows_app {
         SqliteStore, run_monitor_loop,
     };
 
-    #[path = "tui/mod.rs"]
-    mod tui;
-    use tui::App;
+    use super::tui::App;
 
     #[derive(Parser)]
     #[command(name = "tt", version)]
