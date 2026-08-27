@@ -1,6 +1,7 @@
 use crate::identity::IdentityMemory;
 use crate::memory::{LivedMemoryStore, MemoryCore, MemoryError};
 use crate::perception::PerceptionEvent;
+use crate::persona::{PersonaPack, PersonaState, PersonaStateDelta};
 use crate::skills::SkillRegistry;
 use crate::trigger::{TriggerEngine, TriggeredAction};
 
@@ -12,11 +13,12 @@ pub struct RuntimeEffect {
 
 /// Minimal persistent-agent runtime before an LLM/cognition layer is attached.
 ///
-/// It already has identity continuity, lived-memory ingestion, skills and
-/// proactive triggers. Cognition can later consume `RuntimeEffect`s without
-/// changing the perception/memory contract.
+/// It already has identity continuity, mutable post-activation persona state,
+/// lived-memory ingestion, skills and proactive triggers. Cognition can later
+/// consume `RuntimeEffect`s without changing the perception/memory contract.
 pub struct AmadeusRuntime<S: LivedMemoryStore> {
     identity: IdentityMemory,
+    persona_state: PersonaState,
     memory: MemoryCore<S>,
     skills: SkillRegistry,
     triggers: TriggerEngine,
@@ -26,10 +28,15 @@ impl<S: LivedMemoryStore> AmadeusRuntime<S> {
     pub fn new(identity: IdentityMemory, store: S) -> Self {
         Self {
             identity,
+            persona_state: PersonaState::default(),
             memory: MemoryCore::new(store),
             skills: SkillRegistry::default(),
             triggers: TriggerEngine::default(),
         }
+    }
+
+    pub fn from_persona_pack(pack: PersonaPack, store: S) -> Self {
+        Self::new(pack.into_identity(), store)
     }
 
     pub fn ingest_perception(
@@ -46,6 +53,14 @@ impl<S: LivedMemoryStore> AmadeusRuntime<S> {
 
     pub fn identity(&self) -> &IdentityMemory {
         &self.identity
+    }
+
+    pub fn persona_state(&self) -> &PersonaState {
+        &self.persona_state
+    }
+
+    pub fn apply_persona_delta(&mut self, delta: PersonaStateDelta) {
+        self.persona_state.apply_delta(delta);
     }
 
     pub fn memory(&self) -> &MemoryCore<S> {

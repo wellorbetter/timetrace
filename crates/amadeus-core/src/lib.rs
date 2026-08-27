@@ -16,6 +16,7 @@ pub mod identity;
 pub mod memory;
 pub mod paths;
 pub mod perception;
+pub mod persona;
 pub mod runtime;
 pub mod skills;
 pub mod trigger;
@@ -32,6 +33,10 @@ pub use memory::{
 };
 pub use paths::{data_dir, ensure_data_dir, memory_database_path, AMADEUS_DIR_NAME};
 pub use perception::{ComputerActivity, PerceptionEvent};
+pub use persona::{
+    PersonaPack, PersonaPackError, PersonaPackMetadata, PersonaState,
+    PersonaStateDelta, PERSONA_PACK_SCHEMA_VERSION,
+};
 pub use runtime::{AmadeusRuntime, RuntimeEffect};
 pub use skills::{
     SkillDescriptor, SkillRegistry, SkillRegistryError, SkillRisk, SkillSource,
