@@ -527,19 +527,36 @@ class _DiaryDocumentBlock extends ConsumerStatefulWidget {
 
 class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
   late final TextEditingController _controller;
+  List<String> _existingImages = [];
   final List<String> _newImages = [];
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.entry.content);
+    _existingImages = List.of(widget.images);
   }
 
   @override
   void didUpdateWidget(covariant _DiaryDocumentBlock oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.entry.id != widget.entry.id) {
+      _controller.text = widget.entry.content;
+      _existingImages = List.of(widget.images);
+      _newImages.clear();
+      return;
+    }
+
     if (widget.editing && !oldWidget.editing) {
       _controller.text = widget.entry.content;
+      _existingImages = List.of(widget.images);
+      _newImages.clear();
+    } else if (!widget.editing && oldWidget.editing) {
+      _existingImages = List.of(widget.images);
+      _newImages.clear();
+    } else if (!widget.editing && oldWidget.images != widget.images) {
+      _existingImages = List.of(widget.images);
     }
   }
 
@@ -547,6 +564,25 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _removeImage(String path) async {
+    final api = ref.read(apiProvider);
+    try {
+      api.removeDiaryImage(path: path);
+      try {
+        File(path).deleteSync();
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _existingImages.remove(path);
+          _newImages.remove(path);
+        });
+      }
+      ref.invalidate(calendarDataProvider);
+    } catch (error) {
+      AppLogger.log('remove diary image failed: $error');
+    }
   }
 
   Future<void> _addImages() async {
@@ -576,6 +612,27 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
     }
   }
 
+  Future<void> _cancelEditing() async {
+    final api = ref.read(apiProvider);
+    for (final path in List<String>.of(_newImages)) {
+      try {
+        api.removeDiaryImage(path: path);
+        try {
+          File(path).deleteSync();
+        } catch (_) {}
+      } catch (error) {
+        AppLogger.log('cleanup unsaved diary image failed: $error');
+      }
+    }
+    _newImages.clear();
+    _existingImages = List.of(widget.images);
+    _controller.text = widget.entry.content;
+    if (mounted) {
+      setState(() {});
+      widget.onEdit();
+    }
+  }
+
   Future<void> _save() async {
     final api = ref.read(apiProvider);
     api.updateDiaryEntry(id: widget.entry.id, content: _controller.text);
@@ -591,6 +648,9 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final visibleImages = widget.editing
+        ? [..._existingImages, ..._newImages]
+        : widget.images;
 
     return AnimatedContainer(
       duration: TimeTraceMotion.fast,
@@ -637,29 +697,34 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
                 ),
               ),
             ),
-          if (widget.images.isNotEmpty || _newImages.isNotEmpty) ...[
+          if (widget.editing) ...[
+            const SizedBox(height: TimeTraceSpace.xs),
+            _EditableImageStrip(
+              images: visibleImages,
+              onRemove: _removeImage,
+              onAdd: _addImages,
+            ),
+          ] else if (visibleImages.isNotEmpty) ...[
             const SizedBox(height: TimeTraceSpace.xs),
             ImageAlbum(
-              images: [...widget.images, ..._newImages],
-              title: '${widget.images.length + _newImages.length} 张图片',
+              images: visibleImages,
+              title: '${visibleImages.length} 张图片',
             ),
           ],
           const SizedBox(height: TimeTraceSpace.xs),
           Row(
             children: [
               if (widget.editing) ...[
-                TextButton.icon(
-                  onPressed: _addImages,
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 15),
-                  label: const Text('图片'),
-                ),
                 TextButton(
                   onPressed: widget.onDelete,
                   style: TextButton.styleFrom(foregroundColor: scheme.error),
-                  child: const Text('删除'),
+                  child: const Text('删除日记'),
                 ),
                 const Spacer(),
-                TextButton(onPressed: widget.onEdit, child: const Text('取消')),
+                TextButton(
+                  onPressed: () => _cancelEditing(),
+                  child: const Text('取消'),
+                ),
                 const SizedBox(width: TimeTraceSpace.xxs),
                 FilledButton(onPressed: _save, child: const Text('保存')),
               ] else ...[
@@ -677,6 +742,50 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EditableImageStrip extends StatelessWidget {
+  const _EditableImageStrip({
+    required this.images,
+    required this.onRemove,
+    required this.onAdd,
+  });
+
+  final List<String> images;
+  final ValueChanged<String> onRemove;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: TimeTraceSpace.xs,
+      runSpacing: TimeTraceSpace.xs,
+      children: [
+        for (final path in images)
+          _StagedImage(path: path, onRemove: () => onRemove(path)),
+        InkWell(
+          onTap: onAdd,
+          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+          child: Container(
+            width: 58,
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
