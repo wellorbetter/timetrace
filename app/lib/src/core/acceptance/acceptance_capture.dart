@@ -10,10 +10,9 @@ import 'package:window_manager/window_manager.dart';
 /// Release-app-only acceptance harness used by CI/demo recordings.
 ///
 /// It is completely inert unless TIMETRACE_ACCEPTANCE_CAPTURE_DIR is set.
-/// Frames come from the real Flutter render tree, so macOS recordings do not
-/// depend on Screen Recording/TCC permission. The native system recorder is
-/// still attempted separately by CI so we can retain a title-bar-inclusive
-/// video when the hosted runner permits it.
+/// Frames come from the real Flutter render tree, so recordings do not depend
+/// on system-level screen recording permissions. Native recorders are still
+/// kept separately as acceptance evidence when a hosted runner permits them.
 class AcceptanceCapture {
   AcceptanceCapture._();
 
@@ -34,49 +33,128 @@ class AcceptanceCapture {
     final doneFile = File('${directory.path}${Platform.pathSeparator}capture.done');
     if (await doneFile.exists()) await doneFile.delete();
 
-    // The normal app window setup is intentionally async. Ensure the plugin is
-    // ready here as well so acceptance capture never races the first frame.
     await windowManager.ensureInitialized();
 
-    // Keep every platform at the same deterministic viewport. This makes the
-    // README videos comparable and prevents hosted-runner display differences
-    // from changing responsive layout.
-    await windowManager.setSize(const Size(1180, 760));
+    // Hosted runners have different usable work areas. Use a conservative
+    // desktop viewport, then show lower-page content through real scrolling
+    // instead of relying on oversized windows that macOS/Windows may clamp.
+    await windowManager.setSize(const Size(1120, 680));
     await windowManager.center();
     await windowManager.show();
     await windowManager.focus();
 
     await Future<void>.delayed(const Duration(seconds: 2));
 
+    const frameInterval = Duration(milliseconds: 100);
+    const captureDuration = Duration(seconds: 36);
     final capture = _captureFrames(
       boundaryKey: boundaryKey,
       directory: directory,
-      duration: const Duration(seconds: 23),
-      frameInterval: const Duration(milliseconds: 200),
+      duration: captureDuration,
+      frameInterval: frameInterval,
     );
 
-    const walkthrough = <({String route, Duration hold})>[
-      (route: '/dashboard', hold: Duration(seconds: 4)),
-      (route: '/recap', hold: Duration(seconds: 5)),
-      (route: '/settings', hold: Duration(seconds: 4)),
-      (route: '/dashboard', hold: Duration(seconds: 4)),
-      (route: '/recap', hold: Duration(seconds: 5)),
-    ];
+    await _showRoute(router, '/dashboard');
+    await _hold(const Duration(milliseconds: 2200));
+    await _scrollPrimary(boundaryKey, 0.55);
+    await _hold(const Duration(milliseconds: 2200));
+    await _scrollPrimary(boundaryKey, 1.0);
+    await _hold(const Duration(milliseconds: 1800));
 
-    for (final step in walkthrough) {
-      router.go(step.route);
-      await Future<void>.delayed(step.hold);
-    }
+    await _showRoute(router, '/recap');
+    await _hold(const Duration(milliseconds: 2800));
+    await _scrollPrimary(boundaryKey, 0.52);
+    await _hold(const Duration(milliseconds: 2400));
+    await _scrollPrimary(boundaryKey, 1.0);
+    await _hold(const Duration(milliseconds: 2200));
+
+    await _showRoute(router, '/settings');
+    await _hold(const Duration(milliseconds: 2200));
+    await _scrollPrimary(boundaryKey, 0.46);
+    await _hold(const Duration(milliseconds: 2200));
+    await _scrollPrimary(boundaryKey, 1.0);
+    await _hold(const Duration(milliseconds: 2200));
+
+    await _showRoute(router, '/recap');
+    await _hold(const Duration(milliseconds: 1800));
+    await _scrollPrimary(boundaryKey, 0.60);
+    await _hold(const Duration(milliseconds: 2200));
 
     final frameCount = await capture;
+    final boundary = boundaryKey.currentContext?.findRenderObject();
+    final width = boundary is RenderBox ? boundary.size.width.round() : 0;
+    final height = boundary is RenderBox ? boundary.size.height.round() : 0;
+
     await File('${directory.path}${Platform.pathSeparator}capture.json')
         .writeAsString(
       '{"capture":"flutter-render-tree","frames":$frameCount,'
-      '"frame_interval_ms":200,"width":1180,"height":760,'
-      '"platform":"${Platform.operatingSystem}"}',
+      '"frame_interval_ms":${frameInterval.inMilliseconds},'
+      '"width":$width,"height":$height,'
+      '"platform":"${Platform.operatingSystem}",'
+      '"walkthrough":"dashboard-scroll,recap-scroll,settings-scroll,recap"}',
       flush: true,
     );
     await doneFile.writeAsString('ok\n', flush: true);
+  }
+
+  static Future<void> _showRoute(GoRouter router, String route) async {
+    router.go(route);
+    // Let route/layout transitions finish before locating the page Scrollable.
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    await _scrollToTop();
+  }
+
+  static Future<void> _hold(Duration duration) => Future<void>.delayed(duration);
+
+  static ScrollableState? _activeVerticalScrollable;
+
+  static Future<void> _scrollToTop() async {
+    final scrollable = _activeVerticalScrollable;
+    if (scrollable == null || !scrollable.position.hasContentDimensions) return;
+    await scrollable.position.animateTo(
+      scrollable.position.minScrollExtent,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  static Future<void> _scrollPrimary(GlobalKey boundaryKey, double fraction) async {
+    final rootContext = boundaryKey.currentContext;
+    if (rootContext is! Element) return;
+
+    ScrollableState? best;
+    var bestExtent = 0.0;
+
+    void visit(Element element) {
+      if (element is StatefulElement && element.state is ScrollableState) {
+        final state = element.state as ScrollableState;
+        final position = state.position;
+        if (position.hasContentDimensions &&
+            (position.axisDirection == AxisDirection.down ||
+                position.axisDirection == AxisDirection.up)) {
+          final extent = position.maxScrollExtent - position.minScrollExtent;
+          if (extent > bestExtent) {
+            bestExtent = extent;
+            best = state;
+          }
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    rootContext.visitChildren(visit);
+    final scrollable = best;
+    if (scrollable == null || bestExtent < 20) return;
+    _activeVerticalScrollable = scrollable;
+
+    final position = scrollable.position;
+    final clamped = fraction.clamp(0.0, 1.0);
+    final target = position.minScrollExtent + bestExtent * clamped;
+    await position.animateTo(
+      target,
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   static Future<int> _captureFrames({
