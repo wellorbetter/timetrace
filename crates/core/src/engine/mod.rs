@@ -17,6 +17,13 @@ pub mod startup_macos;
 #[cfg(target_os = "macos")]
 pub mod window_macos;
 
+#[cfg(target_os = "linux")]
+pub mod idle_linux;
+#[cfg(target_os = "linux")]
+pub mod startup_linux;
+#[cfg(target_os = "linux")]
+pub mod window_linux;
+
 pub use aggregator::SessionAggregator;
 pub use monitor::run_monitor_loop;
 pub use process_sysinfo::SysinfoProcessQuery;
@@ -35,6 +42,13 @@ pub use idle_macos::MacOsIdleDetector as PlatformIdleDetector;
 pub use startup_macos::MacOsStartupScanner as PlatformStartupScanner;
 #[cfg(target_os = "macos")]
 pub use window_macos::MacOsWindowResolver as PlatformWindowResolver;
+
+#[cfg(target_os = "linux")]
+pub use idle_linux::LinuxIdleDetector as PlatformIdleDetector;
+#[cfg(target_os = "linux")]
+pub use startup_linux::LinuxStartupScanner as PlatformStartupScanner;
+#[cfg(target_os = "linux")]
+pub use window_linux::LinuxWindowResolver as PlatformWindowResolver;
 
 // Preserve the historical engine::* names for Windows-only TUI/egui callers.
 // This keeps the macOS refactor backwards-compatible instead of forcing those
