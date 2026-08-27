@@ -30,6 +30,10 @@ class AppListSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final maxActive = apps.fold<int>(
+      1,
+      (max, app) => app.activeSeconds > max ? app.activeSeconds : max,
+    );
 
     return Card(
       child: Padding(
@@ -62,6 +66,7 @@ class AppListSection extends StatelessWidget {
                   _AppRow(
                     rank: i + 1,
                     app: apps[i],
+                    maxActiveSeconds: maxActive,
                     isSelected: selected == i,
                     onTap: () => onSelect(i),
                   ),
@@ -94,12 +99,14 @@ class _AppRow extends StatelessWidget {
   const _AppRow({
     required this.rank,
     required this.app,
+    required this.maxActiveSeconds,
     required this.isSelected,
     required this.onTap,
   });
 
   final int rank;
   final AppUsageItem app;
+  final int maxActiveSeconds;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -108,8 +115,8 @@ class _AppRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final color = appColor(app.appName);
-    final total = app.totalSeconds <= 0 ? 1 : app.totalSeconds;
-    final activeRatio = (app.activeSeconds / total).clamp(0.0, 1.0);
+    final rankingRatio =
+        (app.activeSeconds / maxActiveSeconds).clamp(0.0, 1.0);
 
     return InkWell(
       onTap: onTap,
@@ -169,7 +176,7 @@ class _AppRow extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: LinearProgressIndicator(
-                  value: activeRatio,
+                  value: rankingRatio,
                   minHeight: 4,
                   backgroundColor: scheme.surfaceContainerHighest,
                   color: color.withValues(alpha: 0.82),
