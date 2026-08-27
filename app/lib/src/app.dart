@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/acceptance/acceptance_capture.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/router/app_router.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
@@ -20,6 +22,9 @@ class TimetraceApp extends ConsumerStatefulWidget {
 
 class _TimetraceAppState extends ConsumerState<TimetraceApp>
     with WindowListener {
+  final GlobalKey _acceptanceBoundaryKey = GlobalKey();
+  bool _acceptanceScheduled = false;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +75,18 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
       if (next) exit(0);
     });
 
+    if (AcceptanceCapture.enabled && !_acceptanceScheduled) {
+      _acceptanceScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(
+          AcceptanceCapture.run(
+            boundaryKey: _acceptanceBoundaryKey,
+            router: router,
+          ),
+        );
+      });
+    }
+
     return MaterialApp.router(
       title: 'TimeTrace',
       debugShowCheckedModeBanner: false,
@@ -80,20 +97,23 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
       builder: (context, child) {
         final scheme = Theme.of(context).colorScheme;
         final hasCustom = background.isImage || background.color != null;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (background.isImage && background.imagePath != null)
-              Image.file(File(background.imagePath!), fit: BoxFit.cover),
-            if (background.color != null)
-              ColoredBox(color: background.color!),
-            ColoredBox(
-              color: scheme.surface.withValues(
-                alpha: hasCustom ? 1 - background.opacity : 1,
+        return RepaintBoundary(
+          key: _acceptanceBoundaryKey,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (background.isImage && background.imagePath != null)
+                Image.file(File(background.imagePath!), fit: BoxFit.cover),
+              if (background.color != null)
+                ColoredBox(color: background.color!),
+              ColoredBox(
+                color: scheme.surface.withValues(
+                  alpha: hasCustom ? 1 - background.opacity : 1,
+                ),
               ),
-            ),
-            child!,
-          ],
+              child!,
+            ],
+          ),
         );
       },
     );
