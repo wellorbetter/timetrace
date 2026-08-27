@@ -4,13 +4,11 @@
 //! never imports a TimeTrace type. This module can disappear once the native
 //! platform observer has been fully moved into Amadeus.
 
-use amadeus_core::{
-    ensure_data_dir, memory_database_path, ComputerActivity, MemoryCore, MemoryError,
-    PerceptionEvent, SqliteLivedMemoryStore,
-};
+use amadeus_core::{ComputerActivity, PerceptionEvent};
 use chrono::Utc;
 use tracing::warn;
 
+use crate::amadeus_host::{shared_amadeus_runtime, AmadeusHostError, SharedAmadeusRuntime};
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 
 pub fn adapt_tracked_event(event: &TrackedEvent) -> PerceptionEvent {
@@ -56,45 +54,51 @@ fn adapt_app(app: &AppInfo) -> ComputerActivity {
     activity
 }
 
-/// Event sink that writes human-scale episodes into Amadeus-owned storage.
+/// Event sink that feeds the process-wide Amadeus runtime. This means computer
+/// perception, working context, consolidation and triggers all observe the same
+/// stream that legacy TimeTrace statistics receive during migration.
 pub struct AmadeusMemorySink {
-    core: MemoryCore<SqliteLivedMemoryStore>,
+    runtime: SharedAmadeusRuntime,
 }
 
 impl AmadeusMemorySink {
-    pub fn open_default() -> Result<Self, MemoryError> {
-        ensure_data_dir()?;
-        let store = SqliteLivedMemoryStore::open(memory_database_path())?;
+    pub fn open_default() -> Result<Self, AmadeusHostError> {
         Ok(Self {
-            core: MemoryCore::new(store),
+            runtime: shared_amadeus_runtime()?,
         })
     }
 
-    pub fn from_store(store: SqliteLivedMemoryStore) -> Self {
-        Self {
-            core: MemoryCore::new(store),
+    pub fn runtime(&self) -> SharedAmadeusRuntime {
+        self.runtime.clone()
+    }
+
+    pub fn flush(&self) {
+        match self.runtime.lock() {
+            Ok(mut runtime) => {
+                if let Err(error) = runtime.flush(Utc::now()) {
+                    warn!("Amadeus runtime flush failed: {error}");
+                }
+            }
+            Err(_) => warn!("Amadeus runtime lock poisoned during flush"),
         }
     }
 }
 
 impl EventSink for AmadeusMemorySink {
     fn accept(&mut self, event: TrackedEvent) {
-        if let Err(error) = self.core.ingest(adapt_tracked_event(&event)) {
-            warn!("Amadeus lived-memory ingest failed: {error}");
-        }
-    }
-}
-
-impl Drop for AmadeusMemorySink {
-    fn drop(&mut self) {
-        if let Err(error) = self.core.flush(Utc::now()) {
-            warn!("Amadeus lived-memory flush failed: {error}");
+        match self.runtime.lock() {
+            Ok(mut runtime) => {
+                if let Err(error) = runtime.ingest_perception(adapt_tracked_event(&event)) {
+                    warn!("Amadeus runtime ingest failed: {error}");
+                }
+            }
+            Err(_) => warn!("Amadeus runtime lock poisoned during perception ingest"),
         }
     }
 }
 
 /// Duplicates one tracking stream into legacy TimeTrace storage and the new
-/// Amadeus memory pipeline during migration.
+/// Amadeus runtime during migration.
 pub struct FanoutEventSink {
     primary: Box<dyn EventSink>,
     secondary: Box<dyn EventSink>,
