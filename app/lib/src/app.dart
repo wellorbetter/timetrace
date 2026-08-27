@@ -30,10 +30,10 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
 
-    // Keep a consistent desktop shell on Windows and macOS. Native title bars
-    // remain native; only the usable content envelope is standardized.
+    // Keep enough room for the explicit desktop sidebar plus a usable compact
+    // content canvas. Native title bars remain platform-native.
     await windowManager.setTitle('TimeTrace');
-    await windowManager.setMinimumSize(const Size(840, 600));
+    await windowManager.setMinimumSize(const Size(940, 620));
     await windowManager.setPreventClose(true);
 
     if (Platform.isWindows) {
