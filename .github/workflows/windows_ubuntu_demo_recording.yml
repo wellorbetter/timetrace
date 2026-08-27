@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/windows_ubuntu_demo_recording.yml'
       - 'app/lib/src/core/acceptance/**'
+      - 'app/lib/src/core/platform_paths.dart'
       - 'scripts/seed_acceptance_demo.py'
       - 'scripts/build_linux.sh'
       - 'crates/core/src/engine/idle_linux.rs'
@@ -72,7 +73,7 @@ jobs:
             "$APP_BIN" >"$RUNNER_TEMP/timetrace-ubuntu-demo.log" 2>&1 &
           APP_PID=$!
 
-          for _ in $(seq 1 70); do
+          for _ in $(seq 1 80); do
             if [[ -f "$FRAME_DIR/capture.done" ]]; then
               break
             fi
@@ -86,10 +87,11 @@ jobs:
           test -f "$FRAME_DIR/capture.done"
           test -f "$FRAME_DIR/capture.json"
           FRAME_COUNT="$(find "$FRAME_DIR" -name 'frame-*.png' | wc -l | tr -d ' ')"
-          test "$FRAME_COUNT" -ge 60
+          test "$FRAME_COUNT" -ge 180
 
           ffmpeg -y -loglevel warning \
-            -framerate 5 -i "$FRAME_DIR/frame-%05d.png" \
+            -framerate 10 -i "$FRAME_DIR/frame-%05d.png" \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" \
             -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p \
             -movflags +faststart "$VIDEO"
 
@@ -99,7 +101,7 @@ jobs:
           kill "$XVFB_PID" || true
 
           test -s "$VIDEO"
-          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/ubuntu-render-capture.json"
 
       - uses: actions/upload-artifact@v4
@@ -166,7 +168,7 @@ jobs:
           $app = Start-Process $exe -WorkingDirectory $bundle -RedirectStandardOutput "$env:RUNNER_TEMP/timetrace-windows-demo.log" -RedirectStandardError "$env:RUNNER_TEMP/timetrace-windows-demo.err.log" -PassThru
 
           $done = Join-Path $frameDir 'capture.done'
-          for ($i = 0; $i -lt 70; $i++) {
+          for ($i = 0; $i -lt 80; $i++) {
             if (Test-Path $done) { break }
             if ($app.HasExited) {
               Get-Content "$env:RUNNER_TEMP/timetrace-windows-demo.err.log" -ErrorAction SilentlyContinue
@@ -180,17 +182,18 @@ jobs:
           $captureJson = Join-Path $frameDir 'capture.json'
           if (-not (Test-Path $captureJson)) { throw 'capture.json missing' }
           $frames = @(Get-ChildItem $frameDir -Filter 'frame-*.png')
-          if ($frames.Count -lt 60) { throw "Only $($frames.Count) frames captured" }
+          if ($frames.Count -lt 180) { throw "Only $($frames.Count) frames captured" }
 
           & ffmpeg -y -loglevel warning `
-            -framerate 5 -i (Join-Path $frameDir 'frame-%05d.png') `
+            -framerate 10 -i (Join-Path $frameDir 'frame-%05d.png') `
+            -vf 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2' `
             -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p `
             -movflags +faststart $video
           if ($LASTEXITCODE -ne 0) { throw 'ffmpeg encode failed' }
 
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
           if (-not (Test-Path $video)) { throw 'Windows demo video missing' }
-          & ffprobe -v error -show_entries format=duration,size -of default=nw=1 $video
+          & ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 $video
           Copy-Item $captureJson "$env:RUNNER_TEMP/windows-render-capture.json"
 
       - uses: actions/upload-artifact@v4
