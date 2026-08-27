@@ -1,4 +1,4 @@
-rust_input: crate::api
+rust_input: crate::api,crate::amadeus_api
 rust_root: bridge
 dart_root: app
 dart_output: app/lib/src/bridge
