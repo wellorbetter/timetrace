@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
@@ -16,8 +17,8 @@ import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_prov
 
 /// Single-page dashboard (概览 + 日历日记 merged):
 /// stats → data carousel (柱状图/饼图/汇总) → calendar → app list → journal.
-/// The carousel holds three DATA DISPLAYS; the calendar is a permanent
-/// element (day selection drives 汇总 + 日记).
+/// The carousel holds data displays; the calendar is a permanent element
+/// whose day selection drives the summary and journal.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -26,7 +27,7 @@ class DashboardScreen extends ConsumerWidget {
     final asyncState = ref.watch(dashboardProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('使用统计')),
+      appBar: AppBar(title: const Text('概览')),
       body: asyncState.when(
         // 切换日期范围时保留旧数据直到新数据到达，避免全屏重绘/闪白。
         skipLoadingOnReload: true,
@@ -34,8 +35,12 @@ class DashboardScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 12),
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(height: TimeTraceSpace.sm),
               Text('正在加载使用数据…', style: TextStyle(fontSize: 12)),
             ],
           ),
@@ -90,7 +95,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   int _carouselAbs = 0;
   int _carouselIndex = 0;
 
-  /// 页码圆点指示器：切页只更新它，不重建整页。
+  /// 页码指示器：切页只更新它，不重建整页。
   final ValueNotifier<int> _carouselDot = ValueNotifier<int>(0);
 
   /// 左侧日历卡片实际高度（动态测量），右侧轮播与之等高对齐。
@@ -132,8 +137,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     if (animate) {
       _carouselCtrl.animateToPage(
         target,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+        duration: TimeTraceMotion.normal,
+        curve: TimeTraceMotion.standard,
       );
     } else {
       _carouselCtrl.jumpToPage(target);
@@ -174,8 +179,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           if (ctx != null) {
             Scrollable.ensureVisible(
               ctx,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
+              duration: TimeTraceMotion.normal,
+              curve: TimeTraceMotion.standard,
               alignment: 0.2,
             );
           }
@@ -207,15 +212,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       if (ctx != null) {
         Scrollable.ensureVisible(
           ctx,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          duration: TimeTraceMotion.normal,
+          curve: TimeTraceMotion.standard,
           alignment: 0.2,
         );
       }
     });
   }
 
-  /// 测量日历卡片高度，让右侧轮播与其对齐（月份 4~6 行、日记
+  /// 测量日历卡片高度，让右侧轮播与之对齐（月份 4~6 行、日记
   /// 自定义区间行出现/隐藏都会改变高度，每次 build 后重新测量）。
   void _measureCalendar() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -282,11 +287,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               },
             ),
       'summary' => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
         child: Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(TimeTraceSpace.sm),
             child: DaySummaryPanel(date: day),
           ),
         ),
@@ -294,7 +299,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       'apps' => apps.isEmpty
           ? _placeholder('暂无使用数据')
           : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xxs),
               child: SingleChildScrollView(
                 child: AppListSection(
                   apps: apps,
@@ -308,8 +313,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             ),
       _ => const SizedBox.shrink(),
     };
-    // PageView 某些布局阶段会给页面无界高度，统一兑底，
-    // 避免 Expanded/LayoutBuilder 报 Infinity错误。
+    // PageView 某些布局阶段会给页面无界高度，统一兜底，
+    // 避免 Expanded/LayoutBuilder 报 Infinity 错误。
     return LayoutBuilder(
       builder: (context, constraints) => SizedBox(
         width: double.infinity,
@@ -320,14 +325,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   }
 
   Widget _placeholder(String text) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.insights_outlined, size: 40, color: scheme.outlineVariant),
-          const SizedBox(height: 10),
-          Text(text, style: TextStyle(fontSize: 12, color: scheme.outline)),
+          Icon(
+            Icons.insights_outlined,
+            size: 34,
+            color: scheme.outlineVariant,
+          ),
+          const SizedBox(height: TimeTraceSpace.xs),
+          Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -357,17 +372,22 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = screenSizeOf(constraints);
-        final scheme = Theme.of(context).colorScheme;
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
 
-        return Center(
+        return Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
+            constraints: const BoxConstraints(
+              maxWidth: TimeTraceLayout.dashboardWidth,
+            ),
             child: ListView(
-              padding: const EdgeInsets.all(12),
+              padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
               children: [
-                // Range chips
+                // Range controls stay lightweight; they are filters, not cards.
                 Wrap(
-                  spacing: 6,
+                  spacing: TimeTraceSpace.xs,
+                  runSpacing: TimeTraceSpace.xs,
                   children: [
                     for (final (label, range) in [
                       ('今天', DateRange.today),
@@ -380,10 +400,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           final selected =
                               ref.watch(dashboardRangeProvider).range == range;
                           return ChoiceChip(
-                            label: Text(
-                              label,
-                              style: const TextStyle(fontSize: 12),
-                            ),
+                            label: Text(label),
                             selected: selected,
                             onSelected: (_) => ref
                                 .read(dashboardRangeProvider.notifier)
@@ -393,164 +410,147 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                // First-launch hint when the current range has no data yet
+                const SizedBox(height: TimeTraceSpace.md),
+                // First-launch hint when the current range has no data yet.
                 if (apps.isEmpty)
-                  Card(
-                    color: scheme.secondaryContainer.withValues(alpha: 0.4),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 18,
-                            color: scheme.primary,
+                  Container(
+                    margin: const EdgeInsets.only(bottom: TimeTraceSpace.md),
+                    padding: const EdgeInsets.all(TimeTraceSpace.sm),
+                    decoration: BoxDecoration(
+                      color: scheme.primaryContainer.withValues(alpha: 0.34),
+                      border: Border.all(color: scheme.outlineVariant),
+                      borderRadius:
+                          BorderRadius.circular(TimeTraceRadius.surface),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 17,
+                          color: scheme.primary,
+                        ),
+                        const SizedBox(width: TimeTraceSpace.xs),
+                        Expanded(
+                          child: Text(
+                            '暂无使用数据。开始使用应用后会自动记录，也可以切换日期范围查看。',
+                            style: theme.textTheme.bodySmall,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '暂无使用数据 — 开始使用应用后将自动记录，也可以切换右上角日期范围查看。',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 // ── Data area: calendar (left) + ordered carousel (right) ──
                 LayoutBuilder(
                   builder: (context, con) {
-                    final narrow = con.maxWidth < 760;
+                    final narrow =
+                        con.maxWidth < TimeTraceLayout.compactBreakpoint;
                     final order = ref.watch(dashboardOrderProvider);
                     final pageCount = order.length;
                     final carouselH = narrow
                         ? 330.0
                         : (size.twoColumn ? 400.0 : 360.0);
 
-                    Widget carousel = Column(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                                                // ◀ prev
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.chevron_left,
-                                    size: 22,
-                                    color: scheme.primary,
-                                  ),
-                                  tooltip: '上一个视图',
-                                  // 无缝轮播：永远只移动一页，首尾互切不再横扫。
-                                  onPressed: () => _carouselCtrl.previousPage(
-                                    duration: const Duration(
-                                      milliseconds: 200,
-                                    ),
-                                    curve: Curves.easeOut,
-                                  ),
+                    final carousel = Column(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left_rounded),
+                                tooltip: '上一个视图',
+                                onPressed: () => _carouselCtrl.previousPage(
+                                  duration: TimeTraceMotion.normal,
+                                  curve: TimeTraceMotion.standard,
                                 ),
-                                Expanded(
-                                  child: PageView.builder(
-                                    controller: _carouselCtrl,
-                                    onPageChanged: (i) {
-                                      _carouselAbs = i;
-                                      _carouselIndex = i % pageCount;
-                                      _carouselDot.value = _carouselIndex;
-                                    },
-                                    itemCount: _carouselInit * 2,
-                                    itemBuilder: (context, i) =>
-                                        _KeepAlivePage(
-                                      // 每页独立绘制层，切页滑动时只移动已缓存的画布，避免重绘卡顿。
-                                      child: RepaintBoundary(
-                                        child: _buildPage(
-                                          order[i % pageCount],
-                                          day: calDay,
-                                          order: order,
-                                          apps: apps,
-                                        ),
+                              ),
+                              Expanded(
+                                child: PageView.builder(
+                                  controller: _carouselCtrl,
+                                  onPageChanged: (i) {
+                                    _carouselAbs = i;
+                                    _carouselIndex = i % pageCount;
+                                    _carouselDot.value = _carouselIndex;
+                                  },
+                                  itemCount: _carouselInit * 2,
+                                  itemBuilder: (context, i) => _KeepAlivePage(
+                                    // 每页独立绘制层，切页滑动时只移动已缓存的画布。
+                                    child: RepaintBoundary(
+                                      child: _buildPage(
+                                        order[i % pageCount],
+                                        day: calDay,
+                                        order: order,
+                                        apps: apps,
                                       ),
                                     ),
                                   ),
                                 ),
-// ▶ next
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.chevron_right,
-                                    size: 22,
-                                    color: scheme.primary,
-                                  ),
-                                  tooltip: '下一个视图',
-                                  // Wrap-around: last page goes to first
-                                  onPressed: () => _carouselCtrl.nextPage(
-                                    duration: const Duration(
-                                      milliseconds: 200,
-                                    ),
-                                    curve: Curves.easeOut,
-                                  ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.chevron_right_rounded),
+                                tooltip: '下一个视图',
+                                onPressed: () => _carouselCtrl.nextPage(
+                                  duration: TimeTraceMotion.normal,
+                                  curve: TimeTraceMotion.standard,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 6),
-                          // Carousel dots (clickable) — 切页时只重建这一行。
-                          ValueListenableBuilder<int>(
-                            valueListenable: _carouselDot,
-                            builder: (context, dot, _) => Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                for (var i = 0; i < pageCount; i++)
-                                  GestureDetector(
-                                    onTap: () =>
-                                        _goToReal(i, animate: true),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        width: dot == i ? 18 : 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: dot == i
-                                              ? scheme.primary
-                                              : scheme.outlineVariant,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
+                        ),
+                        const SizedBox(height: TimeTraceSpace.xs),
+                        // Thin page marks read more quietly than large carousel dots.
+                        ValueListenableBuilder<int>(
+                          valueListenable: _carouselDot,
+                          builder: (context, dot, _) => Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var i = 0; i < pageCount; i++)
+                                GestureDetector(
+                                  onTap: () => _goToReal(i, animate: true),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: TimeTraceSpace.xxs,
+                                      vertical: TimeTraceSpace.xxs,
+                                    ),
+                                    child: AnimatedContainer(
+                                      duration: TimeTraceMotion.fast,
+                                      curve: TimeTraceMotion.standard,
+                                      width: dot == i ? 18 : 7,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: dot == i
+                                            ? scheme.primary
+                                            : scheme.outlineVariant,
+                                        borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
+                                ),
+                            ],
                           ),
-                        ],
+                        ),
+                      ],
                     );
 
-                    // Calendar block (left column / top on narrow)
-                    Widget calendar = Card(
+                    // Calendar block (left column / top on narrow).
+                    final calendar = Card(
                       key: _calendarKey,
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(TimeTraceSpace.sm),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
                                 Icon(
-                                  Icons.calendar_month,
-                                  size: 18,
+                                  Icons.calendar_month_outlined,
+                                  size: 17,
                                   color: scheme.primary,
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: TimeTraceSpace.xs),
                                 Text(
                                   '日历',
-                                  style: TextStyle(
-                                    fontSize: 14,
+                                  style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w600,
-                                    color: scheme.primary,
                                   ),
                                 ),
                                 const Spacer(),
@@ -563,14 +563,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                     DateRange.month => '本月',
                                     DateRange.custom => '所选日',
                                   },
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: scheme.outline,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: TimeTraceSpace.xs),
                             CalendarGrid(
                               selected: calDay,
                               onSelected: (d) => ref
@@ -584,22 +583,21 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     );
 
                     if (narrow) {
-                      // Stack: carousel first (the "data"), calendar below
                       return Column(
                         children: [
                           SizedBox(height: carouselH, child: carousel),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: TimeTraceSpace.md),
                           calendar,
                         ],
                       );
                     }
-                    // Wide: calendar LEFT, carousel RIGHT — 与日历等高对齐
-                    // （测量到前先用默认高度，首帧后对齐）。
+
+                    // Wide: calendar LEFT, carousel RIGHT — align their heights.
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(flex: 5, child: calendar),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: TimeTraceSpace.md),
                         Expanded(
                           flex: 7,
                           child: SizedBox(
@@ -611,12 +609,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     );
                   },
                 ),
-                const SizedBox(height: 12),
-                // ── Journal (selected day) ──
-                // Diary section — no outer Card (avoids card-in-card);
-                // posts/editor carry their own tone+shadow.
+                const SizedBox(height: TimeTraceSpace.md),
+                // Diary has no outer card; posts/editor carry their own surface.
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
                   child: DiarySection(
                     date: calDay,
                     range: _diaryRangeFor(sel),
@@ -631,9 +627,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   }
 }
 
-/// Keeps a carousel page alive so swiping back doesn't rebuild heavy
-/// charts. Pages still update via didUpdateWidget when the range/day
-/// changes, so data stays fresh.
+/// Keeps a carousel page alive so swiping back doesn't rebuild heavy charts.
 class _KeepAlivePage extends StatefulWidget {
   const _KeepAlivePage({required this.child});
 
