@@ -39,11 +39,6 @@ class AppShell extends ConsumerWidget {
           control: !useMeta,
         ): () => context.go('/recap'),
         SingleActivator(
-          LogicalKeyboardKey.digit3,
-          meta: useMeta,
-          control: !useMeta,
-        ): () => context.go('/settings'),
-        SingleActivator(
           LogicalKeyboardKey.comma,
           meta: useMeta,
           control: !useMeta,
@@ -243,7 +238,12 @@ class _LocalStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final platform = Platform.isMacOS ? 'macOS' : 'Windows';
+    final platform = switch (Platform.operatingSystem) {
+      'macos' => 'macOS',
+      'linux' => 'Linux',
+      'windows' => 'Windows',
+      final other => other,
+    };
 
     return Container(
       padding: const EdgeInsets.symmetric(
