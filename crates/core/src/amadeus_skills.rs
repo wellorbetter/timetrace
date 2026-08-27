@@ -108,7 +108,7 @@ impl SkillExecutor for CurrentActivitySkill {
                 "display_name": activity.display_name,
                 "executable_path": activity.executable_path,
                 "window_title": activity.window_title,
-                "started_at": runtime.working_context().started_at.map(|v| v.to_rfc3339()),
+                "started_at": runtime.working_context().active_since.map(|v| v.to_rfc3339()),
             }),
             None => Value::Null,
         })
