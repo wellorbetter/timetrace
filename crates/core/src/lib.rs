@@ -16,8 +16,8 @@ pub use amadeus_adapter::{adapt_tracked_event, AmadeusMemorySink, FanoutEventSin
 pub use amadeus_host::{
     amadeus_converse, configure_openai_compatible_model, handle_triggered_actions,
     persist_amadeus_state, recent_amadeus_memories, search_amadeus_memories,
-    shared_amadeus_runtime, take_pending_initiatives, AmadeusHostError,
-    PendingInitiative, SharedAmadeusRuntime,
+    shared_amadeus_runtime, take_pending_initiatives, take_pending_skill_approvals,
+    AmadeusHostError, PendingInitiative, PendingSkillApproval, SharedAmadeusRuntime,
 };
 pub use amadeus_skills::{
     ensure_amadeus_skills, host_skill_runtime_available, run_amadeus_skill,
