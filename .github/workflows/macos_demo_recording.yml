@@ -83,48 +83,63 @@ jobs:
           ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/macos-render-capture.json"
 
-      - name: Try native macOS screen recording
-        continue-on-error: true
+      - name: Record clean native macOS demo
         run: |
           set -euo pipefail
           APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
           APP_BIN="$APP_PATH/Contents/MacOS/$EXECUTABLE"
+          RAW_VIDEO="$RUNNER_TEMP/timetrace-macos-native.mov"
           VIDEO="$RUNNER_TEMP/timetrace-macos-native.mp4"
 
           "$APP_BIN" >"$RUNNER_TEMP/timetrace-macos-native.log" 2>&1 &
           APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
           sleep 7
-          osascript -e 'tell application "TimeTrace" to activate' || true
+          osascript -e 'tell application "TimeTrace" to activate'
 
-          # This is acceptance evidence only. The deterministic render-tree
-          # video above is the README-quality artifact and never requires TCC.
-          ffmpeg -y -loglevel warning -f avfoundation -framerate 20 \
-            -i 'Capture screen 0:none' -t 22 \
-            -c:v libx264 -preset ultrafast -pix_fmt yuv420p "$VIDEO" \
-            >"$RUNNER_TEMP/ffmpeg-macos-native.log" 2>&1 &
-          FFMPEG_PID=$!
+          # macOS 15 hosted runners currently have an AVFoundation/FFmpeg
+          # permission-popup regression. Use Apple's native recorder instead.
+          # Trigger permission once before the real take, accept the default
+          # authorization action, then discard the warm-up recording.
+          WARMUP="$RUNNER_TEMP/macos-screen-permission-warmup.mov"
+          /usr/sbin/screencapture -v -V 2 "$WARMUP" \
+            >"$RUNNER_TEMP/macos-screen-permission.log" 2>&1 &
+          WARMUP_PID=$!
+          sleep 1
+          osascript -e 'tell application "System Events" to key code 36' || true
+          wait "$WARMUP_PID" || true
+          rm -f "$WARMUP"
+          sleep 2
+
+          # Formal take. Record the real Aqua desktop, including the native
+          # macOS window chrome and pointer clicks, then transcode to MP4.
+          /usr/sbin/screencapture -v -V 22 -k "$RAW_VIDEO" \
+            >"$RUNNER_TEMP/screencapture-macos-native.log" 2>&1 &
+          CAPTURE_PID=$!
 
           sleep 2
-          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
+          osascript -e 'tell application "System Events" to keystroke "2" using command down'
           sleep 4
-          osascript -e 'tell application "System Events" to keystroke "," using command down' || true
+          osascript -e 'tell application "System Events" to keystroke "," using command down'
           sleep 4
-          osascript -e 'tell application "System Events" to keystroke "1" using command down' || true
+          osascript -e 'tell application "System Events" to keystroke "1" using command down'
           sleep 4
-          osascript -e 'tell application "System Events" to keystroke "2" using command down' || true
-          wait "$FFMPEG_PID" || true
+          osascript -e 'tell application "System Events" to keystroke "2" using command down'
+
+          wait "$CAPTURE_PID"
+          test -s "$RAW_VIDEO"
+
+          ffmpeg -y -loglevel warning -i "$RAW_VIDEO" \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" \
+            -c:v libx264 -crf 19 -preset medium -pix_fmt yuv420p \
+            -movflags +faststart "$VIDEO"
+
+          test -s "$VIDEO"
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           kill "$APP_PID" || true
           wait "$APP_PID" || true
-
-          if [[ -s "$VIDEO" ]]; then
-            ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$VIDEO"
-          else
-            printf '%s\n' \
-              'native_video_unavailable=true' \
-              'GitHub-hosted macOS denied native Screen Recording; use timetrace-macos-demo.mp4.' \
-              > "$RUNNER_TEMP/macos-native-status.txt"
-          fi
+          trap - EXIT
 
       - name: Verify native application state
         run: |
@@ -146,7 +161,7 @@ jobs:
             ${{ runner.temp }}/timetrace-macos-native.mp4
             ${{ runner.temp }}/timetrace-macos-demo.log
             ${{ runner.temp }}/timetrace-macos-native.log
-            ${{ runner.temp }}/ffmpeg-macos-native.log
-            ${{ runner.temp }}/macos-native-status.txt
+            ${{ runner.temp }}/macos-screen-permission.log
+            ${{ runner.temp }}/screencapture-macos-native.log
             ${{ runner.temp }}/macos-render-capture.json
           if-no-files-found: warn
