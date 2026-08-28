@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
-import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
@@ -12,7 +11,6 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart' as diary;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/recap_placeholder.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_preview_card.dart';
 
@@ -111,13 +109,17 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(TimeTraceSpace.xl, TimeTraceSpace.md, TimeTraceSpace.xl, TimeTraceSpace.xxl),
           children: [
-            _OverviewHeader(state: widget.state, apps: apps, selection: selection),
+            _OverviewHeader(
+              state: widget.state,
+              apps: apps,
+              selection: selection,
+              onRange: (range) => ref.read(dashboardRangeProvider.notifier).select(range),
+            ),
             const SizedBox(height: TimeTraceSpace.md),
             const RecapPreviewCard(),
             const SizedBox(height: TimeTraceSpace.md),
             _Workspace(
               day: day,
-              selection: selection,
               apps: apps,
               selectedApp: _selectedApp,
               pages: _pages,
@@ -150,10 +152,11 @@ class _OverviewBodyState extends ConsumerState<_OverviewBody> {
 }
 
 class _OverviewHeader extends StatelessWidget {
-  const _OverviewHeader({required this.state, required this.apps, required this.selection});
+  const _OverviewHeader({required this.state, required this.apps, required this.selection, required this.onRange});
   final DashboardState state;
   final List<AppUsageItem> apps;
   final DateRangeSelection selection;
+  final ValueChanged<DateRange> onRange;
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +189,7 @@ class _OverviewHeader extends StatelessWidget {
               ChoiceChip(
                 label: Text(text),
                 selected: selection.range == range,
-                onSelected: (_) {},
+                onSelected: (_) => onRange(range),
               ),
           ],
         ),
@@ -201,7 +204,7 @@ class _OverviewHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w650, letterSpacing: -0.45)),
+              Text(label, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.45)),
               const SizedBox(height: 5),
               Text(
                 top == null
@@ -269,7 +272,6 @@ class _MiniMetric extends StatelessWidget {
 class _Workspace extends StatelessWidget {
   const _Workspace({
     required this.day,
-    required this.selection,
     required this.apps,
     required this.selectedApp,
     required this.pages,
@@ -282,7 +284,6 @@ class _Workspace extends StatelessWidget {
   });
 
   final DateTime day;
-  final DateRangeSelection selection;
   final List<AppUsageItem> apps;
   final int? selectedApp;
   final List<PageDto>? pages;
@@ -298,7 +299,7 @@ class _Workspace extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 800;
-        final calendar = _CalendarPanel(day: day, selection: selection, onSelectDay: onSelectDay);
+        final calendar = _CalendarPanel(day: day, onSelectDay: onSelectDay);
         final detail = _DetailPanel(
           day: day,
           apps: apps,
@@ -327,9 +328,8 @@ class _Workspace extends StatelessWidget {
 }
 
 class _CalendarPanel extends StatelessWidget {
-  const _CalendarPanel({required this.day, required this.selection, required this.onSelectDay});
+  const _CalendarPanel({required this.day, required this.onSelectDay});
   final DateTime day;
-  final DateRangeSelection selection;
   final ValueChanged<DateTime> onSelectDay;
 
   @override
@@ -391,7 +391,7 @@ class _DetailPanel extends StatelessWidget {
     final labels = const {'apps': '应用排行', 'bar': '时间分布', 'hourly': '小时', 'summary': '概要'};
     Widget child;
     if (apps.isEmpty) {
-      child = const RecapPlaceholder(text: '暂无使用数据');
+      child = const _EmptyState(text: '暂无使用数据');
     } else {
       child = switch (view) {
         'bar' => AppChartSection(apps: apps, selected: selectedApp, onSelect: onSelectApp, tall: true),
@@ -449,6 +449,26 @@ class _DetailPanel extends StatelessWidget {
               child: KeyedSubtree(key: ValueKey(view), child: child),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.insights_outlined, size: 32, color: scheme.outlineVariant),
+          const SizedBox(height: TimeTraceSpace.xs),
+          Text(text, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
