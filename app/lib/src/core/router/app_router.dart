@@ -106,7 +106,9 @@ class AppShell extends ConsumerWidget {
                 thickness: 1,
                 color: scheme.outlineVariant,
               ),
-              Expanded(child: child),
+              // The navigator transition is clipped to the content canvas so
+              // an outgoing page can never paint over the persistent sidebar.
+              Expanded(child: ClipRect(child: child)),
             ],
           ),
         ),
@@ -187,8 +189,8 @@ class _SidebarDestination extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(TimeTraceRadius.control),
           child: AnimatedContainer(
-            duration: TimeTraceMotion.fast,
-            curve: TimeTraceMotion.standard,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xs),
             decoration: BoxDecoration(
@@ -197,21 +199,33 @@ class _SidebarDestination extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  selected ? selectedIcon : icon,
-                  size: 19,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 130),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                  child: Icon(
+                    selected ? selectedIcon : icon,
+                    key: ValueKey(selected),
+                    size: 19,
+                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(width: TimeTraceSpace.xs),
                 Expanded(
-                  child: Text(
-                    label,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutCubic,
+                    style: (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
                       color: selected
                           ? scheme.onSurface
                           : scheme.onSurfaceVariant,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
+                    child: Text(label),
                   ),
                 ),
                 Text(
@@ -309,6 +323,58 @@ int _indexOf(BuildContext context) {
   return i >= 0 ? i : 0;
 }
 
+CustomTransitionPage<void> _desktopPage(
+  GoRouterState state,
+  Widget child,
+) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 210),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    child: RepaintBoundary(child: child),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      // A sequential fade-through deliberately avoids the common desktop
+      // artifact where two translucent Scaffolds are visible on top of each
+      // other. The outgoing page is nearly gone before the incoming page
+      // starts to appear, with only a tiny neutral hand-off in between.
+      final incomingOpacity = CurvedAnimation(
+        parent: animation,
+        curve: const Interval(0.46, 1, curve: Curves.easeOutCubic),
+      );
+      final outgoingProgress = CurvedAnimation(
+        parent: secondaryAnimation,
+        curve: const Interval(0, 0.42, curve: Curves.easeInCubic),
+      );
+      final incomingOffset = Tween<Offset>(
+        begin: const Offset(0, 0.010),
+        end: Offset.zero,
+      ).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: const Interval(0.42, 1, curve: Curves.easeOutCubic),
+        ),
+      );
+      final outgoingOffset = Tween<Offset>(
+        begin: Offset.zero,
+        end: const Offset(0, -0.004),
+      ).animate(outgoingProgress);
+
+      return ClipRect(
+        child: FadeTransition(
+          opacity: ReverseAnimation(outgoingProgress),
+          child: SlideTransition(
+            position: outgoingOffset,
+            child: FadeTransition(
+              opacity: incomingOpacity,
+              child: SlideTransition(position: incomingOffset, child: child),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/dashboard',
@@ -316,9 +382,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
-          GoRoute(path: '/recap', builder: (_, _) => const RecapScreen()),
-          GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+          GoRoute(
+            path: '/dashboard',
+            pageBuilder: (_, state) =>
+                _desktopPage(state, const DashboardScreen()),
+          ),
+          GoRoute(
+            path: '/recap',
+            pageBuilder: (_, state) => _desktopPage(state, const RecapScreen()),
+          ),
+          GoRoute(
+            path: '/settings',
+            pageBuilder: (_, state) =>
+                _desktopPage(state, const SettingsScreen()),
+          ),
         ],
       ),
     ],
