@@ -36,11 +36,16 @@ class RecapAiSettings {
 
   bool get needsApiKey => provider != 'ollama';
 
+  bool get isFreeOnline =>
+      provider == 'gemini-free' || provider == 'openrouter-free';
+
   String get displayProvider => switch (provider) {
+    'gemini-free' => 'Gemini Free',
+    'openrouter-free' => 'OpenRouter Free',
     'openai' => 'OpenAI',
     'openrouter' => 'OpenRouter',
     'deepseek' => 'DeepSeek',
-    'ollama' => 'Ollama（本地免费）',
+    'ollama' => 'Ollama（本地）',
     _ => '自定义兼容接口',
   };
 
@@ -92,6 +97,9 @@ class RecapAiSettings {
 }
 
 const recapProviderEndpoints = <String, String>{
+  'gemini-free':
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+  'openrouter-free': 'https://openrouter.ai/api/v1/chat/completions',
   'openai': 'https://api.openai.com/v1/chat/completions',
   'openrouter': 'https://openrouter.ai/api/v1/chat/completions',
   'deepseek': 'https://api.deepseek.com/chat/completions',
@@ -99,8 +107,18 @@ const recapProviderEndpoints = <String, String>{
 };
 
 const recapProviderModels = <String, List<String>>{
+  'gemini-free': ['gemini-2.5-flash'],
+  'openrouter-free': ['openrouter/free'],
   'openai': ['gpt-5-mini', 'gpt-5-nano'],
   'openrouter': ['openai/gpt-5-mini', 'google/gemini-2.5-flash'],
   'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
   'ollama': ['qwen3:8b', 'llama3.2:3b'],
+};
+
+const recapProviderKeyEnvs = <String, String>{
+  'gemini-free': 'GEMINI_API_KEY',
+  'openrouter-free': 'OPENROUTER_API_KEY',
+  'openai': 'OPENAI_API_KEY',
+  'openrouter': 'OPENROUTER_API_KEY',
+  'deepseek': 'DEEPSEEK_API_KEY',
 };
