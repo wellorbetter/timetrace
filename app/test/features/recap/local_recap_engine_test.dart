@@ -26,9 +26,10 @@ void main() {
     expect(result.origin, RecapOrigin.local);
     expect(result.headline, contains('没有足够'));
     expect(result.summary, isNot(contains('项目')));
+    expect(result.recommendations, isNotEmpty);
   });
 
-  test('uses factual top app, comparison, and peak hour', () {
+  test('uses factual top app, comparison, peak hour, and actionable advice', () {
     final snapshot = RecapSnapshot(
       label: '今天',
       start: DateTime(2026, 8, 27),
@@ -48,8 +49,8 @@ void main() {
           idleSeconds: 0,
         ),
       ],
-      sessionCount: 14,
-      contextSwitches: 8,
+      sessionCount: 60,
+      contextSwitches: 38,
       longestActiveStreakSeconds: 90 * 60,
       peakHour: 14,
       peakHourActiveSeconds: 45 * 60,
@@ -62,6 +63,7 @@ void main() {
     expect(result.insights.join(' '), contains('14:00'));
     expect(result.insights.join(' '), contains('50%'));
     expect(result.insights.join(' '), isNot(contains('生产力评分 80')));
+    expect(result.recommendations.join(' '), contains('25–45'));
   });
 
   test('AI serialization can exclude diary text while preserving count', () {
