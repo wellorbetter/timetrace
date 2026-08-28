@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_product_screen.dart';
 import 'package:timetrace_app/src/features/recap/presentation/ai_onboarding_screen.dart';
 import 'package:timetrace_app/src/features/recap/presentation/recap_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
@@ -292,7 +292,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', pageBuilder: (_, state) => _desktopPage(state, const DashboardScreen())),
+          GoRoute(path: '/dashboard', pageBuilder: (_, state) => _desktopPage(state, const DashboardProductScreen())),
           GoRoute(path: '/recap', pageBuilder: (_, state) => _desktopPage(state, const RecapScreen())),
           GoRoute(path: '/ai-setup', pageBuilder: (_, state) => _desktopPage(state, const AiOnboardingScreen())),
           GoRoute(path: '/settings', pageBuilder: (_, state) => _desktopPage(state, const SettingsScreen())),
