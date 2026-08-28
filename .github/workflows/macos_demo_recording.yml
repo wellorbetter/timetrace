@@ -11,6 +11,10 @@ on:
       - 'app/lib/src/core/acceptance/**'
       - 'scripts/seed_acceptance_demo.py'
 
+concurrency:
+  group: demo-macos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   record-macos-demo:
     runs-on: macos-latest
@@ -18,9 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Build signed macOS release app
         run: |
@@ -83,6 +89,27 @@ jobs:
           ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/macos-render-capture.json"
 
+      - name: Pre-approve replayd capture reminder
+        run: |
+          set -euo pipefail
+          APPROVALS="$HOME/Library/Group Containers/group.com.apple.replayd/ScreenCaptureApprovals.plist"
+          mkdir -p "$(dirname "$APPROVALS")"
+
+          # GitHub runner-images uses this replayd approval to prevent the
+          # Sequoia private-window-picker reminder from stealing UI-test focus.
+          # Seed the hosted agent plus the shell/native recorder identities we
+          # invoke directly from this workflow.
+          for ACTOR in \
+            /opt/hca/hosted-compute-agent \
+            /bin/bash \
+            "$(command -v bash)" \
+            /usr/sbin/screencapture; do
+            [[ -n "$ACTOR" ]] || continue
+            defaults write "$APPROVALS" "$ACTOR" -date "3024-01-01 00:00:00 +0000"
+          done
+          killall cfprefsd 2>/dev/null || true
+          plutil -p "$APPROVALS" | tee "$RUNNER_TEMP/replayd-screen-capture-approvals.txt"
+
       - name: Record clean native macOS demo
         run: |
           set -euo pipefail
@@ -97,59 +124,6 @@ jobs:
           trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
           sleep 7
           osascript -e 'tell application "TimeTrace" to activate'
-
-          click_capture_allow() {
-            osascript <<'APPLESCRIPT'
-          tell application "System Events"
-            repeat with proc in application processes
-              try
-                repeat with win in windows of proc
-                  try
-                    if exists button "Allow" of win then
-                      click button "Allow" of win
-                      return "clicked"
-                    end if
-                    if exists button "Allow For One Month" of win then
-                      click button "Allow For One Month" of win
-                      return "clicked"
-                    end if
-                  end try
-                end repeat
-              end try
-            end repeat
-          end tell
-          return "not-found"
-          APPLESCRIPT
-          }
-
-          # Warm up Apple's recorder. macOS Sequoia can show a second prompt
-          # asking a CLI process to bypass the private window picker. Explicitly
-          # click its Allow button instead of assuming Return activates it.
-          WARMUP="$RUNNER_TEMP/macos-screen-permission-warmup.mov"
-          /usr/sbin/screencapture -v -V 4 "$WARMUP" \
-            >"$RUNNER_TEMP/macos-screen-permission.log" 2>&1 &
-          WARMUP_PID=$!
-
-          PERMISSION_CLICKED=false
-          for _ in $(seq 1 12); do
-            if [[ "$(click_capture_allow 2>/dev/null || true)" == "clicked" ]]; then
-              PERMISSION_CLICKED=true
-              break
-            fi
-            sleep 1
-          done
-
-          wait "$WARMUP_PID" || true
-          test "$PERMISSION_CLICKED" = true
-          test -s "$WARMUP"
-          rm -f "$WARMUP"
-          sleep 2
-
-          # Reject a take if the permission dialog is still present.
-          if [[ "$(click_capture_allow 2>/dev/null || true)" == "clicked" ]]; then
-            echo 'Screen-capture permission dialog was still present after warm-up.' >&2
-            exit 1
-          fi
 
           /usr/sbin/screencapture -v -V 22 -k "$RAW_VIDEO" \
             >"$RUNNER_TEMP/screencapture-macos-native.log" 2>&1 &
@@ -176,10 +150,6 @@ jobs:
           DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
           awk -v d="$DURATION" 'BEGIN { exit !(d >= 20.0 && d <= 24.5) }'
 
-          # A permissions dialog stealing focus leaves almost the whole take
-          # frozen. The walkthrough changes pages every four seconds, so a
-          # >=10s freeze means this is not a usable demo even if MP4 decoding
-          # succeeds.
           FREEZE_LOG="$RUNNER_TEMP/macos-native-freeze.log"
           ffmpeg -hide_banner -i "$VIDEO" -vf "freezedetect=n=-50dB:d=10" -an -f null - \
             > /dev/null 2>"$FREEZE_LOG" || true
@@ -214,8 +184,8 @@ jobs:
             ${{ runner.temp }}/timetrace-macos-native.mp4
             ${{ runner.temp }}/timetrace-macos-demo.log
             ${{ runner.temp }}/timetrace-macos-native.log
-            ${{ runner.temp }}/macos-screen-permission.log
             ${{ runner.temp }}/screencapture-macos-native.log
             ${{ runner.temp }}/macos-native-freeze.log
+            ${{ runner.temp }}/replayd-screen-capture-approvals.txt
             ${{ runner.temp }}/macos-render-capture.json
           if-no-files-found: warn
