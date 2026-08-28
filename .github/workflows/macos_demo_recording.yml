@@ -98,22 +98,59 @@ jobs:
           sleep 7
           osascript -e 'tell application "TimeTrace" to activate'
 
-          # macOS 15 hosted runners currently have an AVFoundation/FFmpeg
-          # permission-popup regression. Use Apple's native recorder instead.
-          # Trigger permission once before the real take, accept the default
-          # authorization action, then discard the warm-up recording.
+          click_capture_allow() {
+            osascript <<'APPLESCRIPT'
+          tell application "System Events"
+            repeat with proc in application processes
+              try
+                repeat with win in windows of proc
+                  try
+                    if exists button "Allow" of win then
+                      click button "Allow" of win
+                      return "clicked"
+                    end if
+                    if exists button "Allow For One Month" of win then
+                      click button "Allow For One Month" of win
+                      return "clicked"
+                    end if
+                  end try
+                end repeat
+              end try
+            end repeat
+          end tell
+          return "not-found"
+          APPLESCRIPT
+          }
+
+          # Warm up Apple's recorder. macOS Sequoia can show a second prompt
+          # asking a CLI process to bypass the private window picker. Explicitly
+          # click its Allow button instead of assuming Return activates it.
           WARMUP="$RUNNER_TEMP/macos-screen-permission-warmup.mov"
-          /usr/sbin/screencapture -v -V 2 "$WARMUP" \
+          /usr/sbin/screencapture -v -V 4 "$WARMUP" \
             >"$RUNNER_TEMP/macos-screen-permission.log" 2>&1 &
           WARMUP_PID=$!
-          sleep 1
-          osascript -e 'tell application "System Events" to key code 36' || true
+
+          PERMISSION_CLICKED=false
+          for _ in $(seq 1 12); do
+            if [[ "$(click_capture_allow 2>/dev/null || true)" == "clicked" ]]; then
+              PERMISSION_CLICKED=true
+              break
+            fi
+            sleep 1
+          done
+
           wait "$WARMUP_PID" || true
+          test "$PERMISSION_CLICKED" = true
+          test -s "$WARMUP"
           rm -f "$WARMUP"
           sleep 2
 
-          # Formal take. Record the real Aqua desktop, including the native
-          # macOS window chrome and pointer clicks, then transcode to MP4.
+          # Reject a take if the permission dialog is still present.
+          if [[ "$(click_capture_allow 2>/dev/null || true)" == "clicked" ]]; then
+            echo 'Screen-capture permission dialog was still present after warm-up.' >&2
+            exit 1
+          fi
+
           /usr/sbin/screencapture -v -V 22 -k "$RAW_VIDEO" \
             >"$RUNNER_TEMP/screencapture-macos-native.log" 2>&1 &
           CAPTURE_PID=$!
@@ -136,6 +173,22 @@ jobs:
             -movflags +faststart "$VIDEO"
 
           test -s "$VIDEO"
+          DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
+          awk -v d="$DURATION" 'BEGIN { exit !(d >= 20.0 && d <= 24.5) }'
+
+          # A permissions dialog stealing focus leaves almost the whole take
+          # frozen. The walkthrough changes pages every four seconds, so a
+          # >=10s freeze means this is not a usable demo even if MP4 decoding
+          # succeeds.
+          FREEZE_LOG="$RUNNER_TEMP/macos-native-freeze.log"
+          ffmpeg -hide_banner -i "$VIDEO" -vf "freezedetect=n=-50dB:d=10" -an -f null - \
+            > /dev/null 2>"$FREEZE_LOG" || true
+          if grep -q 'freeze_duration:' "$FREEZE_LOG"; then
+            cat "$FREEZE_LOG" >&2
+            echo 'Native macOS recording failed motion/interaction quality gate.' >&2
+            exit 1
+          fi
+
           ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           kill "$APP_PID" || true
           wait "$APP_PID" || true
@@ -163,5 +216,6 @@ jobs:
             ${{ runner.temp }}/timetrace-macos-native.log
             ${{ runner.temp }}/macos-screen-permission.log
             ${{ runner.temp }}/screencapture-macos-native.log
+            ${{ runner.temp }}/macos-native-freeze.log
             ${{ runner.temp }}/macos-render-capture.json
           if-no-files-found: warn
