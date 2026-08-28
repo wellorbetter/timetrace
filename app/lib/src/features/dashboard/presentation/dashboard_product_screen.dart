@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart' as diary;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
