@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -103,6 +104,10 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
   Widget build(BuildContext context) {
     final media = MediaQuery.sizeOf(context);
     final colors = Theme.of(context).colorScheme;
+    final contentWidth = math.max(
+      0.0,
+      math.min(700.0, media.width - 80),
+    );
     return AlertDialog(
       key: const ValueKey('recap-ai-settings-dialog'),
       insetPadding: const EdgeInsets.all(TimeTraceSpace.md),
@@ -138,11 +143,9 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
           const Expanded(child: Text('AI Recap 设置')),
         ],
       ),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 700,
-          maxHeight: media.height * 0.72,
-        ),
+      content: SizedBox(
+        width: contentWidth,
+        height: media.height * 0.72,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -574,13 +577,14 @@ class _CredentialSection extends StatelessWidget {
     final command = platform == 'windows'
         ? 'setx $variable "sk-..."'
         : 'export $variable="sk-..."';
-    return Container(
+    return Material(
       key: const ValueKey('recap-ai-credential-section'),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        border: Border.all(color: colors.outlineVariant),
+      color: colors.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
+        side: BorderSide(color: colors.outlineVariant),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
