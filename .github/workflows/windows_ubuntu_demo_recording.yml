@@ -1,0 +1,208 @@
+name: Windows Ubuntu Demo Recording
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/windows_ubuntu_demo_recording.yml'
+      - 'app/lib/src/core/acceptance/**'
+      - 'app/lib/src/core/platform_paths.dart'
+      - 'scripts/seed_acceptance_demo.py'
+      - 'scripts/build_linux.sh'
+      - 'crates/core/src/engine/idle_linux.rs'
+      - 'crates/core/src/engine/window_linux.rs'
+      - 'crates/core/src/engine/startup_linux.rs'
+      - 'crates/tui/src/main.rs'
+
+jobs:
+  record-ubuntu-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Linux desktop recording dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev \
+            libayatana-appindicator3-dev libxss-dev \
+            xvfb openbox ffmpeg dbus-x11
+
+      - name: Build Ubuntu release app
+        run: |
+          chmod +x scripts/build_linux.sh
+          ./scripts/build_linux.sh
+
+      - name: Seed disposable Ubuntu demo data
+        run: |
+          DEMO_DB="$HOME/.config/TimeTrace/time.db"
+          python3 scripts/seed_acceptance_demo.py --db "$DEMO_DB"
+          test -s "$DEMO_DB"
+
+      - name: Record deterministic Ubuntu Flutter demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+
+          Xvfb :99 -screen 0 1440x900x24 -ac +extension RANDR +extension RENDER +extension XFIXES &
+          XVFB_PID=$!
+          sleep 2
+          openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+          OPENBOX_PID=$!
+          eval "$(dbus-launch --sh-syntax)"
+
+          BUNDLE_DIR="$(find app/build/linux -type d -path '*/release/bundle' -print -quit)"
+          test -n "$BUNDLE_DIR"
+          APP_BIN="$(find "$BUNDLE_DIR" -maxdepth 1 -type f -executable -print -quit)"
+          test -n "$APP_BIN"
+
+          FRAME_DIR="$RUNNER_TEMP/timetrace-ubuntu-frames"
+          VIDEO="$RUNNER_TEMP/timetrace-ubuntu-demo.mp4"
+          mkdir -p "$FRAME_DIR"
+
+          TIMETRACE_ACCEPTANCE_CAPTURE_DIR="$FRAME_DIR" \
+            "$APP_BIN" >"$RUNNER_TEMP/timetrace-ubuntu-demo.log" 2>&1 &
+          APP_PID=$!
+
+          for _ in $(seq 1 80); do
+            if [[ -f "$FRAME_DIR/capture.done" ]]; then
+              break
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/timetrace-ubuntu-demo.log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          test -f "$FRAME_DIR/capture.done"
+          test -f "$FRAME_DIR/capture.json"
+          FRAME_COUNT="$(find "$FRAME_DIR" -name 'frame-*.png' | wc -l | tr -d ' ')"
+          test "$FRAME_COUNT" -ge 180
+
+          ffmpeg -y -loglevel warning \
+            -framerate 10 -i "$FRAME_DIR/frame-%05d.png" \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" \
+            -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p \
+            -movflags +faststart "$VIDEO"
+
+          kill "$APP_PID" || true
+          wait "$APP_PID" || true
+          kill "$OPENBOX_PID" || true
+          kill "$XVFB_PID" || true
+
+          test -s "$VIDEO"
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          cp "$FRAME_DIR/capture.json" "$RUNNER_TEMP/ubuntu-render-capture.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TimeTrace-Ubuntu-Demo
+          path: |
+            ${{ runner.temp }}/timetrace-ubuntu-demo.mp4
+            ${{ runner.temp }}/timetrace-ubuntu-demo.log
+            ${{ runner.temp }}/ubuntu-render-capture.json
+          if-no-files-found: warn
+
+  record-windows-demo:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Windows release app
+        shell: pwsh
+        run: |
+          cargo build -p timetrace-bridge --release
+          Push-Location app
+          flutter pub get
+          flutter build windows --release
+          Pop-Location
+          $bundle = Get-ChildItem app/build/windows -Recurse -Directory |
+            Where-Object { $_.Name -eq 'Release' -and (Test-Path (Join-Path $_.FullName 'timetrace_app.exe')) } |
+            Select-Object -First 1
+          if (-not $bundle) { throw 'Windows release bundle not found' }
+          Copy-Item target/release/timetrace_bridge.dll (Join-Path $bundle.FullName 'timetrace_bridge.dll') -Force
+          Set-Content -Path "$env:RUNNER_TEMP/windows-demo-bundle.txt" -Value $bundle.FullName
+
+      - name: Ensure FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg -y --no-progress
+          }
+          ffmpeg -version | Select-Object -First 1
+
+      - name: Seed disposable Windows demo data
+        shell: pwsh
+        run: |
+          $db = Join-Path $env:APPDATA 'TimeTrace\time.db'
+          python scripts/seed_acceptance_demo.py --db $db
+          if (-not (Test-Path $db)) { throw 'demo database missing' }
+
+      - name: Record deterministic Windows Flutter demo
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Get-Content "$env:RUNNER_TEMP/windows-demo-bundle.txt"
+          $exe = Join-Path $bundle 'timetrace_app.exe'
+          $frameDir = Join-Path $env:RUNNER_TEMP 'timetrace-windows-frames'
+          $video = Join-Path $env:RUNNER_TEMP 'timetrace-windows-demo.mp4'
+          New-Item -ItemType Directory -Path $frameDir -Force | Out-Null
+
+          $env:TIMETRACE_ACCEPTANCE_CAPTURE_DIR = $frameDir
+          $app = Start-Process $exe -WorkingDirectory $bundle -RedirectStandardOutput "$env:RUNNER_TEMP/timetrace-windows-demo.log" -RedirectStandardError "$env:RUNNER_TEMP/timetrace-windows-demo.err.log" -PassThru
+
+          $done = Join-Path $frameDir 'capture.done'
+          for ($i = 0; $i -lt 80; $i++) {
+            if (Test-Path $done) { break }
+            if ($app.HasExited) {
+              Get-Content "$env:RUNNER_TEMP/timetrace-windows-demo.err.log" -ErrorAction SilentlyContinue
+              throw "TimeTrace exited with $($app.ExitCode)"
+            }
+            Start-Sleep -Seconds 1
+            $app.Refresh()
+          }
+
+          if (-not (Test-Path $done)) { throw 'capture.done missing' }
+          $captureJson = Join-Path $frameDir 'capture.json'
+          if (-not (Test-Path $captureJson)) { throw 'capture.json missing' }
+          $frames = @(Get-ChildItem $frameDir -Filter 'frame-*.png')
+          if ($frames.Count -lt 180) { throw "Only $($frames.Count) frames captured" }
+
+          & ffmpeg -y -loglevel warning `
+            -framerate 10 -i (Join-Path $frameDir 'frame-%05d.png') `
+            -vf 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2' `
+            -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p `
+            -movflags +faststart $video
+          if ($LASTEXITCODE -ne 0) { throw 'ffmpeg encode failed' }
+
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          if (-not (Test-Path $video)) { throw 'Windows demo video missing' }
+          & ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 $video
+          Copy-Item $captureJson "$env:RUNNER_TEMP/windows-render-capture.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TimeTrace-Windows-Demo
+          path: |
+            ${{ runner.temp }}/timetrace-windows-demo.mp4
+            ${{ runner.temp }}/timetrace-windows-demo.log
+            ${{ runner.temp }}/timetrace-windows-demo.err.log
+            ${{ runner.temp }}/windows-render-capture.json
+          if-no-files-found: warn

@@ -24,6 +24,7 @@ dependencies:
   file_picker: ^11.0.3
   lunar: ^1.7.8
   flutter_markdown: ^0.7.7+1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -38,6 +38,8 @@ pub use engine::window_win32::Win32WindowResolver;
 pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};
 #[cfg(target_os = "macos")]
 pub use engine::startup_macos::{is_self_start_enabled, set_self_start_enabled};
+#[cfg(target_os = "linux")]
+pub use engine::startup_linux::{is_self_start_enabled, set_self_start_enabled};
 
 pub use error::AppError;
 pub use storage::SqliteStore;

@@ -12,20 +12,25 @@ concurrency:
 jobs:
   rust-test:
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
       - run: cargo build --workspace
 
   flutter-windows:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
       - run: cd app && flutter pub get
       - run: cd app && flutter analyze --no-fatal-infos
       - run: cd app && flutter test
@@ -33,12 +38,15 @@ jobs:
 
   macos-app:
     runs-on: macos-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
       - name: Rust core and bridge tests
         run: cargo test -p timetrace-core -p timetrace-bridge
       - name: Validate self-use installer
@@ -49,6 +57,7 @@ jobs:
           ./scripts/build_macos.sh
       - name: Smoke launch macOS app
         run: |
+          set -euo pipefail
           APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
@@ -56,6 +65,7 @@ jobs:
           test -x "$APP_BIN"
           "$APP_BIN" >"$RUNNER_TEMP/timetrace-smoke.log" 2>&1 &
           PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
           sleep 8
           if ! kill -0 "$PID" 2>/dev/null; then
             echo "TimeTrace exited during smoke launch" >&2
@@ -78,6 +88,7 @@ jobs:
 
           kill "$PID" || true
           wait "$PID" || true
+          trap - EXIT
       - name: Package macOS self-use installer
         run: |
           APP_PATH="$(find app/build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"

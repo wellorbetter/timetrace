@@ -40,6 +40,22 @@ class DesktopBridge {
       return 'libtimetrace_bridge.dylib';
     }
 
+    if (Platform.isLinux) {
+      final executable = File(Platform.resolvedExecutable);
+      final bundled = File(
+        '${executable.parent.path}/lib/libtimetrace_bridge.so',
+      );
+      if (bundled.existsSync()) return bundled.path;
+
+      for (final candidate in [
+        File('../target/debug/libtimetrace_bridge.so'),
+        File('../target/release/libtimetrace_bridge.so'),
+      ]) {
+        if (candidate.existsSync()) return candidate.absolute.path;
+      }
+      return 'libtimetrace_bridge.so';
+    }
+
     return 'libtimetrace_bridge.so';
   }
 }

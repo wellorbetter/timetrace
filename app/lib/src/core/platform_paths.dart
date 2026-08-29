@@ -13,8 +13,12 @@ class PlatformPaths {
       final home = Platform.environment['HOME'] ?? '.';
       return '$home/Library/Application Support/TimeTrace';
     }
+
+    // Match Rust `dirs::config_dir()` on Linux so the UI log/preferences,
+    // diary assets, and the Rust-owned database all live under one TimeTrace
+    // root instead of splitting state across ~/.config and ~/.local/share.
     final home = Platform.environment['HOME'] ?? '.';
-    final root = Platform.environment['XDG_DATA_HOME'] ?? '$home/.local/share';
+    final root = Platform.environment['XDG_CONFIG_HOME'] ?? '$home/.config';
     return '$root/TimeTrace';
   }
 

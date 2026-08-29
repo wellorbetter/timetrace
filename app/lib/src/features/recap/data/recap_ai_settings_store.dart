@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:timetrace_app/src/core/platform_paths.dart';
+import 'package:timetrace_app/src/features/recap/data/recap_secret_store.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 
 class RecapAiSettingsStore {
@@ -15,7 +16,9 @@ class RecapAiSettingsStore {
       if (!await file.exists()) return const RecapAiSettings();
       final raw = jsonDecode(await file.readAsString());
       if (raw is! Map<String, dynamic>) return const RecapAiSettings();
-      return RecapAiSettings.fromJson(raw);
+      final settings = RecapAiSettings.fromJson(raw);
+      final secret = await RecapSecretStore.load();
+      return settings.copyWith(runtimeApiKey: secret);
     } catch (_) {
       return const RecapAiSettings();
     }
@@ -31,5 +34,10 @@ class RecapAiSettingsStore {
     );
     if (await file.exists()) await file.delete();
     await temp.rename(path);
+
+    // The key never enters recap_ai.json. Platform credential protection is
+    // best-effort: environment variables remain a supported fallback on hosts
+    // where no native secret backend is available.
+    await RecapSecretStore.save(settings.runtimeApiKey.trim());
   }
 }
