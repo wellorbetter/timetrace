@@ -60,6 +60,18 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
     state = await AsyncValue.guard(() => _load(selection, settings));
   }
 
+  /// Generate a recap for a background schedule without mutating the user's
+  /// currently selected dashboard range. The generated result becomes the
+  /// latest recap so opening the Recap page after a notification shows exactly
+  /// what the scheduler produced.
+  Future<RecapState> generateScheduled(DateRange range) async {
+    final settings =
+        ref.read(recapAiSettingsProvider).value ?? const RecapAiSettings();
+    final generated = await _load(DateRangeSelection(range), settings);
+    state = AsyncData(generated);
+    return generated;
+  }
+
   Future<RecapState> _load(
     DateRangeSelection selection,
     RecapAiSettings settings,
