@@ -51,12 +51,23 @@ class RecapScheduleSettings {
 
   factory RecapScheduleSettings.fromJson(Map<String, Object?> json) {
     final cadenceName = json['cadence'] as String?;
-    final cadence = RecapScheduleCadence.values.where((e) => e.name == cadenceName).firstOrNull ?? RecapScheduleCadence.off;
+    var cadence = RecapScheduleCadence.off;
+    for (final candidate in RecapScheduleCadence.values) {
+      if (candidate.name == cadenceName) {
+        cadence = candidate;
+        break;
+      }
+    }
+    final hour = ((json['hour'] as num?)?.toInt() ?? 22).clamp(0, 23).toInt();
+    final minute = ((json['minute'] as num?)?.toInt() ?? 0).clamp(0, 59).toInt();
+    final weekday = ((json['weekday'] as num?)?.toInt() ?? DateTime.sunday)
+        .clamp(DateTime.monday, DateTime.sunday)
+        .toInt();
     return RecapScheduleSettings(
       cadence: cadence,
-      hour: (json['hour'] as num?)?.toInt().clamp(0, 23) ?? 22,
-      minute: (json['minute'] as num?)?.toInt().clamp(0, 59) ?? 0,
-      weekday: (json['weekday'] as num?)?.toInt().clamp(DateTime.monday, DateTime.sunday) ?? DateTime.sunday,
+      hour: hour,
+      minute: minute,
+      weekday: weekday,
       notify: json['notify'] as bool? ?? true,
       lastRunKey: json['last_run_key'] as String?,
     );
