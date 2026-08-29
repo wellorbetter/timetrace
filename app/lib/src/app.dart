@@ -11,6 +11,7 @@ import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
+import 'package:timetrace_app/src/features/recap/application/scheduled_recap_service.dart';
 import 'package:window_manager/window_manager.dart';
 
 class TimetraceApp extends ConsumerStatefulWidget {
@@ -23,10 +24,12 @@ class TimetraceApp extends ConsumerStatefulWidget {
 class _TimetraceAppState extends ConsumerState<TimetraceApp> with WindowListener {
   final GlobalKey _acceptanceBoundaryKey = GlobalKey();
   bool _acceptanceScheduled = false;
+  late final ScheduledRecapService _scheduledRecap;
 
   @override
   void initState() {
     super.initState();
+    _scheduledRecap = ScheduledRecapService(ref);
     _setupDesktopWindow();
   }
 
@@ -40,10 +43,18 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp> with WindowListener
 
     final tray = TrayService(ref);
     await tray.init();
+    _scheduledRecap.start();
     final config = ref.read(apiProvider).getConfig();
     if (config.startMinimized || Platform.executableArguments.contains('--minimized')) {
       await windowManager.hide();
     }
+  }
+
+  @override
+  void dispose() {
+    _scheduledRecap.dispose();
+    windowManager.removeListener(this);
+    super.dispose();
   }
 
   @override
