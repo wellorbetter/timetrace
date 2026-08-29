@@ -2,6 +2,7 @@
 
 mod api;
 pub mod frb_generated;
+mod live_activity;
 
 #[cfg(target_os = "windows")]
 pub mod icons;

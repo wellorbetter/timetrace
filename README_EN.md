@@ -27,6 +27,8 @@
 - **Usage stats** — tracks foreground app active time; auto-detects idle, lock screen and sleep, excluded from active time
 - **App icons** — resolves the foreground app and its icon in real time; lives in the system tray with a quick right-click menu
 - **Dashboard** — bar chart / donut chart / 24h hourly distribution / daily summary / app distribution carousel, synced with the calendar
+- **AI Recap** — starts with deterministic local facts and can optionally enhance the prose with an OpenAI-compatible model; models cannot rewrite factual metrics
+- **Nowline** — turns live activity into a lyrics-like semantic stream with a transparent always-on-top surface, fading history, and click-through mode—locally and without live AI token spend
 - **Journal** — social-feed style diary: Markdown editing, image albums, auto-saved drafts, grouped & collapsible by day
 - **Settings** — monitoring parameters, excluded apps, startup/minimize behavior, and persistent theme/font/background/dashboard preferences
 - **Background & app picker** — local background images with opacity control, running-process selection, and executable icons
@@ -90,7 +92,9 @@ Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished wit
 
 ## Privacy
 
-All data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`); nothing is uploaded.
+Activity data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`), and Nowline makes no network requests. A structured factual snapshot is sent only when the user explicitly configures and enables AI Recap; diary text requires its own opt-in.
+
+See [docs/NOWLINE.md](docs/NOWLINE.md) for Nowline's architecture and privacy boundary.
 
 ## License
 

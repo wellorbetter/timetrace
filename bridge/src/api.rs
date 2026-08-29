@@ -167,7 +167,10 @@ impl TimeTraceApi {
         let config = AppConfig::load();
         let initially_paused = !config.auto_start_tracking;
         let excluded_apps = config.excluded_apps.clone();
-        let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
+        crate::live_activity::reset(initially_paused);
+        let sink: Box<dyn EventSink> = Box::new(crate::live_activity::LiveActivitySink::new(
+            SessionAggregator::new(db.clone()),
+        ));
         let handle = run_monitor_loop(
             PlatformWindowResolver::new(),
             PlatformIdleDetector::new(),
@@ -195,6 +198,7 @@ impl TimeTraceApi {
             if let Some(h) = guard.as_ref() {
                 if paused { h.pause(); } else { h.resume(); }
                 self.paused.store(paused, std::sync::atomic::Ordering::SeqCst);
+                crate::live_activity::set_paused(paused);
                 tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
             }
         }
