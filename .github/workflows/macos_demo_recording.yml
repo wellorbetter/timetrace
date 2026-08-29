@@ -95,15 +95,14 @@ jobs:
           APPROVALS="$HOME/Library/Group Containers/group.com.apple.replayd/ScreenCaptureApprovals.plist"
           mkdir -p "$(dirname "$APPROVALS")"
 
-          # GitHub runner-images uses this replayd approval to prevent the
-          # Sequoia private-window-picker reminder from stealing UI-test focus.
-          # Seed the hosted agent plus the shell/native recorder identities we
-          # invoke directly from this workflow.
+          # GitHub runner-images uses replayd approvals to prevent the private
+          # window picker reminder from stealing focus during UI automation.
           for ACTOR in \
             /opt/hca/hosted-compute-agent \
             /bin/bash \
             "$(command -v bash)" \
-            /usr/sbin/screencapture; do
+            /usr/sbin/screencapture \
+            "$(command -v ffmpeg)"; do
             [[ -n "$ACTOR" ]] || continue
             defaults write "$APPROVALS" "$ACTOR" -date "3024-01-01 00:00:00 +0000"
           done
@@ -129,6 +128,7 @@ jobs:
             >"$RUNNER_TEMP/screencapture-macos-native.log" 2>&1 &
           CAPTURE_PID=$!
 
+          # Drive the real application while the native screen recorder runs.
           sleep 2
           osascript -e 'tell application "System Events" to keystroke "2" using command down'
           sleep 4
@@ -141,14 +141,28 @@ jobs:
           wait "$CAPTURE_PID"
           test -s "$RAW_VIDEO"
 
-          ffmpeg -y -loglevel warning -i "$RAW_VIDEO" \
-            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" \
+          # screencapture on recent hosted macOS images can emit an occasional
+          # packet with broken MOV PTS/DTS ordering. Generate clean timestamps,
+          # discard malformed packets, and force a stable CFR MP4 instead of
+          # allowing a partially written artifact to count as success.
+          ffmpeg -y -loglevel warning \
+            -fflags +genpts+discardcorrupt -err_detect ignore_err -i "$RAW_VIDEO" \
+            -map 0:v:0 -an \
+            -vf "fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setpts=N/(30*TB)" \
             -c:v libx264 -crf 19 -preset medium -pix_fmt yuv420p \
-            -movflags +faststart "$VIDEO"
+            -movflags +faststart -avoid_negative_ts make_zero "$VIDEO"
 
           test -s "$VIDEO"
           DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
           awk -v d="$DURATION" 'BEGIN { exit !(d >= 20.0 && d <= 24.5) }'
+
+          # A nominal-duration container is not enough: require enough decoded
+          # frames and make sure decoded presentation timestamps reach EOF.
+          DECODED_FRAMES="$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "$VIDEO")"
+          test -n "$DECODED_FRAMES"
+          test "$DECODED_FRAMES" -ge 540
+          LAST_PTS="$(ffprobe -v error -select_streams v:0 -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 "$VIDEO" | tail -n1)"
+          awk -v last="$LAST_PTS" -v d="$DURATION" 'BEGIN { exit !(last >= d - 0.75) }'
 
           FREEZE_LOG="$RUNNER_TEMP/macos-native-freeze.log"
           ffmpeg -hide_banner -i "$VIDEO" -vf "freezedetect=n=-50dB:d=10" -an -f null - \
@@ -159,7 +173,21 @@ jobs:
             exit 1
           fi
 
-          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 "$VIDEO"
+          # freezedetect may only emit freeze_start when a freeze runs through
+          # EOF. Treat an unclosed >=10s freeze as a failure as well.
+          LAST_FREEZE_START="$(grep 'freeze_start:' "$FREEZE_LOG" | tail -n1 | sed -E 's/.*freeze_start: ([0-9.]+).*/\1/' || true)"
+          LAST_FREEZE_END="$(grep 'freeze_end:' "$FREEZE_LOG" | tail -n1 | sed -E 's/.*freeze_end: ([0-9.]+).*/\1/' || true)"
+          if [[ -n "$LAST_FREEZE_START" ]]; then
+            if [[ -z "$LAST_FREEZE_END" ]] || awk -v s="$LAST_FREEZE_START" -v e="$LAST_FREEZE_END" 'BEGIN { exit !(s > e) }'; then
+              awk -v s="$LAST_FREEZE_START" -v d="$DURATION" 'BEGIN { exit !((d - s) >= 10.0) }' && {
+                cat "$FREEZE_LOG" >&2
+                echo 'Native macOS recording has an unclosed freeze through EOF.' >&2
+                exit 1
+              }
+            fi
+          fi
+
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate,nb_frames -show_entries format=duration,size -of default=nw=1 "$VIDEO"
           kill "$APP_PID" || true
           wait "$APP_PID" || true
           trap - EXIT
