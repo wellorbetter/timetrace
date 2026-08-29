@@ -3,11 +3,19 @@ name = "timetrace-gui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "TimeTrace GUI — native desktop window"
+description = "TimeTrace GUI — legacy Windows native desktop window"
+
+[features]
+# The egui frontend predates the Flutter desktop app and still depends on
+# Win32-only icon/startup integrations. Keep it opt-in so cross-platform
+# workspace tests validate shared Rust code instead of compiling a Windows
+# compatibility frontend on Linux/macOS.
+legacy-windows-gui = []
 
 [[bin]]
 name = "tt-gui"
 path = "src/main.rs"
+required-features = ["legacy-windows-gui"]
 
 [dependencies]
 timetrace-core = { path = "../core" }
