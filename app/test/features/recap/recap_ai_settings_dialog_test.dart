@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
@@ -20,7 +22,10 @@ void main() {
     expect(find.text('默认'), findsOneWidget);
     expect(find.text('未配置'), findsOneWidget);
     expect(find.byKey(const ValueKey('recap-ai-key-guide')), findsOneWidget);
-    expect(find.textContaining('setx DEEPSEEK_API_KEY'), findsOneWidget);
+    final command = Platform.isWindows
+        ? 'setx DEEPSEEK_API_KEY'
+        : 'export DEEPSEEK_API_KEY';
+    expect(find.textContaining(command), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
