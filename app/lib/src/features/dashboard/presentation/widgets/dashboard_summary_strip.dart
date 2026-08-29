@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_preview_card.dart';
