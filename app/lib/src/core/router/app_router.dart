@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_product_screen.dart';
 import 'package:timetrace_app/src/features/recap/presentation/ai_onboarding_screen.dart';
 import 'package:timetrace_app/src/features/recap/presentation/recap_product_screen.dart';
+import 'package:timetrace_app/src/features/recap/presentation/recap_schedule_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
 class AppShell extends ConsumerWidget {
@@ -67,11 +68,20 @@ class AppShell extends ConsumerWidget {
                           ),
                           const SizedBox(height: TimeTraceSpace.xxs),
                           _SidebarDestination(
+                            icon: Icons.schedule_outlined,
+                            selectedIcon: Icons.schedule_rounded,
+                            label: '自动回顾',
+                            shortcut: '',
+                            selected: selectedIndex == 2,
+                            onTap: () => context.go('/recap-schedule'),
+                          ),
+                          const SizedBox(height: TimeTraceSpace.xxs),
+                          _SidebarDestination(
                             icon: Icons.key_outlined,
                             selectedIcon: Icons.key_rounded,
                             label: 'AI 接入',
                             shortcut: '',
-                            selected: selectedIndex == 2,
+                            selected: selectedIndex == 3,
                             onTap: () => context.go('/ai-setup'),
                           ),
                           const SizedBox(height: TimeTraceSpace.xxs),
@@ -80,7 +90,7 @@ class AppShell extends ConsumerWidget {
                             selectedIcon: Icons.tune_rounded,
                             label: '设置',
                             shortcut: useMeta ? '⌘,' : 'Ctrl+,',
-                            selected: selectedIndex == 3,
+                            selected: selectedIndex == 4,
                             onTap: () => context.go('/settings'),
                           ),
                           const Spacer(),
@@ -250,8 +260,9 @@ int _indexOf(BuildContext context) {
   return switch (location) {
     '/dashboard' => 0,
     '/recap' => 1,
-    '/ai-setup' => 2,
-    '/settings' => 3,
+    '/recap-schedule' => 2,
+    '/ai-setup' => 3,
+    '/settings' => 4,
     _ => 0,
   };
 }
@@ -294,6 +305,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/dashboard', pageBuilder: (_, state) => _desktopPage(state, const DashboardProductScreen())),
           GoRoute(path: '/recap', pageBuilder: (_, state) => _desktopPage(state, const RecapProductScreen())),
+          GoRoute(path: '/recap-schedule', pageBuilder: (_, state) => _desktopPage(state, const RecapScheduleScreen())),
           GoRoute(path: '/ai-setup', pageBuilder: (_, state) => _desktopPage(state, const AiOnboardingScreen())),
           GoRoute(path: '/settings', pageBuilder: (_, state) => _desktopPage(state, const SettingsScreen())),
         ],
