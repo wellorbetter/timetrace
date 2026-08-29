@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
+import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_models.dart';
 import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_ai_settings_dialog.dart';
 import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
