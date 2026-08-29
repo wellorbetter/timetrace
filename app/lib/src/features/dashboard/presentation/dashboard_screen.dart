@@ -10,7 +10,8 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart' as diary;
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart'
+    as diary;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
@@ -119,7 +120,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
 
-    final delta = (realIdx - _carouselIndex + pageCount) % pageCount;
+    var delta = realIdx - _carouselIndex;
+    if (delta > pageCount / 2) delta -= pageCount;
+    if (delta < -pageCount / 2) delta += pageCount;
     final target = _carouselAbs + delta;
     if (target == _carouselAbs) return;
 
@@ -239,64 +242,79 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     required List<AppUsageItem> apps,
   }) {
     final Widget page = switch (key) {
-      'bar' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : AppChartSection(
-              apps: apps,
-              selected: _selected,
-              onSelect: (i) {
-                _selectApp(i);
-                final appsIdx = order.indexOf('apps');
-                if (appsIdx >= 0) {
-                  _goToReal(appsIdx);
-                  _scrollToRow(i);
-                }
-              },
-              tall: true,
-            ),
-      'pie' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : PieChartCard(apps: apps),
-      'hourly' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : HourlyChartCard(
-              date: day,
-              apps: apps,
-              selectedName: _selected != null && _selected! < apps.length
-                  ? apps[_selected!].appName
-                  : null,
-              onSelectApp: _selectAppByName,
-              onClearSelected: () {
-                if (_selected != null) _selectApp(_selected!);
-              },
-            ),
+      'bar' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : AppChartSection(
+                apps: apps,
+                selected: _selected,
+                onSelect: (i) {
+                  _selectApp(i);
+                  final appsIdx = order.indexOf('apps');
+                  if (appsIdx >= 0) {
+                    _goToReal(appsIdx);
+                    _scrollToRow(i);
+                  }
+                },
+                tall: true,
+              ),
+      'pie' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : PieChartCard(
+                apps: apps,
+                selectedIndex: _selected,
+                onSelectApp: (i) {
+                  if (_selected != i) _selectApp(i);
+                  final appsIdx = order.indexOf('apps');
+                  if (appsIdx >= 0) {
+                    _goToReal(appsIdx, animate: true);
+                    _scrollToRow(i);
+                  }
+                },
+              ),
+      'hourly' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : HourlyChartCard(
+                date: day,
+                apps: apps,
+                selectedName: _selected != null && _selected! < apps.length
+                    ? apps[_selected!].appName
+                    : null,
+                onSelectApp: _selectAppByName,
+                onClearSelected: () {
+                  if (_selected != null) _selectApp(_selected!);
+                },
+              ),
       'summary' => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
-          child: Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(TimeTraceSpace.sm),
-              child: DaySummaryPanel(date: day),
-            ),
+        padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(TimeTraceSpace.sm),
+            child: DaySummaryPanel(date: day),
           ),
         ),
-      'apps' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TimeTraceSpace.xxs,
-              ),
-              child: SingleChildScrollView(
-                child: AppListSection(
-                  apps: apps,
-                  selected: _selected,
-                  pages: _pages,
-                  loading: _loadingPages,
-                  onSelect: (i) => _selectApp(i, fromAppsPage: true),
-                  rowKeys: _rowKeys,
+      ),
+      'apps' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TimeTraceSpace.xxs,
+                ),
+                child: SingleChildScrollView(
+                  child: AppListSection(
+                    apps: apps,
+                    selected: _selected,
+                    pages: _pages,
+                    loading: _loadingPages,
+                    onSelect: (i) => _selectApp(i, fromAppsPage: true),
+                    rowKeys: _rowKeys,
+                  ),
                 ),
               ),
-            ),
       _ => const SizedBox.shrink(),
     };
 
@@ -317,11 +335,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.insights_outlined,
-            size: 34,
-            color: scheme.outlineVariant,
-          ),
+          Icon(Icons.insights_outlined, size: 34, color: scheme.outlineVariant),
           const SizedBox(height: TimeTraceSpace.xs),
           Text(
             text,
@@ -423,7 +437,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 LayoutBuilder(
                   builder: (context, innerConstraints) {
-                    final narrow = innerConstraints.maxWidth <
+                    final narrow =
+                        innerConstraints.maxWidth <
                         TimeTraceLayout.compactBreakpoint;
                     final order = ref.watch(dashboardOrderProvider);
                     final pageCount = order.length;
@@ -479,32 +494,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         const SizedBox(height: TimeTraceSpace.xs),
                         ValueListenableBuilder<int>(
                           valueListenable: _carouselDot,
-                          builder: (context, dot, _) => Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              for (var i = 0; i < pageCount; i++)
-                                GestureDetector(
-                                  onTap: () => _goToReal(i, animate: true),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: TimeTraceSpace.xxs,
-                                      vertical: TimeTraceSpace.xxs,
-                                    ),
-                                    child: AnimatedContainer(
-                                      duration: TimeTraceMotion.fast,
-                                      curve: TimeTraceMotion.standard,
-                                      width: dot == i ? 18 : 7,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: dot == i
-                                            ? scheme.primary
-                                            : scheme.outlineVariant,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          builder: (context, dot, _) => _CarouselIndicator(
+                            order: order,
+                            selectedIndex: dot,
+                            onSelected: (i) => _goToReal(i, animate: true),
                           ),
                         ),
                       ],
@@ -600,6 +593,82 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ),
         );
       },
+    );
+  }
+}
+
+class _CarouselIndicator extends StatelessWidget {
+  const _CarouselIndicator({
+    required this.order,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final List<String> order;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (order.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final safeIndex = selectedIndex.clamp(0, order.length - 1).toInt();
+    final currentLabel = kViews[order[safeIndex]] ?? '数据视图';
+
+    return Semantics(
+      liveRegion: true,
+      label: '当前轮播视图：$currentLabel，${safeIndex + 1}/${order.length}',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 58,
+            child: Text(
+              currentLabel,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: TimeTraceSpace.xs),
+          for (var i = 0; i < order.length; i++)
+            Semantics(
+              button: true,
+              selected: safeIndex == i,
+              label: '切换到${kViews[order[i]] ?? '数据视图'}',
+              child: Tooltip(
+                message: kViews[order[i]] ?? '数据视图',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => onSelected(i),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TimeTraceSpace.xxs,
+                      vertical: TimeTraceSpace.xs,
+                    ),
+                    child: AnimatedContainer(
+                      duration: TimeTraceMotion.fast,
+                      curve: TimeTraceMotion.standard,
+                      width: safeIndex == i ? 18 : 7,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: safeIndex == i
+                            ? scheme.primary
+                            : scheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
