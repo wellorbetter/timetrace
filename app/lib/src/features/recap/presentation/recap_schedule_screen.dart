@@ -37,7 +37,7 @@ class RecapScheduleScreen extends ConsumerWidget {
                 Text(
                   '让 TimeTrace 主动给你回顾',
                   style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w650,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.35,
                   ),
                 ),
