@@ -15,6 +15,61 @@ class RecapAiAttempt {
 class RecapAiClient {
   const RecapAiClient();
 
+  /// Verifies only the configured endpoint and API key.
+  ///
+  /// The request contains no TimeTrace usage facts or diary text. A null
+  /// result means the provider accepted the request; otherwise the returned
+  /// message is safe to render directly in the settings dialog.
+  Future<String?> testConnection(RecapAiSettings settings) async {
+    if (!settings.isConfigured) return '请先选择模型并完成服务配置。';
+    final keyName = settings.apiKeyEnv.trim();
+    final apiKey = keyName.isEmpty ? null : Platform.environment[keyName];
+    if (keyName.isNotEmpty && (apiKey == null || apiKey.trim().isEmpty)) {
+      return '未检测到环境变量 $keyName，请配置后重启 TimeTrace。';
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12);
+    try {
+      final request = await client
+          .postUrl(Uri.parse(settings.endpoint.trim()))
+          .timeout(const Duration(seconds: 15));
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (apiKey != null && apiKey.isNotEmpty) {
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $apiKey');
+      }
+      request.write(
+        jsonEncode({
+          'model': settings.model.trim(),
+          'temperature': 0,
+          'max_tokens': 8,
+          'messages': const [
+            {'role': 'user', 'content': 'Reply with OK.'},
+          ],
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
+      await response.drain<void>();
+      if (response.statusCode >= 200 && response.statusCode < 300) return null;
+      return switch (response.statusCode) {
+        401 || 403 => 'API Key 未通过验证，请检查后重试。',
+        429 => '服务请求较多，请稍后再试。',
+        _ => '服务返回 ${response.statusCode}，请检查 Endpoint 与模型名。',
+      };
+    } on TimeoutException {
+      return '连接超时，请检查网络后重试。';
+    } on FormatException {
+      return 'Endpoint 格式不正确，请检查后重试。';
+    } catch (_) {
+      return '暂时无法连接模型服务，请检查网络与配置。';
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<RecapAiAttempt> enhance({
     required RecapResult local,
     required RecapAiSettings settings,
@@ -24,16 +79,16 @@ class RecapAiClient {
     final keyName = settings.apiKeyEnv.trim();
     final apiKey = keyName.isEmpty ? null : Platform.environment[keyName];
     if (keyName.isNotEmpty && (apiKey == null || apiKey.trim().isEmpty)) {
-      return RecapAiAttempt(
-        result: local,
-        error: '未找到环境变量 $keyName，已使用本地回顾。',
-      );
+      return RecapAiAttempt(result: local, error: '未找到环境变量 $keyName，已使用本地回顾。');
     }
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12);
     try {
       final uri = Uri.parse(settings.endpoint.trim());
-      final request = await client.postUrl(uri).timeout(const Duration(seconds: 15));
+      final request = await client
+          .postUrl(uri)
+          .timeout(const Duration(seconds: 15));
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (apiKey != null && apiKey.isNotEmpty) {
@@ -44,18 +99,14 @@ class RecapAiClient {
         'model': settings.model.trim(),
         'temperature': 0.35,
         'messages': [
-          {
-            'role': 'system',
-            'content': _systemPrompt,
-          },
-          {
-            'role': 'user',
-            'content': _userPrompt(local, settings),
-          },
+          {'role': 'system', 'content': _systemPrompt},
+          {'role': 'user', 'content': _userPrompt(local, settings)},
         ],
       };
       request.write(jsonEncode(body));
-      final response = await request.close().timeout(const Duration(seconds: 45));
+      final response = await request.close().timeout(
+        const Duration(seconds: 45),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return RecapAiAttempt(
@@ -123,14 +174,20 @@ class RecapAiClient {
       return (
         headline.trim(),
         summary.trim(),
-        insights.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty).take(5).toList(),
+        insights
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .take(5)
+            .toList(),
       );
     } catch (_) {
       return null;
     }
   }
 
-  String _userPrompt(RecapResult local, RecapAiSettings settings) => '''
+  String _userPrompt(RecapResult local, RecapAiSettings settings) =>
+      '''
 下面是 TimeTrace 从本机记录计算出的事实快照，以及本地规则生成的基线回顾。
 
 事实快照：

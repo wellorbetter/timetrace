@@ -1,9 +1,9 @@
 class RecapAiSettings {
   const RecapAiSettings({
-    this.enabled = false,
-    this.endpoint = 'https://api.openai.com/v1/chat/completions',
-    this.model = '',
-    this.apiKeyEnv = 'OPENAI_API_KEY',
+    this.enabled = true,
+    this.endpoint = 'https://api.deepseek.com/chat/completions',
+    this.model = 'deepseek-v4-flash',
+    this.apiKeyEnv = 'DEEPSEEK_API_KEY',
     this.includeDiaryEntries = false,
   });
 
@@ -41,13 +41,14 @@ class RecapAiSettings {
     'include_diary_entries': includeDiaryEntries,
   };
 
-  factory RecapAiSettings.fromJson(Map<String, Object?> json) => RecapAiSettings(
-    enabled: json['enabled'] == true,
-    endpoint:
-        json['endpoint'] as String? ??
-        'https://api.openai.com/v1/chat/completions',
-    model: json['model'] as String? ?? '',
-    apiKeyEnv: json['api_key_env'] as String? ?? 'OPENAI_API_KEY',
-    includeDiaryEntries: json['include_diary_entries'] == true,
-  );
+  factory RecapAiSettings.fromJson(Map<String, Object?> json) =>
+      RecapAiSettings(
+        enabled: json['enabled'] as bool? ?? true,
+        endpoint:
+            json['endpoint'] as String? ??
+            'https://api.deepseek.com/chat/completions',
+        model: json['model'] as String? ?? 'deepseek-v4-flash',
+        apiKeyEnv: json['api_key_env'] as String? ?? 'DEEPSEEK_API_KEY',
+        includeDiaryEntries: json['include_diary_entries'] == true,
+      );
 }
