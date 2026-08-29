@@ -16,18 +16,18 @@ class RecapSecretStore {
 
   static Future<String> load() async {
     try {
-      if (Platform.isWindows) return _loadWindows();
-      if (Platform.isMacOS) return _loadMacOS();
-      if (Platform.isLinux) return _loadLinux();
+      if (Platform.isWindows) return await _loadWindows();
+      if (Platform.isMacOS) return await _loadMacOS();
+      if (Platform.isLinux) return await _loadLinux();
     } catch (_) {}
     return '';
   }
 
   static Future<bool> save(String secret) async {
     try {
-      if (Platform.isWindows) return _saveWindows(secret);
-      if (Platform.isMacOS) return _saveMacOS(secret);
-      if (Platform.isLinux) return _saveLinux(secret);
+      if (Platform.isWindows) return await _saveWindows(secret);
+      if (Platform.isMacOS) return await _saveMacOS(secret);
+      if (Platform.isLinux) return await _saveLinux(secret);
     } catch (_) {}
     return false;
   }
@@ -141,11 +141,14 @@ class RecapSecretStore {
     ]);
     process.stdin.write(secret);
     await process.stdin.close();
-    return await process.exitCode == 0;
+    return (await process.exitCode) == 0;
   }
 
   static Future<bool> _hasSecretTool() async {
-    final result = await Process.run('sh', ['-c', 'command -v secret-tool >/dev/null 2>&1']);
+    final result = await Process.run(
+      'sh',
+      ['-c', 'command -v secret-tool >/dev/null 2>&1'],
+    );
     return result.exitCode == 0;
   }
 
