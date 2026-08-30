@@ -45,18 +45,18 @@ class _ImageAlbumState extends State<ImageAlbum> {
             switchOutCurve: TimeTraceMotion.standard,
             child: switch (_mode) {
               _AlbumMode.grid => _GridBody(
-                  key: const ValueKey('grid'),
-                  images: images,
-                  thumbSize: widget.thumbSize,
-                  scheme: scheme,
-                ),
+                key: const ValueKey('grid'),
+                images: images,
+                thumbSize: widget.thumbSize,
+                scheme: scheme,
+              ),
               _AlbumMode.stack => _StackBody(
-                  key: const ValueKey('stack'),
-                  images: images,
-                  maxPeek: widget.maxPeek,
-                  thumbSize: widget.thumbSize,
-                  scheme: scheme,
-                ),
+                key: const ValueKey('stack'),
+                images: images,
+                maxPeek: widget.maxPeek,
+                thumbSize: widget.thumbSize,
+                scheme: scheme,
+              ),
             },
           ),
         ),
@@ -111,7 +111,7 @@ class _GridBody extends StatelessWidget {
                 width: thumbSize,
                 height: thumbSize,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: thumbSize,
                   height: thumbSize,
                   color: scheme.surfaceContainerHighest,
@@ -165,19 +165,17 @@ class _StackBody extends StatelessWidget {
                   width: thumbSize,
                   height: thumbSize,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-                    border: Border.all(
-                      color: scheme.surface,
-                      width: 2,
+                    borderRadius: BorderRadius.circular(
+                      TimeTraceRadius.control,
                     ),
+                    border: Border.all(color: scheme.surface, width: 2),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Image.file(
                     File(shown[i]),
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => ColoredBox(
-                      color: scheme.surfaceContainerHighest,
-                    ),
+                    errorBuilder: (_, _, _) =>
+                        ColoredBox(color: scheme.surfaceContainerHighest),
                   ),
                 ),
               ),
@@ -221,7 +219,8 @@ Future<void> showImageGallery(
   await showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.92),
-    builder: (_) => ImageGallery(images: images, initial: initial, title: title),
+    builder: (_) =>
+        ImageGallery(images: images, initial: initial, title: title),
   );
 }
 
@@ -287,7 +286,7 @@ class _ImageGalleryState extends State<ImageGallery> {
                 child: Image.file(
                   File(img),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.broken_image_outlined,
                     size: 42,
                     color: Colors.white54,
@@ -332,7 +331,11 @@ class _ImageGalleryState extends State<ImageGallery> {
                 ),
                 const SizedBox(width: TimeTraceSpace.xxs),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],

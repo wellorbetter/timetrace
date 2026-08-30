@@ -8,8 +8,27 @@ const kViews = <String, String>{
   'hourly': '时段',
   'summary': '汇总',
   'apps': '应用列表',
+  'history': '使用历史',
 };
-const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
+const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly', 'history'];
+
+/// Every carousel page can be enabled or disabled from Overview settings.
+///
+/// The original five pages and the new history page are all enabled by
+/// default. [dashboardVisibleOrder] keeps a safe fallback if a stale settings
+/// file happens to hide every page.
+const kOptionalViews = {'bar', 'pie', 'summary', 'apps', 'hourly', 'history'};
+const kDefaultHiddenViews = <String>{};
+
+List<String> dashboardVisibleOrder(
+  List<String> order,
+  Set<String> hiddenViews,
+) {
+  final visible = order
+      .where((view) => kViews.containsKey(view) && !hiddenViews.contains(view))
+      .toList(growable: false);
+  return visible.isEmpty ? const ['summary'] : visible;
+}
 
 /// Persisted dashboard carousel order (local JSON, UI-only — no Rust change).
 class DashboardOrderNotifier extends Notifier<List<String>> {
@@ -28,9 +47,6 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
       for (final v in kDefaultOrder) {
         if (!order.contains(v)) order.add(v);
       }
-      // 时段分布固定在最后（产品决策），旧配置也迁移到末尾。
-      order.remove('hourly');
-      order.add('hourly');
       return order;
     } catch (e) {
       return List.of(kDefaultOrder);
@@ -44,11 +60,12 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
     }
     final item = order.removeAt(from);
     order.insert(to, item);
-    // 时段固定最末位：任何拖拽后都重新放回末尾。
-    if (order.contains('hourly') && order.last != 'hourly') {
-      order.remove('hourly');
-      order.add('hourly');
-    }
+    state = order;
+    _persist(order);
+  }
+
+  void reset() {
+    final order = List<String>.of(kDefaultOrder);
     state = order;
     _persist(order);
   }
@@ -65,4 +82,43 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
 final dashboardOrderProvider =
     NotifierProvider<DashboardOrderNotifier, List<String>>(
       DashboardOrderNotifier.new,
+    );
+
+class DashboardHiddenViewsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() {
+    try {
+      final stored = UiPreferencesStore.read()['hidden_views'];
+      if (stored is! List) return Set.of(kDefaultHiddenViews);
+      return stored.whereType<String>().where(kOptionalViews.contains).toSet();
+    } catch (_) {
+      return Set.of(kDefaultHiddenViews);
+    }
+  }
+
+  void setHidden(String view, {required bool hidden}) {
+    if (!kOptionalViews.contains(view)) return;
+    final next = Set<String>.of(state);
+    hidden ? next.add(view) : next.remove(view);
+    state = next;
+    try {
+      UiPreferencesStore.update({'hidden_views': next.toList()..sort()});
+    } catch (_) {
+      // UI preference persistence is best-effort.
+    }
+  }
+
+  void reset() {
+    state = Set<String>.of(kDefaultHiddenViews);
+    try {
+      UiPreferencesStore.update({'hidden_views': const <String>[]});
+    } catch (_) {
+      // UI preference persistence is best-effort.
+    }
+  }
+}
+
+final dashboardHiddenViewsProvider =
+    NotifierProvider<DashboardHiddenViewsNotifier, Set<String>>(
+      DashboardHiddenViewsNotifier.new,
     );

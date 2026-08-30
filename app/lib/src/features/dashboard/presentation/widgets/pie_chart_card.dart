@@ -1,12 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/core/format.dart';
-import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Donut chart — top five apps plus an aggregated remainder. The chart stays
-/// deliberately quiet so the labels and proportions remain the focus.
+/// Original Overview donut — top five apps plus an aggregated "其他" slice.
+/// Compact center text and a one-line legend prevent the chart from becoming
+/// cramped when the selected range contains many applications.
 class PieChartCard extends StatelessWidget {
   const PieChartCard({required this.apps, super.key});
 
@@ -14,23 +14,24 @@ class PieChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final total = apps
-        .fold<int>(0, (s, a) => s + a.activeSeconds)
+        .fold<int>(0, (sum, app) => sum + app.activeSeconds)
         .clamp(1, 1 << 62);
-    final top = apps.take(5).toList();
-    final rest = apps.skip(5).toList();
-    final restSec = rest.fold<int>(0, (s, a) => s + a.activeSeconds);
+    final top = apps.take(5).toList(growable: false);
+    final restSeconds = apps
+        .skip(5)
+        .fold<int>(0, (sum, app) => sum + app.activeSeconds);
 
     return Card(
+      key: const ValueKey('dashboard-app-share'),
       child: Padding(
-        padding: const EdgeInsets.all(TimeTraceSpace.sm),
+        padding: const EdgeInsets.all(12),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final legendRows = top.length + (restSec > 0 ? 1 : 0);
-            final legendH = legendRows * 18.0;
-            final reserved = 24.0 + 20.0 + 8.0 + legendH + 8.0;
+            final legendRows = top.length + (restSeconds > 0 ? 1 : 0);
+            final legendHeight = legendRows * 18.0;
+            final reserved = 12.0 * 2 + 20.0 + 8.0 + 8.0 + legendHeight + 4.0;
             final diameter = (constraints.maxHeight - reserved)
                 .clamp(90.0, 160.0)
                 .toDouble();
@@ -40,18 +41,12 @@ class PieChartCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '占比',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: TimeTraceSpace.xs),
+                const Text('占比', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 Expanded(
                   child: Center(
-                    child: SizedBox(
-                      width: diameter,
-                      height: diameter,
+                    child: SizedBox.square(
+                      dimension: diameter,
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -70,9 +65,9 @@ class PieChartCard extends StatelessWidget {
                                     title: '',
                                     showTitle: false,
                                   ),
-                                if (restSec > 0)
+                                if (restSeconds > 0)
                                   PieChartSectionData(
-                                    value: restSec.toDouble(),
+                                    value: restSeconds.toDouble(),
                                     color: scheme.surfaceContainerHighest,
                                     radius: radius,
                                     title: '',
@@ -86,8 +81,9 @@ class PieChartCard extends StatelessWidget {
                             children: [
                               Text(
                                 formatDuration(total),
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
                                   color: scheme.onSurface,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
@@ -96,8 +92,9 @@ class PieChartCard extends StatelessWidget {
                               ),
                               Text(
                                 '活跃',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: scheme.outline,
                                 ),
                               ),
                             ],
@@ -107,69 +104,77 @@ class PieChartCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Divider(height: TimeTraceSpace.xs),
+                const Divider(height: 8),
                 for (final app in top)
-                  _LegendRow(
-                    color: appColor(app.appName),
-                    label: app.appName,
-                    percent: (app.activeSeconds / total * 100).round(),
+                  SizedBox(
+                    height: 18,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: appColor(app.appName),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Tooltip(
+                            message: app.appName,
+                            child: Text(
+                              app.appName,
+                              style: const TextStyle(fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${(app.activeSeconds / total * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: scheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                if (restSec > 0)
-                  _LegendRow(
-                    color: scheme.surfaceContainerHighest,
-                    label: '其他',
-                    percent: (restSec / total * 100).round(),
+                if (restSeconds > 0)
+                  SizedBox(
+                    height: 18,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text('其他', style: TextStyle(fontSize: 11)),
+                        ),
+                        Text(
+                          '${(restSeconds / total * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: scheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _LegendRow extends StatelessWidget {
-  const _LegendRow({
-    required this.color,
-    required this.label,
-    required this.percent,
-  });
-
-  final Color color;
-  final String label;
-  final int percent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return SizedBox(
-      height: 18,
-      child: Row(
-        children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: TimeTraceSpace.xs),
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.labelSmall,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(
-            '$percent%',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
       ),
     );
   }

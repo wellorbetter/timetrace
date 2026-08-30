@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
@@ -14,7 +16,12 @@ import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
+import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
+import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
+import 'package:timetrace_app/src/features/settings/presentation/widgets/ai_diary_settings_section.dart';
+import 'package:timetrace_app/src/features/settings/providers/ai_diary_scheduler_provider.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -26,6 +33,7 @@ class SettingsScreen extends ConsumerWidget {
     final dark = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final asyncSettings = ref.watch(settingsProvider);
+    final recapAiSettings = ref.watch(recapAiSettingsProvider);
     final backgroundArea = Platform.isMacOS ? '菜单栏' : '系统托盘';
 
     return Scaffold(
@@ -117,8 +125,57 @@ class SettingsScreen extends ConsumerWidget {
                   _SettingsGroup(
                     icon: Icons.view_carousel_outlined,
                     title: '概览布局',
-                    subtitle: '调整数据视图在概览轮播中的顺序。',
+                    subtitle: '选择轮播内容并调整顺序；原版图表默认全部开启。',
                     children: [_dashboardOrderPicker(ref)],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  _SettingsGroup(
+                    icon: Icons.edit_note_rounded,
+                    title: 'AI 日记',
+                    subtitle: '根据真实使用记录协助写日记；模型、提示词、隐私和生成时间都在这里设置。',
+                    children: [
+                      recapAiSettings.when(
+                        loading: () => const Padding(
+                          padding: EdgeInsets.all(TimeTraceSpace.lg),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                        error: (error, _) => ListTile(
+                          leading: Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          title: const Text('AI 日记设置加载失败'),
+                          subtitle: Text('$error'),
+                          trailing: IconButton(
+                            tooltip: '重试',
+                            onPressed: () =>
+                                ref.invalidate(recapAiSettingsProvider),
+                            icon: const Icon(Icons.refresh_rounded),
+                          ),
+                        ),
+                        data: (value) => AiDiarySettingsSection(
+                          initial: value,
+                          defaultPrompt: kDefaultAiDiaryCustomPrompt,
+                          onTestConnection:
+                              const RecapAiClient().testConnection,
+                          onSave: (next) async {
+                            await ref
+                                .read(recapAiSettingsProvider.notifier)
+                                .save(next);
+                            unawaited(
+                              ref
+                                  .read(aiDiaryDailySchedulerProvider)
+                                  .checkNow(),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: TimeTraceSpace.lg),
                   _SettingsGroup(
@@ -136,10 +193,8 @@ class SettingsScreen extends ConsumerWidget {
                             '${(settings.pollIntervalMs / 1000).toStringAsFixed(1)} ${l.seconds}',
                         description: '多久检测一次当前前台应用。越短越精确，也会增加少量开销。',
                         help: '修改后重启应用生效。',
-                        onChanged: (v) => _update(
-                          ref,
-                          settings.copyWith(pollIntervalMs: v),
-                        ),
+                        onChanged: (v) =>
+                            _update(ref, settings.copyWith(pollIntervalMs: v)),
                       ),
                       const _GroupDivider(),
                       _SliderSetting<int>(
@@ -148,7 +203,8 @@ class SettingsScreen extends ConsumerWidget {
                         min: 1,
                         max: 60,
                         divisions: 59,
-                        display: '${settings.idleThresholdMinutes} ${l.minutes}',
+                        display:
+                            '${settings.idleThresholdMinutes} ${l.minutes}',
                         description: '键盘或鼠标停止操作多久后视为离开并暂停计时。',
                         help: '锁屏、屏幕保护或待机会立即暂停，不受此阈值影响。',
                         onChanged: (v) => _update(
@@ -199,9 +255,7 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ),
                       const _GroupDivider(),
-                      _SelfStartupTile(
-                        startMinimized: settings.startMinimized,
-                      ),
+                      _SelfStartupTile(startMinimized: settings.startMinimized),
                       const _GroupDivider(),
                       ListTile(
                         leading: const Icon(Icons.block_outlined),
@@ -214,8 +268,7 @@ class SettingsScreen extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () =>
-                            _editExcludedApps(context, ref, settings),
+                        onTap: () => _editExcludedApps(context, ref, settings),
                       ),
                       const _GroupDivider(),
                       const _PauseRecordTile(),
@@ -228,9 +281,30 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: '查看本地存储位置，导出或清理记录。',
                     children: [
                       ListTile(
+                        key: const ValueKey('data-location-tile'),
                         leading: const Icon(Icons.folder_outlined),
-                        title: Text(l.recordingSince),
-                        subtitle: SelectableText(_dbPath(settings)),
+                        title: const Text('数据存储位置'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SelectableText(_dbPath(settings)),
+                            const SizedBox(height: TimeTraceSpace.xxs),
+                            Text(
+                              '选择文件夹后，下次启动将使用其中的 time.db；原数据库会保留。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                        trailing: OutlinedButton.icon(
+                          key: const ValueKey('choose-data-location'),
+                          onPressed: () =>
+                              _chooseDatabaseLocation(context, ref, settings),
+                          icon: const Icon(
+                            Icons.folder_open_outlined,
+                            size: 17,
+                          ),
+                          label: const Text('选择'),
+                        ),
                       ),
                       const _GroupDivider(),
                       ListTile(
@@ -262,7 +336,7 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'TimeTrace v1.0.1 · Rust + Flutter · MIT',
+                          '${l.aboutText} · v1.1.0 · Rust + Flutter · MIT',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -270,9 +344,9 @@ class SettingsScreen extends ConsumerWidget {
                         onPressed: () async {
                           await ref.read(settingsProvider.notifier).save();
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(l.saved)),
-                            );
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(l.saved)));
                           }
                         },
                         icon: const Icon(Icons.check_rounded, size: 18),
@@ -328,10 +402,7 @@ class SettingsScreen extends ConsumerWidget {
           for (final font in AppFont.all)
             DropdownMenuItem<AppFont>(
               value: font,
-              child: Text(
-                font.name,
-                style: TextStyle(fontFamily: font.family),
-              ),
+              child: Text(font.name, style: TextStyle(fontFamily: font.family)),
             ),
         ],
         onChanged: (font) {
@@ -418,9 +489,8 @@ class SettingsScreen extends ConsumerWidget {
                   max: 1,
                   divisions: 17,
                   label: '${(pref.opacity * 100).round()}%',
-                  onChanged: (value) => ref
-                      .read(backgroundProvider.notifier)
-                      .setOpacity(value),
+                  onChanged: (value) =>
+                      ref.read(backgroundProvider.notifier).setOpacity(value),
                 ),
               ),
               SizedBox(
@@ -441,6 +511,82 @@ class SettingsScreen extends ConsumerWidget {
   String _dbPath(AppSettings settings) =>
       settings.dbPath.isNotEmpty ? settings.dbPath : PlatformPaths.database;
 
+  Future<void> _chooseDatabaseLocation(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final current = File(_dbPath(settings));
+    final directory = await FilePicker.getDirectoryPath(
+      dialogTitle: '选择 TimeTrace 数据存储文件夹',
+      initialDirectory: current.parent.path,
+      lockParentWindow: true,
+    );
+    if (directory == null || !context.mounted) return;
+
+    final selected = Directory(directory);
+    final target = File(
+      '$directory${Platform.pathSeparator}time.db',
+    ).absolute.path;
+    if (target == current.absolute.path) return;
+
+    try {
+      final probe = File(
+        '$directory${Platform.pathSeparator}.timetrace-write-check',
+      );
+      await selected.create(recursive: true);
+      await probe.writeAsString('TimeTrace');
+      await probe.delete();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('所选文件夹不可写，请选择其他位置。')));
+      return;
+    }
+
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更改数据存储位置？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('新位置将在下次启动 TimeTrace 时生效。'),
+            const SizedBox(height: TimeTraceSpace.sm),
+            SelectableText(target),
+            const SizedBox(height: TimeTraceSpace.sm),
+            Text(
+              '现有数据不会自动搬移或删除；需要继续使用旧记录时，请先复制原来的 time.db。',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('使用此位置'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final notifier = ref.read(settingsProvider.notifier);
+    notifier.preview(settings.copyWith(dbPath: target));
+    await notifier.save();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('数据位置已保存，重启 TimeTrace 后生效。')));
+  }
+
   void _confirmClear(BuildContext context, WidgetRef ref, L10n l) {
     showDialog<void>(
       context: context,
@@ -460,9 +606,9 @@ class SettingsScreen extends ConsumerWidget {
                 ref.invalidate(settingsProvider);
                 ref.invalidate(dashboardProvider);
                 AppLogger.log('data cleared via settings');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.saved)),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.saved)));
               } catch (e) {
                 AppLogger.log('clear data failed: $e');
               }
@@ -474,33 +620,28 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportCsv(
-    BuildContext context,
-    WidgetRef ref,
-    L10n l,
-  ) async {
+  Future<void> _exportCsv(BuildContext context, WidgetRef ref, L10n l) async {
     final path = PlatformPaths.csvExport;
     try {
       PlatformPaths.ensureDirectory();
       final now = DateTime.now();
-      final start =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+      final start = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
       final end =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final csv = ref.read(apiProvider).exportCsv(start: start, end: end);
       File(path).writeAsStringSync(csv);
       AppLogger.log('exported CSV to $path');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l.exportData}: $path')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${l.exportData}: $path')));
       }
     } catch (e) {
       AppLogger.log('export failed: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l.exportData} ${l.cancel}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${l.exportData} ${l.cancel}')));
       }
     }
   }
@@ -575,9 +716,9 @@ class _SettingsControlRow extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
@@ -626,9 +767,9 @@ class _SettingsBlock extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 2),
           Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
@@ -670,9 +811,9 @@ class _SettingsToggleRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 2),
                 Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
@@ -680,10 +821,7 @@ class _SettingsToggleRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: TimeTraceSpace.md),
-          Switch(
-            value: value,
-            onChanged: enabled ? onChanged : null,
-          ),
+          Switch(value: value, onChanged: enabled ? onChanged : null),
         ],
       ),
     );
@@ -744,9 +882,7 @@ class _SliderSetting<T> extends StatelessWidget {
                         Flexible(
                           child: Text(
                             label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -769,9 +905,9 @@ class _SliderSetting<T> extends StatelessWidget {
               const SizedBox(width: TimeTraceSpace.sm),
               Text(
                 display,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -781,9 +917,8 @@ class _SliderSetting<T> extends StatelessWidget {
             max: max,
             divisions: divisions,
             label: display,
-            onChanged: (next) => onChanged(
-              value is int ? next.round() as T : next as T,
-            ),
+            onChanged: (next) =>
+                onChanged(value is int ? next.round() as T : next as T),
           ),
         ],
       ),
@@ -821,7 +956,9 @@ class _SelfStartupTileState extends ConsumerState<_SelfStartupTile> {
   void _toggle(bool enabled) {
     setState(() => _busy = true);
     try {
-      ref.read(apiProvider).setSelfStartEnabled(
+      ref
+          .read(apiProvider)
+          .setSelfStartEnabled(
             enabled: enabled,
             minimized: widget.startMinimized,
           );
@@ -886,24 +1023,36 @@ class _PauseRecordTileState extends ConsumerState<_PauseRecordTile> {
 Widget _dashboardOrderPicker(WidgetRef ref) {
   final order = ref.watch(dashboardOrderProvider);
   final notifier = ref.read(dashboardOrderProvider.notifier);
+  final hidden = ref.watch(dashboardHiddenViewsProvider);
+  final visibility = ref.read(dashboardHiddenViewsProvider.notifier);
   return Column(
     children: [
       for (var i = 0; i < order.length; i++) ...[
         ListTile(
-          leading: Icon(
-            switch (order[i]) {
-              'bar' => Icons.bar_chart_rounded,
-              'pie' => Icons.donut_large_rounded,
-              'hourly' => Icons.schedule_rounded,
-              'summary' => Icons.summarize_outlined,
-              'apps' => Icons.apps_rounded,
-              _ => Icons.dashboard_outlined,
-            },
-          ),
+          leading: Icon(switch (order[i]) {
+            'bar' => Icons.bar_chart_rounded,
+            'pie' => Icons.donut_large_rounded,
+            'hourly' => Icons.schedule_rounded,
+            'summary' => Icons.summarize_outlined,
+            'apps' => Icons.apps_rounded,
+            'history' => Icons.history_rounded,
+            _ => Icons.dashboard_outlined,
+          }),
           title: Text(kViews[order[i]] ?? order[i]),
+          subtitle: kOptionalViews.contains(order[i])
+              ? Text(hidden.contains(order[i]) ? '已隐藏' : '已显示')
+              : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (kOptionalViews.contains(order[i])) ...[
+                Switch(
+                  value: !hidden.contains(order[i]),
+                  onChanged: (enabled) =>
+                      visibility.setHidden(order[i], hidden: !enabled),
+                ),
+                const SizedBox(width: TimeTraceSpace.xs),
+              ],
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_up_rounded),
                 tooltip: '上移',
@@ -957,8 +1106,8 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
       final entries = Platform.isWindows
           ? await _loadWindowsProcesses()
           : Platform.isMacOS
-              ? await _loadMacProcesses()
-              : <_ProcessEntry>[];
+          ? await _loadMacProcesses()
+          : <_ProcessEntry>[];
       if (!mounted) return;
       setState(() {
         _processes = entries..sort((a, b) => a.name.compareTo(b.name));
@@ -978,7 +1127,8 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
       r'Get-Process | Where-Object { $_.Path } | Select-Object ProcessName,Path | ConvertTo-Csv -NoTypeInformation',
     ]);
     final entries = <String, _ProcessEntry>{};
-    for (final line in result.stdout.toString().split(RegExp(r'\r?\n')).skip(1)) {
+    for (final line
+        in result.stdout.toString().split(RegExp(r'\r?\n')).skip(1)) {
       final match = RegExp(r'^"([^"]+)","(.*)"$').firstMatch(line.trim());
       if (match == null) continue;
       final name = '${match.group(1)}.exe';
@@ -1057,36 +1207,33 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : visible.isEmpty
-                      ? const Center(child: Text('没有找到正在运行的应用'))
-                      : ListView.builder(
-                          itemCount: visible.length,
-                          itemBuilder: (_, index) {
-                            final process = visible[index];
-                            final name = process.name;
-                            return CheckboxListTile(
-                              dense: true,
-                              value: _selected.contains(name),
-                              secondary: AppIcon(
-                                exePath: process.path,
-                                size: 28,
-                              ),
-                              title: Text(name),
-                              subtitle: Text(
-                                process.path,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              onChanged: (checked) => setState(() {
-                                if (checked == true) {
-                                  _selected.add(name);
-                                } else {
-                                  _selected.remove(name);
-                                }
-                              }),
-                            );
-                          },
-                        ),
+                  ? const Center(child: Text('没有找到正在运行的应用'))
+                  : ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (_, index) {
+                        final process = visible[index];
+                        final name = process.name;
+                        return CheckboxListTile(
+                          dense: true,
+                          value: _selected.contains(name),
+                          secondary: AppIcon(exePath: process.path, size: 28),
+                          title: Text(name),
+                          subtitle: Text(
+                            process.path,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          onChanged: (checked) => setState(() {
+                            if (checked == true) {
+                              _selected.add(name);
+                            } else {
+                              _selected.remove(name);
+                            }
+                          }),
+                        );
+                      },
+                    ),
             ),
             Align(
               alignment: Alignment.centerLeft,

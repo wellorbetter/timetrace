@@ -20,7 +20,8 @@ class DateRangeSelection {
   /// Concrete calendar day; non-null when [range] is [DateRange.custom].
   final DateTime? day;
 
-  /// The single day all day-level views (hourly/summary/diary) should show.
+  /// Anchor day for the calendar and day-only diary actions. Multi-day data
+  /// pages use [dashboardRangeDateBounds] instead of treating this as a range.
   DateTime get effectiveDay {
     final now = DateTime.now();
     switch (range) {
@@ -34,6 +35,33 @@ class DateRangeSelection {
       case DateRange.month:
         return now;
     }
+  }
+}
+
+/// Local calendar bounds shared by every Overview page.
+///
+/// Keeping this in one place prevents day-only widgets from silently showing
+/// "today" while the dashboard is set to Week or Month.
+(DateTime, DateTime) dashboardRangeDateBounds(
+  DateRangeSelection selection, {
+  DateTime? now,
+}) {
+  final todayValue = now ?? DateTime.now();
+  final today = DateTime(todayValue.year, todayValue.month, todayValue.day);
+  switch (selection.range) {
+    case DateRange.today:
+      return (today, today);
+    case DateRange.yesterday:
+      final yesterday = today.subtract(const Duration(days: 1));
+      return (yesterday, yesterday);
+    case DateRange.custom:
+      final selected = selection.day ?? today;
+      final day = DateTime(selected.year, selected.month, selected.day);
+      return (day, day);
+    case DateRange.week:
+      return (today.subtract(Duration(days: today.weekday - 1)), today);
+    case DateRange.month:
+      return (DateTime(today.year, today.month), today);
   }
 }
 
@@ -54,7 +82,6 @@ final dashboardRangeProvider =
     NotifierProvider<DateRangeNotifier, DateRangeSelection>(
       DateRangeNotifier.new,
     );
-
 
 /// Dashboard state provider with auto-refresh.
 class DashboardNotifier extends AsyncNotifier<DashboardState> {
@@ -109,7 +136,6 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     }
   }
 
-
   Future<DashboardState> _load() async {
     final api = ref.read(apiProvider);
     final range = ref.read(dashboardRangeProvider);
@@ -130,30 +156,11 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     );
   }
 
-    (String, String) _rangeBounds(DateRangeSelection sel) {
-    final now = DateTime.now();
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    final today = fmt(now);
-    switch (sel.range) {
-      case DateRange.today:
-        return (today, today);
-      case DateRange.yesterday:
-        final y = now.subtract(const Duration(days: 1));
-        final ys = fmt(y);
-        return (ys, ys);
-      case DateRange.custom:
-        final ds = fmt(sel.day ?? now);
-        return (ds, ds);
-      case DateRange.week:
-        final monday = now.subtract(Duration(days: now.weekday - 1));
-        return (fmt(monday), today);
-      case DateRange.month:
-        return (
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-01',
-          today,
-        );
-    }
+  (String, String) _rangeBounds(DateRangeSelection selection) {
+    String format(DateTime date) =>
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final (start, end) = dashboardRangeDateBounds(selection);
+    return (format(start), format(end));
   }
 }
 

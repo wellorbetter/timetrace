@@ -14,12 +14,14 @@ pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, 
 pub use contracts::idle::IdleDetector;
 pub use contracts::process::{ProcessInfo, ProcessQuery, ProcessStatus};
 pub use contracts::startup::{DisableResult, StartupEntryRecord, StartupScanner};
-pub use contracts::storage::{AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord};
-pub use contracts::window::WindowResolver;
-pub use engine::{
-    run_monitor_loop, PlatformIdleDetector, PlatformStartupScanner,
-    PlatformWindowResolver, SessionAggregator, SysinfoProcessQuery,
+pub use contracts::storage::{
+    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, DiaryEntryRecord, DiarySource,
+    SessionRecord,
 };
+pub use contracts::window::WindowResolver;
+pub use engine::{run_monitor_loop, SessionAggregator, SysinfoProcessQuery};
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub use engine::{PlatformIdleDetector, PlatformStartupScanner, PlatformWindowResolver};
 pub use paths::{
     app_data_dir, config_path, database_path, ensure_app_data_dir, rust_log_path,
     APP_DIR_NAME,

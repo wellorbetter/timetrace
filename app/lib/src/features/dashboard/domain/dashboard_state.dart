@@ -39,6 +39,6 @@ abstract class AppUsageItem with _$AppUsageItem {
 
   String get idleLabel {
     final m = idleSeconds ~/ 60;
-    return '${m}分';
+    return '$m分';
   }
 }

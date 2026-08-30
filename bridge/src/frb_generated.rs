@@ -1392,6 +1392,60 @@ fn wire__crate__api__TimeTraceApi_is_tracking_paused_impl(
         },
     )
 }
+fn wire__crate__api__TimeTraceApi_publish_ai_diary_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_publish_ai_diary",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_date = <String>::sse_decode(&mut deserializer);
+            let api_content = <String>::sse_decode(&mut deserializer);
+            let api_source_model = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = crate::api::TimeTraceApi::publish_ai_diary(
+                    &*api_that_guard,
+                    api_date,
+                    api_content,
+                    api_source_model,
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__TimeTraceApi_publish_diary_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2109,11 +2163,15 @@ impl SseDecode for crate::api::DiaryEntryDto {
         let mut var_date = <String>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
         let mut var_status = <String>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_sourceModel = <Option<String>>::sse_decode(deserializer);
         return crate::api::DiaryEntryDto {
             id: var_id,
             date: var_date,
             content: var_content,
             status: var_status,
+            source: var_source,
+            source_model: var_sourceModel,
         };
     }
 }
@@ -2468,21 +2526,22 @@ fn pde_ffi_dispatcher_sync_impl(
             wire__crate__api__TimeTraceApi_is_self_start_enabled_impl(ptr, rust_vec_len, data_len)
         }
         27 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__TimeTraceApi_publish_diary_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__TimeTraceApi_remove_diary_image_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__TimeTraceApi_save_diary_draft_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__TimeTraceApi_set_diary_impl(ptr, rust_vec_len, data_len),
-        34 => {
+        28 => wire__crate__api__TimeTraceApi_publish_ai_diary_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__TimeTraceApi_publish_diary_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__TimeTraceApi_remove_diary_image_impl(ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__TimeTraceApi_save_diary_draft_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__TimeTraceApi_set_diary_impl(ptr, rust_vec_len, data_len),
+        35 => {
             wire__crate__api__TimeTraceApi_set_diary_image_entry_impl(ptr, rust_vec_len, data_len)
         }
-        35 => {
+        36 => {
             wire__crate__api__TimeTraceApi_set_self_start_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        36 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__TimeTraceApi_update_diary_entry_impl(ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__TimeTraceApi_update_diary_entry_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2610,6 +2669,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::DiaryEntryDto {
             self.date.into_into_dart().into_dart(),
             self.content.into_into_dart().into_dart(),
             self.status.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.source_model.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2793,6 +2854,8 @@ impl SseEncode for crate::api::DiaryEntryDto {
         <String>::sse_encode(self.date, serializer);
         <String>::sse_encode(self.content, serializer);
         <String>::sse_encode(self.status, serializer);
+        <String>::sse_encode(self.source, serializer);
+        <Option<String>>::sse_encode(self.source_model, serializer);
     }
 }
 

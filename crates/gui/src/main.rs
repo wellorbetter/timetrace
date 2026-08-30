@@ -72,9 +72,18 @@ impl Lang {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let config = AppConfig::load();
-    let db_path = cli.db.unwrap_or_else(|| dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("TimeTrace").join("time.db").to_string_lossy().to_string());
+    let db_path = cli.db.unwrap_or_else(|| {
+        if config.db_path.trim().is_empty() {
+            dirs::data_local_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("TimeTrace")
+                .join("time.db")
+                .to_string_lossy()
+                .to_string()
+        } else {
+            config.db_path.clone()
+        }
+    });
     let db = Arc::new(SqliteStore::open(std::path::PathBuf::from(&db_path))?);
 
     if DataStore::get_all_startup_entries(&*db).is_empty() {

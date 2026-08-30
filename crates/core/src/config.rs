@@ -33,6 +33,11 @@ pub struct AppConfig {
     /// Applications to exclude from tracking (process or display name).
     #[serde(default)]
     pub excluded_apps: Vec<String>,
+
+    /// Optional database file selected by the desktop UI.
+    /// Empty keeps the platform-native TimeTrace location.
+    #[serde(default)]
+    pub db_path: String,
 }
 
 fn default_poll_interval() -> u64 { 3000 }
@@ -48,6 +53,7 @@ impl Default for AppConfig {
             start_minimized: false,
             auto_start_tracking: true,
             excluded_apps: Vec::new(),
+            db_path: String::new(),
         }
     }
 }
@@ -79,5 +85,19 @@ impl AppConfig {
         let json = serde_json::to_string_pretty(self)
             .map_err(std::io::Error::other)?;
         std::fs::write(path, json)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_config_defaults_to_platform_database() {
+        let config: AppConfig = serde_json::from_str(
+            r#"{"poll_interval_ms":1000,"idle_threshold_minutes":5}"#,
+        )
+        .expect("old config remains readable");
+        assert!(config.db_path.is_empty());
     }
 }

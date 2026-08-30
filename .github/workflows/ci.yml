@@ -30,6 +30,17 @@ jobs:
       - run: cd app && flutter analyze --no-fatal-infos
       - run: cd app && flutter test
       - run: cd app && flutter build windows --release
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path app\build\windows\x64\runner\Release\* `
+            -DestinationPath "$env:RUNNER_TEMP\TimeTrace-Windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TimeTrace-Windows-x64
+          path: ${{ runner.temp }}/TimeTrace-Windows-x64.zip
+          if-no-files-found: error
 
   macos-app:
     runs-on: macos-latest

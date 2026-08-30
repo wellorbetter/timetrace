@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
@@ -7,12 +8,14 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart'
+    hide DiaryRange, DiarySection;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart' as diary;
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/range_summary_panel.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/usage_history_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
@@ -89,11 +92,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
   final GlobalKey _calendarKey = GlobalKey();
   double _calendarH = 0;
+  final GlobalKey _appsViewportKey = GlobalKey();
+  final ScrollController _appsScrollCtrl = ScrollController();
+  late List<String> _lastVisibleOrder;
 
   @override
   void initState() {
     super.initState();
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
+    _lastVisibleOrder = order;
     final pageCount = order.isEmpty ? 1 : order.length;
     _carouselInit = (_kCarouselBase ~/ pageCount) * pageCount;
     _carouselCtrl = PageController(initialPage: _carouselInit);
@@ -101,9 +108,26 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
     ref.listenManual(hourlyFocusProvider, (prev, next) {
       if (next == null) return;
-      final orderNow = ref.read(dashboardOrderProvider);
+      final orderNow = _activeOrder();
       final idx = orderNow.indexOf('hourly');
       if (idx >= 0) _goToReal(idx, animate: false);
+    });
+    ref.listenManual(dashboardOrderProvider, (previous, next) {
+      _scheduleVisibleOrderSync();
+    });
+    ref.listenManual(dashboardHiddenViewsProvider, (previous, next) {
+      _scheduleVisibleOrderSync();
+    });
+    ref.listenManual(dashboardRangeProvider, (previous, next) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (!mounted) return;
+      setState(() {
+        _selected = null;
+        _pages = null;
+        _loadingPages = false;
+      });
+      if (_appsScrollCtrl.hasClients) _appsScrollCtrl.jumpTo(0);
+      ref.read(hourlyFocusProvider.notifier).clear();
     });
   }
 
@@ -111,17 +135,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   void dispose() {
     _carouselCtrl.dispose();
     _carouselDot.dispose();
+    _appsScrollCtrl.dispose();
     super.dispose();
   }
 
   void _goToReal(int realIdx, {bool animate = false}) {
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
 
-    final delta = (realIdx - _carouselIndex + pageCount) % pageCount;
-    final target = _carouselAbs + delta;
-    if (target == _carouselAbs) return;
+    final currentAbsolute = _carouselCtrl.hasClients
+        ? (_carouselCtrl.page?.round() ?? _carouselAbs)
+        : _carouselAbs;
+    final currentIndex = currentAbsolute % pageCount;
+    var delta = realIdx - currentIndex;
+    if (delta > pageCount / 2) delta -= pageCount;
+    if (delta < -pageCount / 2) delta += pageCount;
+    final target = currentAbsolute + delta;
+    if (target == currentAbsolute) return;
 
     if (animate) {
       _carouselCtrl.animateToPage(
@@ -132,6 +163,58 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     } else {
       _carouselCtrl.jumpToPage(target);
     }
+  }
+
+  List<String> _activeOrder() => dashboardVisibleOrder(
+    ref.read(dashboardOrderProvider),
+    ref.read(dashboardHiddenViewsProvider),
+  );
+
+  void _scheduleVisibleOrderSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nextOrder = _activeOrder();
+      if (nextOrder.isEmpty || listEquals(nextOrder, _lastVisibleOrder)) return;
+
+      final previousIndex = _lastVisibleOrder.isEmpty
+          ? 0
+          : _carouselIndex.clamp(0, _lastVisibleOrder.length - 1).toInt();
+      final previousKey = _lastVisibleOrder.isEmpty
+          ? null
+          : _lastVisibleOrder[previousIndex];
+      final matchingIndex = previousKey == null
+          ? -1
+          : nextOrder.indexOf(previousKey);
+      final nextIndex = matchingIndex < 0 ? 0 : matchingIndex;
+      final currentAbsolute = _carouselCtrl.hasClients
+          ? (_carouselCtrl.page?.round() ?? _carouselAbs)
+          : _carouselAbs;
+      final target = _nearestAbsolutePage(
+        currentAbsolute,
+        nextOrder.length,
+        nextIndex,
+      );
+
+      _lastVisibleOrder = List<String>.of(nextOrder);
+      _carouselAbs = target;
+      _carouselIndex = nextIndex;
+      _carouselDot.value = nextIndex;
+      if (_carouselCtrl.hasClients) _carouselCtrl.jumpToPage(target);
+    });
+  }
+
+  int _nearestAbsolutePage(int current, int pageCount, int realIndex) {
+    final aligned = current - current % pageCount;
+    final candidates = [
+      aligned + realIndex - pageCount,
+      aligned + realIndex,
+      aligned + realIndex + pageCount,
+    ];
+    candidates.sort(
+      (left, right) =>
+          (left - current).abs().compareTo((right - current).abs()),
+    );
+    return candidates.first;
   }
 
   void _selectApp(int i, {bool fromAppsPage = false}) {
@@ -163,18 +246,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       });
 
       if (fromAppsPage) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || i >= _rowKeys.length) return;
-          final rowContext = _rowKeys[i].currentContext;
-          if (rowContext != null) {
-            Scrollable.ensureVisible(
-              rowContext,
-              duration: TimeTraceMotion.normal,
-              curve: TimeTraceMotion.standard,
-              alignment: 0.2,
-            );
-          }
-        });
+        _scrollAppsToRow(i);
       }
     } catch (_) {
       if (mounted) setState(() => _loadingPages = false);
@@ -186,26 +258,50 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     if (idx < 0) return;
     if (_selected != idx) _selectApp(idx);
 
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
     final appsIdx = order.indexOf('apps');
     if (appsIdx >= 0) {
       _goToReal(appsIdx);
-      _scrollToRow(idx);
+      _scrollAppsToRow(idx);
     }
   }
 
-  void _scrollToRow(int i) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || i >= _rowKeys.length) return;
-      final rowContext = _rowKeys[i].currentContext;
-      if (rowContext != null) {
-        Scrollable.ensureVisible(
-          rowContext,
+  void _scrollAppsToRow(int i) {
+    Future<void>.delayed(TimeTraceMotion.normal, () {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || i >= _rowKeys.length || !_appsScrollCtrl.hasClients) {
+          return;
+        }
+        final rowContext = _rowKeys[i].currentContext;
+        final viewportContext = _appsViewportKey.currentContext;
+        final rowBox = rowContext?.findRenderObject() as RenderBox?;
+        final viewportBox = viewportContext?.findRenderObject() as RenderBox?;
+        if (rowBox == null || viewportBox == null) return;
+
+        final rowTop = rowBox
+            .localToGlobal(Offset.zero, ancestor: viewportBox)
+            .dy;
+        final rowBottom = rowTop + rowBox.size.height;
+        final viewportHeight = viewportBox.size.height;
+        var target = _appsScrollCtrl.offset;
+        if (rowTop < TimeTraceSpace.xs) {
+          target += rowTop - TimeTraceSpace.xs;
+        } else if (rowBottom > viewportHeight - TimeTraceSpace.xs) {
+          target += rowBottom - viewportHeight + TimeTraceSpace.xs;
+        } else {
+          return;
+        }
+        final safeTarget = target.clamp(
+          _appsScrollCtrl.position.minScrollExtent,
+          _appsScrollCtrl.position.maxScrollExtent,
+        );
+        _appsScrollCtrl.animateTo(
+          safeTarget.toDouble(),
           duration: TimeTraceMotion.normal,
           curve: TimeTraceMotion.standard,
-          alignment: 0.2,
         );
-      }
+      });
     });
   }
 
@@ -219,84 +315,110 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
-  diary.DiaryRange _diaryRangeFor(DateRangeSelection selection) {
-    switch (selection.range) {
-      case DateRange.today:
-      case DateRange.yesterday:
-      case DateRange.custom:
-        return diary.DiaryRange.day;
-      case DateRange.week:
-        return diary.DiaryRange.week;
-      case DateRange.month:
-        return diary.DiaryRange.month;
-    }
+  DiaryRange _diaryRangeFor(DateRangeSelection selection) {
+    return switch (selection.range) {
+      DateRange.today ||
+      DateRange.yesterday ||
+      DateRange.custom => DiaryRange.day,
+      DateRange.week => DiaryRange.week,
+      DateRange.month => DiaryRange.month,
+    };
   }
 
   Widget _buildPage(
     String key, {
     required DateTime day,
+    required DateRangeSelection selection,
+    required DashboardState state,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
+    final (rangeStart, rangeEnd) = dashboardRangeDateBounds(selection);
+    final rangeLabel = switch (selection.range) {
+      DateRange.week => '本周累计',
+      DateRange.month => '本月累计',
+      _ => null,
+    };
     final Widget page = switch (key) {
-      'bar' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : AppChartSection(
-              apps: apps,
-              selected: _selected,
-              onSelect: (i) {
-                _selectApp(i);
-                final appsIdx = order.indexOf('apps');
-                if (appsIdx >= 0) {
-                  _goToReal(appsIdx);
-                  _scrollToRow(i);
-                }
-              },
-              tall: true,
-            ),
-      'pie' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : PieChartCard(apps: apps),
-      'hourly' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : HourlyChartCard(
-              date: day,
-              apps: apps,
-              selectedName: _selected != null && _selected! < apps.length
-                  ? apps[_selected!].appName
-                  : null,
-              onSelectApp: _selectAppByName,
-              onClearSelected: () {
-                if (_selected != null) _selectApp(_selected!);
-              },
-            ),
+      'bar' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : AppChartSection(
+                apps: apps,
+                selected: _selected,
+                onSelect: (i) {
+                  _selectApp(i);
+                  final appsIdx = order.indexOf('apps');
+                  if (appsIdx >= 0) {
+                    _goToReal(appsIdx);
+                    _scrollAppsToRow(i);
+                  }
+                },
+                tall: true,
+              ),
+      'pie' => apps.isEmpty ? _placeholder('暂无使用数据') : PieChartCard(apps: apps),
+      'hourly' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : HourlyChartCard(
+                date: day,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd,
+                rangeLabel: rangeLabel,
+                apps: apps,
+                selectedName: _selected != null && _selected! < apps.length
+                    ? apps[_selected!].appName
+                    : null,
+                onSelectApp: _selectAppByName,
+                onClearSelected: () {
+                  if (_selected != null) _selectApp(_selected!);
+                },
+              ),
       'summary' => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
-          child: Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(TimeTraceSpace.sm),
-              child: DaySummaryPanel(date: day),
-            ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Card(
+          key: const ValueKey('dashboard-summary-card'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: switch (selection.range) {
+              DateRange.week || DateRange.month => RangeSummaryPanel(
+                start: rangeStart,
+                end: rangeEnd,
+                state: state,
+              ),
+              _ => DaySummaryPanel(date: day),
+            },
           ),
         ),
-      'apps' => apps.isEmpty
-          ? _placeholder('暂无使用数据')
-          : Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TimeTraceSpace.xxs,
-              ),
-              child: SingleChildScrollView(
-                child: AppListSection(
-                  apps: apps,
-                  selected: _selected,
-                  pages: _pages,
-                  loading: _loadingPages,
-                  onSelect: (i) => _selectApp(i, fromAppsPage: true),
-                  rowKeys: _rowKeys,
+      ),
+      'apps' =>
+        apps.isEmpty
+            ? _placeholder('暂无使用数据')
+            : LayoutBuilder(
+                builder: (context, constraints) => Scrollbar(
+                  controller: _appsScrollCtrl,
+                  child: SingleChildScrollView(
+                    key: _appsViewportKey,
+                    controller: _appsScrollCtrl,
+                    primary: false,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: AppListSection(
+                        apps: apps,
+                        selected: _selected,
+                        pages: _pages,
+                        loading: _loadingPages,
+                        onSelect: (i) => _selectApp(i, fromAppsPage: true),
+                        rowKeys: _rowKeys,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+      'history' => const UsageHistoryCard(),
       _ => const SizedBox.shrink(),
     };
 
@@ -317,11 +439,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.insights_outlined,
-            size: 34,
-            color: scheme.outlineVariant,
-          ),
+          Icon(Icons.insights_outlined, size: 34, color: scheme.outlineVariant),
           const SizedBox(height: TimeTraceSpace.xs),
           Text(
             text,
@@ -362,14 +480,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
 
-        return Align(
-          alignment: Alignment.topCenter,
+        return Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: TimeTraceLayout.dashboardWidth,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1000),
             child: ListView(
-              padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
+              padding: const EdgeInsets.all(12),
               children: [
                 Wrap(
                   spacing: TimeTraceSpace.xs,
@@ -390,9 +505,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: TimeTraceSpace.sm),
-                DashboardSummaryStrip(state: state, apps: apps),
-                const SizedBox(height: TimeTraceSpace.md),
+                const SizedBox(height: 12),
                 if (apps.isEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: TimeTraceSpace.md),
@@ -423,138 +536,140 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 LayoutBuilder(
                   builder: (context, innerConstraints) {
-                    final narrow = innerConstraints.maxWidth <
+                    final narrow =
+                        innerConstraints.maxWidth <
                         TimeTraceLayout.compactBreakpoint;
-                    final order = ref.watch(dashboardOrderProvider);
+                    final allViews = ref.watch(dashboardOrderProvider);
+                    final hiddenViews = ref.watch(dashboardHiddenViewsProvider);
+                    final order = dashboardVisibleOrder(allViews, hiddenViews);
                     final pageCount = order.length;
                     final carouselHeight = narrow
                         ? 330.0
                         : (screenSize.twoColumn ? 400.0 : 360.0);
 
-                    final carousel = Column(
+                    final carouselViewport = Row(
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left_rounded),
-                                tooltip: '上一个视图',
-                                onPressed: () => _carouselCtrl.previousPage(
-                                  duration: TimeTraceMotion.normal,
-                                  curve: TimeTraceMotion.standard,
-                                ),
-                              ),
-                              Expanded(
-                                child: PageView.builder(
-                                  controller: _carouselCtrl,
-                                  onPageChanged: (i) {
-                                    _carouselAbs = i;
-                                    _carouselIndex = i % pageCount;
-                                    _carouselDot.value = _carouselIndex;
-                                  },
-                                  itemCount: _carouselInit * 2,
-                                  itemBuilder: (context, i) => _KeepAlivePage(
-                                    child: RepaintBoundary(
-                                      child: _buildPage(
-                                        order[i % pageCount],
-                                        day: calendarDay,
-                                        order: order,
-                                        apps: apps,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right_rounded),
-                                tooltip: '下一个视图',
-                                onPressed: () => _carouselCtrl.nextPage(
-                                  duration: TimeTraceMotion.normal,
-                                  curve: TimeTraceMotion.standard,
-                                ),
-                              ),
-                            ],
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_left,
+                            size: 22,
+                            color: scheme.primary,
+                          ),
+                          tooltip: '上一个视图',
+                          onPressed: () => _carouselCtrl.previousPage(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
                           ),
                         ),
-                        const SizedBox(height: TimeTraceSpace.xs),
-                        ValueListenableBuilder<int>(
-                          valueListenable: _carouselDot,
-                          builder: (context, dot, _) => Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              for (var i = 0; i < pageCount; i++)
-                                GestureDetector(
-                                  onTap: () => _goToReal(i, animate: true),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: TimeTraceSpace.xxs,
-                                      vertical: TimeTraceSpace.xxs,
-                                    ),
-                                    child: AnimatedContainer(
-                                      duration: TimeTraceMotion.fast,
-                                      curve: TimeTraceMotion.standard,
-                                      width: dot == i ? 18 : 7,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: dot == i
-                                            ? scheme.primary
-                                            : scheme.outlineVariant,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                  ),
+                        Expanded(
+                          child: PageView.builder(
+                            controller: _carouselCtrl,
+                            allowImplicitScrolling: false,
+                            onPageChanged: (i) {
+                              _carouselAbs = i;
+                              _carouselIndex = i % pageCount;
+                              _carouselDot.value = _carouselIndex;
+                            },
+                            itemBuilder: (context, i) => _KeepAlivePage(
+                              child: RepaintBoundary(
+                                child: _buildPage(
+                                  order[i % pageCount],
+                                  day: calendarDay,
+                                  selection: selection,
+                                  state: state,
+                                  order: order,
+                                  apps: apps,
                                 ),
-                            ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_right,
+                            size: 22,
+                            color: scheme.primary,
+                          ),
+                          tooltip: '下一个视图',
+                          onPressed: () => _carouselCtrl.nextPage(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
                           ),
                         ),
                       ],
                     );
 
-                    final calendar = Card(
-                      key: _calendarKey,
-                      child: Padding(
-                        padding: const EdgeInsets.all(TimeTraceSpace.sm),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_month_outlined,
-                                  size: 17,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(width: TimeTraceSpace.xs),
-                                Text(
-                                  '日历',
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                    Widget carouselAtHeight(double pageHeight) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          key: const ValueKey('dashboard-carousel'),
+                          height: pageHeight,
+                          child: carouselViewport,
+                        ),
+                        const SizedBox(height: 6),
+                        ValueListenableBuilder<int>(
+                          valueListenable: _carouselDot,
+                          builder: (context, dot, _) => _CarouselIndicator(
+                            order: order,
+                            selectedIndex: dot,
+                            onSelected: (i) => _goToReal(i, animate: true),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    final calendar = KeyedSubtree(
+                      key: const ValueKey('dashboard-calendar'),
+                      child: Card(
+                        key: _calendarKey,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_month,
+                                    size: 18,
+                                    color: scheme.primary,
                                   ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  switch (selection.range) {
-                                    DateRange.today => '今天',
-                                    DateRange.yesterday => '昨天',
-                                    DateRange.week => '本周',
-                                    DateRange.month => '本月',
-                                    DateRange.custom => '所选日',
-                                  },
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '日历',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: scheme.primary,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: TimeTraceSpace.xs),
-                            CalendarGrid(
-                              selected: calendarDay,
-                              onSelected: (day) => ref
-                                  .read(dashboardRangeProvider.notifier)
-                                  .selectDay(day),
-                              rowHeight: narrow ? 48 : 52,
-                            ),
-                          ],
+                                  const Spacer(),
+                                  Text(
+                                    switch (selection.range) {
+                                      DateRange.today => '今天',
+                                      DateRange.yesterday => '昨天',
+                                      DateRange.week => '本周',
+                                      DateRange.month => '本月',
+                                      DateRange.custom => '所选日',
+                                    },
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: scheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              CalendarGrid(
+                                selected: calendarDay,
+                                onSelected: (day) => ref
+                                    .read(dashboardRangeProvider.notifier)
+                                    .selectDay(day),
+                                rowHeight: narrow ? 48 : 52,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -562,8 +677,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     if (narrow) {
                       return Column(
                         children: [
-                          SizedBox(height: carouselHeight, child: carousel),
-                          const SizedBox(height: TimeTraceSpace.md),
+                          carouselAtHeight(carouselHeight),
+                          const SizedBox(height: 12),
                           calendar,
                         ],
                       );
@@ -573,33 +688,89 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(flex: 5, child: calendar),
-                        const SizedBox(width: TimeTraceSpace.md),
+                        const SizedBox(width: 12),
                         Expanded(
                           flex: 7,
-                          child: SizedBox(
-                            height: _calendarH > 0
-                                ? _calendarH
-                                : carouselHeight,
-                            child: carousel,
+                          child: carouselAtHeight(
+                            _calendarH > 0 ? _calendarH : carouselHeight,
                           ),
                         ),
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: TimeTraceSpace.md),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
-                  child: diary.DiarySection(
-                    date: calendarDay,
-                    range: _diaryRangeFor(selection),
-                  ),
+                const SizedBox(height: 12),
+                DiarySection(
+                  date: calendarDay,
+                  range: _diaryRangeFor(selection),
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _CarouselIndicator extends StatelessWidget {
+  const _CarouselIndicator({
+    required this.order,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final List<String> order;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (order.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final safeIndex = selectedIndex.clamp(0, order.length - 1).toInt();
+    final currentLabel = kViews[order[safeIndex]] ?? '数据视图';
+
+    return Semantics(
+      key: const ValueKey('dashboard-carousel-indicator'),
+      liveRegion: true,
+      label: '当前轮播视图：$currentLabel，${safeIndex + 1}/${order.length}',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < order.length; i++)
+            Semantics(
+              button: true,
+              selected: safeIndex == i,
+              label: '切换到${kViews[order[i]] ?? '数据视图'}',
+              child: Tooltip(
+                message: kViews[order[i]] ?? '数据视图',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => onSelected(i),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: TimeTraceSpace.xxs,
+                    ),
+                    child: AnimatedContainer(
+                      duration: TimeTraceMotion.fast,
+                      curve: TimeTraceMotion.standard,
+                      width: safeIndex == i ? 18 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: safeIndex == i
+                            ? scheme.primary
+                            : scheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

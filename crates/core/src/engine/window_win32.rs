@@ -1,34 +1,40 @@
 //! Win32 window resolution via `GetForegroundWindow` + `OpenProcess`.
 
-use windows::core::PWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM};
 use windows::Win32::System::Threading::{
-    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
     GetWindowThreadProcessId,
 };
+use windows::core::PWSTR;
 
-use crate::engine::app_identity::display_name_for;
-use crate::contracts::window::WindowResolver;
 use crate::contracts::events::AppInfo;
+use crate::contracts::window::WindowResolver;
+use crate::engine::app_identity::display_name_for;
 
 pub struct Win32WindowResolver;
 
 impl Win32WindowResolver {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl WindowResolver for Win32WindowResolver {
     fn get_foreground_app(&self) -> Option<AppInfo> {
         unsafe {
             let hwnd = GetForegroundWindow();
-            if hwnd.is_invalid() { return None; }
+            if hwnd.is_invalid() {
+                return None;
+            }
 
             let mut pid: u32 = 0;
             GetWindowThreadProcessId(hwnd, Some(&mut pid));
-            if pid == 0 { return None; }
+            if pid == 0 {
+                return None;
+            }
 
             let mut exe_path = get_process_path(pid).unwrap_or_default();
             let exe_stem = exe_path
@@ -39,7 +45,9 @@ impl WindowResolver for Win32WindowResolver {
                 .to_lowercase();
             if exe_stem == "applicationframehost" || exe_stem == "shellexperiencehost" {
                 if let Some(child_pid) = resolve_child_pid(hwnd, pid) {
-                    if let Some(real) = get_process_path(child_pid) { exe_path = real; }
+                    if let Some(real) = get_process_path(child_pid) {
+                        exe_path = real;
+                    }
                 }
             }
 
@@ -49,15 +57,20 @@ impl WindowResolver for Win32WindowResolver {
         }
     }
 
-    fn get_window_title(&self, _hwnd: isize) -> Option<String> { None }
+    fn get_window_title(&self, _hwnd: isize) -> Option<String> {
+        None
+    }
 }
 
-struct ChildCtx { host_pid: u32, child_pid: u32 }
+struct ChildCtx {
+    host_pid: u32,
+    child_pid: u32,
+}
 
 unsafe extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
-    let ctx = &mut *(lparam.0 as *mut ChildCtx);
+    let ctx = unsafe { &mut *(lparam.0 as *mut ChildCtx) };
     let mut cpid: u32 = 0;
-    GetWindowThreadProcessId(hwnd, Some(&mut cpid));
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut cpid)) };
     if cpid != 0 && cpid != ctx.host_pid {
         ctx.child_pid = cpid;
         return windows::core::BOOL(0);
@@ -66,38 +79,71 @@ unsafe extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> windows
 }
 
 unsafe fn resolve_child_pid(hwnd: HWND, host_pid: u32) -> Option<u32> {
-    let mut ctx = ChildCtx { host_pid, child_pid: 0 };
-    let _ = EnumChildWindows(Some(hwnd), Some(enum_child_proc), LPARAM(&mut ctx as *mut ChildCtx as isize));
+    let mut ctx = ChildCtx {
+        host_pid,
+        child_pid: 0,
+    };
+    let _ = unsafe {
+        EnumChildWindows(
+            Some(hwnd),
+            Some(enum_child_proc),
+            LPARAM(&mut ctx as *mut ChildCtx as isize),
+        )
+    };
     (ctx.child_pid != 0).then_some(ctx.child_pid)
 }
 
 unsafe fn get_process_path(pid: u32) -> Option<String> {
-    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
     let _guard = HandleGuard(handle);
     let mut buffer = vec![0u16; 260];
     let mut size: u32 = buffer.len() as u32;
-    if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size).is_ok() && size > 0 {
+    if unsafe {
+        QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_WIN32,
+            PWSTR(buffer.as_mut_ptr()),
+            &mut size,
+        )
+    }
+    .is_ok()
+        && size > 0
+    {
         buffer.truncate(size as usize);
         Some(String::from_utf16_lossy(&buffer))
-    } else { None }
+    } else {
+        None
+    }
 }
 
 unsafe fn get_window_title_text(hwnd: HWND) -> Option<String> {
     let len = unsafe { GetWindowTextLengthW(hwnd) };
-    if len == 0 { return None; }
+    if len == 0 {
+        return None;
+    }
     let mut buffer = vec![0u16; (len + 1) as usize];
     let copied = unsafe { GetWindowTextW(hwnd, &mut buffer) };
-    if copied == 0 { return None; }
+    if copied == 0 {
+        return None;
+    }
     buffer.truncate(copied as usize);
     Some(String::from_utf16_lossy(&buffer))
 }
 
 struct HandleGuard(HANDLE);
-impl Drop for HandleGuard { fn drop(&mut self) { unsafe { let _ = CloseHandle(self.0); }; } }
+impl Drop for HandleGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.0);
+        };
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_resolver_does_not_crash() { let _ = Win32WindowResolver::new().get_foreground_app(); }
+    fn test_resolver_does_not_crash() {
+        let _ = Win32WindowResolver::new().get_foreground_app();
+    }
 }

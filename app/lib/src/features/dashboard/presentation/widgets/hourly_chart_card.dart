@@ -16,6 +16,9 @@ class HourlyChartCard extends ConsumerStatefulWidget {
   const HourlyChartCard({
     required this.date,
     required this.apps,
+    this.rangeStart,
+    this.rangeEnd,
+    this.rangeLabel,
     this.selectedName,
     this.onSelectApp,
     this.onClearSelected,
@@ -24,6 +27,9 @@ class HourlyChartCard extends ConsumerStatefulWidget {
 
   final DateTime date;
   final List<AppUsageItem> apps;
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final String? rangeLabel;
   final String? selectedName;
   final ValueChanged<String>? onSelectApp;
   final VoidCallback? onClearSelected;
@@ -54,12 +60,21 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   @override
   void didUpdateWidget(covariant HourlyChartCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.date.year != widget.date.year ||
-        oldWidget.date.month != widget.date.month ||
-        oldWidget.date.day != widget.date.day) {
+    if (_dateKey(_startOf(oldWidget)) != _dateKey(startDate) ||
+        _dateKey(_endOf(oldWidget)) != _dateKey(endDate)) {
       _load();
     }
   }
+
+  DateTime get startDate => widget.rangeStart ?? widget.date;
+  DateTime get endDate => widget.rangeEnd ?? widget.date;
+
+  DateTime _startOf(HourlyChartCard value) => value.rangeStart ?? value.date;
+  DateTime _endOf(HourlyChartCard value) => value.rangeEnd ?? value.date;
+
+  bool get isSingleDay => _sameDay(startDate, endDate);
+
+  String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
 
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -69,12 +84,17 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
 
   void _load() {
     final api = ref.read(apiProvider);
-    final date = _fmt(widget.date);
-    final hourly = api.getDayHourly(date: date).map((v) => v.toInt()).toList();
+    final hourly = List<int>.filled(24, 0);
+    for (final date in _datesInRange()) {
+      final day = api.getDayHourly(date: _fmt(date));
+      for (var hour = 0; hour < hourly.length && hour < day.length; hour++) {
+        hourly[hour] += day[hour].toInt();
+      }
+    }
     _hourApps.clear();
     final focus = ref.read(hourlyFocusProvider);
     var sel = -1;
-    if (focus != null && _sameDay(focus.date, widget.date)) {
+    if (isSingleDay && focus != null && _sameDay(focus.date, startDate)) {
       sel = focus.hour;
     }
     if (sel < 0 || sel >= hourly.length || hourly[sel] == 0) {
@@ -89,7 +109,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   }
 
   void _applyFocus(HourlyFocus focus) {
-    if (!_sameDay(focus.date, widget.date)) return;
+    if (!isSingleDay || !_sameDay(focus.date, startDate)) return;
     final h = focus.hour;
     if (h < 0 || h >= _hourly.length || _hourly[h] == 0) return;
     if (h < _startHour || h > _endHour) return;
@@ -131,12 +151,24 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   List<AppUsageDto> _appsOf(int hour) {
     final cached = _hourApps[hour];
     if (cached != null) return cached;
-    final raw = ref
-        .read(apiProvider)
-        .getHourApps(date: _fmt(widget.date), hour: hour);
+    final api = ref.read(apiProvider);
+    final raw = <AppUsageDto>[
+      for (final date in _datesInRange())
+        ...api.getHourApps(date: _fmt(date), hour: hour),
+    ];
     final merged = _mergeByName(raw);
     _hourApps[hour] = merged;
     return merged;
+  }
+
+  Iterable<DateTime> _datesInRange() sync* {
+    for (
+      var day = DateTime(startDate.year, startDate.month, startDate.day);
+      !day.isAfter(endDate);
+      day = day.add(const Duration(days: 1))
+    ) {
+      yield day;
+    }
   }
 
   List<AppUsageDto> _mergeByName(List<AppUsageDto> raw) {
@@ -147,17 +179,18 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
       totals[name] = (totals[name] ?? 0) + a.activeSeconds.toInt();
       if (a.exePath.isNotEmpty) executables.putIfAbsent(name, () => a.exePath);
     }
-    final list = totals.entries
-        .map(
-          (e) => AppUsageDto(
-            appName: e.key,
-            activeSeconds: e.value,
-            idleSeconds: 0,
-            exePath: executables[e.key] ?? '',
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.activeSeconds.compareTo(a.activeSeconds));
+    final list =
+        totals.entries
+            .map(
+              (e) => AppUsageDto(
+                appName: e.key,
+                activeSeconds: e.value,
+                idleSeconds: 0,
+                exePath: executables[e.key] ?? '',
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.activeSeconds.compareTo(a.activeSeconds));
     return list;
   }
 
@@ -172,9 +205,9 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
     final selName = widget.selectedName;
 
     final hourApps = _selectedHour >= 0
-        ? _appsOf(_selectedHour)
-            .where((a) => a.activeSeconds.toInt() > 0)
-            .toList()
+        ? _appsOf(
+            _selectedHour,
+          ).where((a) => a.activeSeconds.toInt() > 0).toList()
         : const <AppUsageDto>[];
     final hourTotal = _selectedHour >= 0
         ? hourApps.fold<int>(0, (s, a) => s + a.activeSeconds.toInt())
@@ -189,7 +222,9 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
             Row(
               children: [
                 Text(
-                  '时段分布',
+                  widget.rangeLabel == null
+                      ? '时段分布'
+                      : '时段分布 · ${widget.rangeLabel}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -203,11 +238,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
                 ),
               ],
             ),
-            _RangeSlider(
-              start: _startHour,
-              end: _endHour,
-              onCommit: _setRange,
-            ),
+            _RangeSlider(start: _startHour, end: _endHour, onCommit: _setRange),
             if (selName != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -241,7 +272,9 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
                       const SizedBox(width: TimeTraceSpace.xxs),
                       InkWell(
                         onTap: widget.onClearSelected,
-                        borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+                        borderRadius: BorderRadius.circular(
+                          TimeTraceRadius.small,
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(1),
                           child: Icon(
@@ -268,7 +301,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
               Expanded(
                 child: Center(
                   child: Text(
-                    '该日暂无活跃数据',
+                    isSingleDay ? '该日暂无活跃数据' : '该范围暂无活跃数据',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -369,10 +402,13 @@ class _HourlyBarChart extends StatelessWidget {
               reservedSize: 18,
               getTitlesWidget: (value, meta) {
                 final h = value.toInt();
-                if (h < startHour || h > endHour) return const SizedBox.shrink();
+                if (h < startHour || h > endHour) {
+                  return const SizedBox.shrink();
+                }
                 final span = endHour - startHour;
                 final step = span > 12 ? 6 : 3;
-                final show = h == startHour ||
+                final show =
+                    h == startHour ||
                     h == endHour ||
                     (h - startHour) % step == 0;
                 if (!show) return const SizedBox.shrink();
@@ -506,7 +542,9 @@ class _HourDetail extends StatelessWidget {
       );
     }
 
-    final visible = expanded ? apps.length : (apps.length > 5 ? 5 : apps.length);
+    final visible = expanded
+        ? apps.length
+        : (apps.length > 5 ? 5 : apps.length);
     final hasMore = apps.length > 5;
     final pct = total <= 0 ? 0.0 : (100.0 / total);
 
@@ -533,7 +571,9 @@ class _HourDetail extends StatelessWidget {
               foregroundColor: scheme.onSurfaceVariant,
               textStyle: theme.textTheme.labelSmall,
               minimumSize: const Size(0, 28),
-              padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xs),
+              padding: const EdgeInsets.symmetric(
+                horizontal: TimeTraceSpace.xs,
+              ),
             ),
           ),
       ],

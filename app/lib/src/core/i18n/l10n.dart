@@ -16,7 +16,9 @@ class LocaleNotifier extends Notifier<AppLocale> {
   }
 }
 
-final localeProvider = NotifierProvider<LocaleNotifier, AppLocale>(LocaleNotifier.new);
+final localeProvider = NotifierProvider<LocaleNotifier, AppLocale>(
+  LocaleNotifier.new,
+);
 
 /// Lightweight string table (avoids ARB overhead for this app's scale).
 class L10n {
@@ -33,13 +35,15 @@ class L10n {
   String get language => locale == AppLocale.zh ? '语言' : 'Language';
   String get monitoring => locale == AppLocale.zh ? '监控' : 'Monitoring';
   String get pollInterval => locale == AppLocale.zh ? '轮询间隔' : 'Poll interval';
-  String get idleThreshold => locale == AppLocale.zh ? '空闲阈值' : 'Idle threshold';
+  String get idleThreshold =>
+      locale == AppLocale.zh ? '空闲阈值' : 'Idle threshold';
   String get seconds => locale == AppLocale.zh ? '秒' : 's';
   String get minutes => locale == AppLocale.zh ? '分钟' : 'min';
   String get data => locale == AppLocale.zh ? '数据' : 'Data';
   String get clearData => locale == AppLocale.zh ? '清除全部数据' : 'Clear all data';
-  String get clearDataConfirm =>
-      locale == AppLocale.zh ? '确定清除全部记录？此操作不可恢复。' : 'Clear all records? This cannot be undone.';
+  String get clearDataConfirm => locale == AppLocale.zh
+      ? '确定清除全部记录？此操作不可恢复。'
+      : 'Clear all records? This cannot be undone.';
   String get cancel => locale == AppLocale.zh ? '取消' : 'Cancel';
   String get confirm => locale == AppLocale.zh ? '确认' : 'OK';
   String get save => locale == AppLocale.zh ? '保存' : 'Save';
@@ -49,20 +53,24 @@ class L10n {
   String get calendar => locale == AppLocale.zh ? '日历' : 'Calendar';
   String get font => locale == AppLocale.zh ? '字体' : 'Font';
   String get background => locale == AppLocale.zh ? '背景' : 'Background';
-  String get backgroundImage => locale == AppLocale.zh ? '选择背景图片' : 'Choose background image';
+  String get backgroundImage =>
+      locale == AppLocale.zh ? '选择背景图片' : 'Choose background image';
   String get clear => locale == AppLocale.zh ? '清除' : 'Clear';
   String get exportData => locale == AppLocale.zh ? '导出数据' : 'Export data';
   String get about => locale == AppLocale.zh ? '关于' : 'About';
   String get aboutText => locale == AppLocale.zh
-      ? 'TimeTrace — 本地应用使用追踪器'
-      : 'TimeTrace — local app usage tracker';
-  String get recordingSince => locale == AppLocale.zh ? '数据记录自' : 'Recording since';
+      ? 'TimeTrace — 本地优先的使用追踪与日记'
+      : 'TimeTrace — local-first activity tracker and journal';
+  String get recordingSince =>
+      locale == AppLocale.zh ? '数据记录自' : 'Recording since';
   String get active => locale == AppLocale.zh ? '活跃' : 'Active';
   String get idle => locale == AppLocale.zh ? '离开' : 'Away';
   String get byApp => locale == AppLocale.zh ? '按应用' : 'By App';
   String get distribution => locale == AppLocale.zh ? '占比' : 'Distribution';
   String get appList => locale == AppLocale.zh ? '应用列表' : 'App list';
-  String get noData => locale == AppLocale.zh ? '暂无数据，切换应用后回来查看' : 'No data yet. Switch apps and return.';
+  String get noData => locale == AppLocale.zh
+      ? '暂无数据，切换应用后回来查看'
+      : 'No data yet. Switch apps and return.';
   String get pages => locale == AppLocale.zh ? '页面' : 'pages';
   String get noPageData => locale == AppLocale.zh ? '暂无页面数据' : 'No page data';
 }

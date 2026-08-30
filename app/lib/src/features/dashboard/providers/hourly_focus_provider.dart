@@ -15,9 +15,10 @@ class HourlyFocusNotifier extends Notifier<HourlyFocus?> {
   void focus(DateTime date, int hour) {
     state = HourlyFocus(date: date, hour: hour);
   }
+
+  void clear() => state = null;
 }
 
-final hourlyFocusProvider =
-    NotifierProvider<HourlyFocusNotifier, HourlyFocus?>(
-      HourlyFocusNotifier.new,
-    );
+final hourlyFocusProvider = NotifierProvider<HourlyFocusNotifier, HourlyFocus?>(
+  HourlyFocusNotifier.new,
+);

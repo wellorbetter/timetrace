@@ -205,6 +205,13 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiTimeTraceApiIsTrackingPaused({required TimeTraceApi that});
 
+  PlatformInt64 crateApiTimeTraceApiPublishAiDiary({
+    required TimeTraceApi that,
+    required String date,
+    required String content,
+    required String sourceModel,
+  });
+
   PlatformInt64 crateApiTimeTraceApiPublishDiary({
     required TimeTraceApi that,
     required String date,
@@ -1173,6 +1180,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  PlatformInt64 crateApiTimeTraceApiPublishAiDiary({
+    required TimeTraceApi that,
+    required String date,
+    required String content,
+    required String sourceModel,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(date, serializer);
+          sse_encode_String(content, serializer);
+          sse_encode_String(sourceModel, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTimeTraceApiPublishAiDiaryConstMeta,
+        argValues: [that, date, content, sourceModel],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiPublishAiDiaryConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_publish_ai_diary",
+        argNames: ["that", "date", "content", "sourceModel"],
+      );
+
+  @override
   PlatformInt64 crateApiTimeTraceApiPublishDiary({
     required TimeTraceApi that,
     required String date,
@@ -1188,7 +1232,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1221,7 +1265,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(path, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1254,7 +1298,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(command, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -1289,7 +1333,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1322,7 +1366,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1357,7 +1401,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1392,7 +1436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(path, serializer);
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1427,7 +1471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_bool(enabled, serializer);
           sse_encode_bool(minimized, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1460,7 +1504,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(paused, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1495,7 +1539,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1530,7 +1574,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1700,13 +1744,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DiaryEntryDto dco_decode_diary_entry_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return DiaryEntryDto(
       id: dco_decode_i_64(arr[0]),
       date: dco_decode_String(arr[1]),
       content: dco_decode_String(arr[2]),
       status: dco_decode_String(arr[3]),
+      source: dco_decode_String(arr[4]),
+      sourceModel: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -2084,11 +2130,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_date = sse_decode_String(deserializer);
     var var_content = sse_decode_String(deserializer);
     var var_status = sse_decode_String(deserializer);
+    var var_source = sse_decode_String(deserializer);
+    var var_sourceModel = sse_decode_opt_String(deserializer);
     return DiaryEntryDto(
       id: var_id,
       date: var_date,
       content: var_content,
       status: var_status,
+      source: var_source,
+      sourceModel: var_sourceModel,
     );
   }
 
@@ -2521,6 +2571,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.date, serializer);
     sse_encode_String(self.content, serializer);
     sse_encode_String(self.status, serializer);
+    sse_encode_String(self.source, serializer);
+    sse_encode_opt_String(self.sourceModel, serializer);
   }
 
   @protected
@@ -2972,6 +3024,18 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
         date: date,
         content: content,
       );
+
+  /// Atomically publish an AI-authored diary with model provenance.
+  PlatformInt64 publishAiDiary({
+    required String date,
+    required String content,
+    required String sourceModel,
+  }) => RustLib.instance.api.crateApiTimeTraceApiPublishAiDiary(
+    that: this,
+    date: date,
+    content: content,
+    sourceModel: sourceModel,
+  );
 
   /// Remove a diary image.
   void removeDiaryImage({required String path}) => RustLib.instance.api
