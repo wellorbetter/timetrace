@@ -1,12 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 
-/// Reusable image album widget:
-/// - collapsed: peeking stack (each image reveals a corner) + "+N"
-/// - expanded: flat grid (平铺)
-/// - hidden: single-line summary, tap to bring back
-/// Tap any image → fullscreen gallery (looping swipe + ◀ ▶ navigation).
+/// Reusable diary image album.
+/// Collapsed mode uses a quiet, aligned overlap instead of decorative rotation
+/// or shadows; expanded mode is a simple thumbnail grid.
 class ImageAlbum extends StatefulWidget {
   const ImageAlbum({
     required this.images,
@@ -36,55 +35,59 @@ class _ImageAlbumState extends State<ImageAlbum> {
     final images = widget.images;
     if (images.isEmpty) return const SizedBox.shrink();
 
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Images + toggle button on the SAME row — the button sits at the
-        // top-right of the images, so it adds no extra height between the
-        // post text and the album.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: switch (_mode) {
-                _AlbumMode.grid => _GridBody(
-                    images: images,
-                    thumbSize: widget.thumbSize,
-                    scheme: scheme),
-                _AlbumMode.stack => _StackBody(
-                    images: images,
-                    maxPeek: widget.maxPeek,
-                    thumbSize: widget.thumbSize,
-                    scheme: scheme),
-              },
-            ),
-            const SizedBox(width: 2),
-            IconButton(
-              icon: Icon(
-                  _mode == _AlbumMode.grid
-                      ? Icons.view_stream_outlined
-                      : Icons.grid_view_outlined,
-                  size: 15),
-              tooltip:
-                  _mode == _AlbumMode.grid ? '收起为堆叠' : '平铺展开',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() => _mode = _mode == _AlbumMode.grid
-                  ? _AlbumMode.stack
-                  : _AlbumMode.grid),
-            ),
-          ],
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: TimeTraceMotion.normal,
+            switchInCurve: TimeTraceMotion.standard,
+            switchOutCurve: TimeTraceMotion.standard,
+            child: switch (_mode) {
+              _AlbumMode.grid => _GridBody(
+                  key: const ValueKey('grid'),
+                  images: images,
+                  thumbSize: widget.thumbSize,
+                  scheme: scheme,
+                ),
+              _AlbumMode.stack => _StackBody(
+                  key: const ValueKey('stack'),
+                  images: images,
+                  maxPeek: widget.maxPeek,
+                  thumbSize: widget.thumbSize,
+                  scheme: scheme,
+                ),
+            },
+          ),
+        ),
+        const SizedBox(width: TimeTraceSpace.xxs),
+        IconButton(
+          icon: Icon(
+            _mode == _AlbumMode.grid
+                ? Icons.view_agenda_outlined
+                : Icons.grid_view_outlined,
+            size: 15,
+          ),
+          tooltip: _mode == _AlbumMode.grid ? '收起' : '展开图片',
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+          onPressed: () => setState(
+            () => _mode = _mode == _AlbumMode.grid
+                ? _AlbumMode.stack
+                : _AlbumMode.grid,
+          ),
         ),
       ],
     );
   }
 }
 
-/// Flat grid of thumbnails (平铺), tap → gallery.
 class _GridBody extends StatelessWidget {
   const _GridBody({
     required this.images,
     required this.thumbSize,
     required this.scheme,
+    super.key,
   });
 
   final List<String> images;
@@ -94,14 +97,15 @@ class _GridBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: TimeTraceSpace.xs,
+      runSpacing: TimeTraceSpace.xs,
       children: [
         for (var i = 0; i < images.length; i++)
-          GestureDetector(
+          InkWell(
+            borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             onTap: () => showImageGallery(context, images, initial: i),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(TimeTraceRadius.control),
               child: Image.file(
                 File(images[i]),
                 width: thumbSize,
@@ -111,7 +115,12 @@ class _GridBody extends StatelessWidget {
                   width: thumbSize,
                   height: thumbSize,
                   color: scheme.surfaceContainerHighest,
-                  child: Icon(Icons.broken_image, size: 20, color: scheme.outline),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -121,13 +130,13 @@ class _GridBody extends StatelessWidget {
   }
 }
 
-/// Peeking stack (each image reveals a corner) + "+N" badge.
 class _StackBody extends StatelessWidget {
   const _StackBody({
     required this.images,
     required this.maxPeek,
     required this.thumbSize,
     required this.scheme,
+    super.key,
   });
 
   final List<String> images;
@@ -138,70 +147,60 @@ class _StackBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = images.take(maxPeek).toList();
-    final step = thumbSize * 0.18;
-    return GestureDetector(
+    final step = thumbSize * 0.22;
+    final width = thumbSize + step * (shown.length - 1);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(TimeTraceRadius.control),
       onTap: () => showImageGallery(context, images),
       child: SizedBox(
-        height: thumbSize + 4,
+        width: width,
+        height: thumbSize,
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
             for (var i = 0; i < shown.length; i++)
               Positioned(
                 left: i * step,
-                top: 2 + i * 3.0,
-                child: Transform.rotate(
-                  angle: (i - (shown.length - 1) / 2) * 0.02,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(shown[i]),
-                            width: thumbSize,
-                            height: thumbSize,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: thumbSize,
-                              height: thumbSize,
-                              color: scheme.surfaceContainerHighest,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Corner badge on the TOPMOST image only — small,
-                      // tucked into the corner (doesn't cover the photo).
-                      if (i == shown.length - 1)
-                        Positioned(
-                          right: 4,
-                          top: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text('×${images.length}',
-                                style: const TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                    ],
+                child: Container(
+                  width: thumbSize,
+                  height: thumbSize,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+                    border: Border.all(
+                      color: scheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.file(
+                    File(shown[i]),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: scheme.surfaceContainerHighest,
+                    ),
+                  ),
+                ),
+              ),
+            if (images.length > shown.length)
+              Positioned(
+                right: TimeTraceSpace.xxs,
+                bottom: TimeTraceSpace.xxs,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TimeTraceSpace.xs,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.inverseSurface.withValues(alpha: 0.86),
+                    borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+                  ),
+                  child: Text(
+                    '+${images.length - shown.length}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onInverseSurface,
+                    ),
                   ),
                 ),
               ),
@@ -212,8 +211,6 @@ class _StackBody extends StatelessWidget {
   }
 }
 
-/// Fullscreen image gallery: looping swipe (PageView) + ◀ ▶ navigation +
-/// InteractiveViewer pinch zoom + index counter.
 Future<void> showImageGallery(
   BuildContext context,
   List<String> images, {
@@ -248,7 +245,6 @@ class _ImageGalleryState extends State<ImageGallery> {
   late final PageController _ctrl;
   late int _index;
 
-  // Loop trick: render a huge page count, map to the real list with modulo.
   static const _loopBase = 1000;
   late final int _base = widget.images.length * _loopBase ~/ 2;
 
@@ -268,8 +264,8 @@ class _ImageGalleryState extends State<ImageGallery> {
   void _go(int delta) {
     _ctrl.animateToPage(
       _ctrl.page!.round() + delta,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+      duration: TimeTraceMotion.normal,
+      curve: TimeTraceMotion.standard,
     );
   }
 
@@ -278,10 +274,10 @@ class _ImageGalleryState extends State<ImageGallery> {
     final n = widget.images.length;
     return Stack(
       children: [
-        // Looping pages
         PageView.builder(
           controller: _ctrl,
-          onPageChanged: (p) => setState(() => _index = ((p - _base) % n + n) % n),
+          onPageChanged: (p) =>
+              setState(() => _index = ((p - _base) % n + n) % n),
           itemCount: _base * 2,
           itemBuilder: (context, p) {
             final img = widget.images[(p % n + n) % n];
@@ -291,66 +287,84 @@ class _ImageGalleryState extends State<ImageGallery> {
                 child: Image.file(
                   File(img),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image,
-                      size: 48, color: Colors.white54),
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image_outlined,
+                    size: 42,
+                    color: Colors.white54,
+                  ),
                 ),
               ),
             );
           },
         ),
-        // Top bar: title + counter + close
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(TimeTraceSpace.sm),
             child: Row(
               children: [
                 if (widget.title != null)
                   Expanded(
-                    child: Text(widget.title!,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                const Spacer(),
+                    child: Text(
+                      widget.title!,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TimeTraceSpace.xs,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(TimeTraceRadius.small),
                   ),
-                  child: Text('${_index + 1} / $n',
-                      style: const TextStyle(fontSize: 12, color: Colors.white)),
+                  child: Text(
+                    '${_index + 1} / $n',
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: TimeTraceSpace.xxs),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
         ),
-        // Left / right navigation arrows
         Positioned(
-          left: 8,
+          left: TimeTraceSpace.xs,
           top: 0,
           bottom: 0,
           child: Center(
             child: IconButton(
-              icon: const Icon(Icons.chevron_left, color: Colors.white, size: 32),
+              icon: const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
               onPressed: () => _go(-1),
             ),
           ),
         ),
         Positioned(
-          right: 8,
+          right: TimeTraceSpace.xs,
           top: 0,
           bottom: 0,
           child: Center(
             child: IconButton(
-              icon: const Icon(Icons.chevron_right, color: Colors.white, size: 32),
+              icon: const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
               onPressed: () => _go(1),
             ),
           ),

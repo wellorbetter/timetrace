@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:timetrace_app/src/core/chinese_calendar.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 
-/// Month calendar grid — reused by the 日历日记 tab and the overview
-/// carousel page. Xiaomi-style cells: festivals red, lunar grey,
-/// today/selected circles, subtle usage heat tint.
+/// Quiet desktop month calendar reused by the dashboard and journal views.
+/// Usage is shown as a restrained accent tint; selection relies on border and
+/// soft fill instead of large saturated circles.
 class CalendarGrid extends ConsumerStatefulWidget {
   const CalendarGrid({
     required this.selected,
@@ -30,7 +31,8 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final data = ref.watch(calendarDataProvider).value;
 
     return TableCalendar(
@@ -46,26 +48,47 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
       headerStyle: HeaderStyle(
         titleCentered: true,
         formatButtonVisible: false,
-        titleTextStyle: TextStyle(
-            fontSize: 15, fontWeight: FontWeight.w600, color: scheme.onSurface),
-        leftChevronIcon:
-            Icon(Icons.chevron_left, size: 20, color: scheme.primary),
-        rightChevronIcon:
-            Icon(Icons.chevron_right, size: 20, color: scheme.primary),
+        headerPadding: const EdgeInsets.only(bottom: TimeTraceSpace.xs),
+        leftChevronPadding: const EdgeInsets.all(TimeTraceSpace.xxs),
+        rightChevronPadding: const EdgeInsets.all(TimeTraceSpace.xxs),
+        titleTextStyle: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ) ??
+            TextStyle(color: scheme.onSurface),
+        leftChevronIcon: Icon(
+          Icons.chevron_left_rounded,
+          size: 20,
+          color: scheme.onSurfaceVariant,
+        ),
+        rightChevronIcon: Icon(
+          Icons.chevron_right_rounded,
+          size: 20,
+          color: scheme.onSurfaceVariant,
+        ),
       ),
-      daysOfWeekHeight: 22,
+      daysOfWeekHeight: 24,
       rowHeight: widget.rowHeight,
       daysOfWeekStyle: DaysOfWeekStyle(
-        weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
-        weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
+        weekdayStyle: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ) ??
+            TextStyle(color: scheme.onSurfaceVariant),
+        weekendStyle: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ) ??
+            TextStyle(color: scheme.onSurfaceVariant),
       ),
       calendarStyle: CalendarStyle(
         outsideDaysVisible: false,
-        defaultTextStyle: TextStyle(fontSize: 13, color: scheme.onSurface),
+        cellMargin: EdgeInsets.zero,
+        defaultTextStyle: theme.textTheme.bodyMedium ?? const TextStyle(),
       ),
       calendarBuilders: CalendarBuilders(
         defaultBuilder: (context, day, focused) =>
-            _dayCell(day, scheme, data, selected: false),
+            _dayCell(day, scheme, data),
         selectedBuilder: (context, day, focused) =>
             _dayCell(day, scheme, data, selected: true),
         todayBuilder: (context, day, focused) =>
@@ -75,10 +98,13 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
     );
   }
 
-  /// Xiaomi-style clean cells: festivals red, lunar grey, today/selected
-  /// circles, subtle heat tint for high-usage days, mini image/diary markers.
-  Widget _dayCell(DateTime day, ColorScheme scheme, CalendarData? data,
-      {bool selected = false, bool today = false}) {
+  Widget _dayCell(
+    DateTime day,
+    ColorScheme scheme,
+    CalendarData? data, {
+    bool selected = false,
+    bool today = false,
+  }) {
     final images = data?.images ?? const {};
     final diaryDays = data?.diaryDays ?? const <String>{};
     final usage = data?.usage ?? const <String, int>{};
@@ -94,8 +120,8 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
 
     final isFestival = info.festival != null;
     final heat = usageSec > 0
-        ? scheme.primary.withValues(alpha: 0.05 + 0.15 * intensity)
-        : null;
+        ? scheme.primary.withValues(alpha: 0.035 + 0.10 * intensity)
+        : Colors.transparent;
 
     String? sub;
     if (info.hasMarker) {
@@ -104,24 +130,41 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
       sub = info.day;
     }
 
-    Color dayColor = scheme.onSurface;
-    if (isFestival) dayColor = Colors.red.shade600;
-    if (selected) {
-      dayColor = scheme.onPrimary;
-    } else if (today) {
-      dayColor = scheme.primary;
-    }
+    final foreground = selected
+        ? scheme.onPrimaryContainer
+        : isFestival
+            ? scheme.tertiary
+            : today
+                ? scheme.primary
+                : scheme.onSurface;
+    final secondaryForeground = selected
+        ? scheme.onPrimaryContainer.withValues(alpha: 0.72)
+        : isFestival
+            ? scheme.tertiary.withValues(alpha: 0.82)
+            : scheme.onSurfaceVariant;
 
     return Center(
-      child: Container(
-        width: 40,
-        height: 42,
+      child: AnimatedContainer(
+        duration: TimeTraceMotion.fast,
+        curve: TimeTraceMotion.standard,
+        width: 42,
+        height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected
-              ? scheme.primary
-              : (heat ?? (today ? scheme.primaryContainer : null)),
-          shape: BoxShape.circle,
+              ? scheme.primaryContainer
+              : today
+                  ? scheme.primaryContainer.withValues(alpha: 0.42)
+                  : heat,
+          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+          border: Border.all(
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.68)
+                : today
+                    ? scheme.primary.withValues(alpha: 0.35)
+                    : Colors.transparent,
+            width: selected ? 1.2 : 1,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -129,11 +172,10 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
             Text(
               '${day.day}',
               style: TextStyle(
-                fontSize: 15,
-                fontWeight:
-                    (today || selected) ? FontWeight.bold : FontWeight.w500,
-                color: dayColor,
-                height: 1.1,
+                fontSize: 14,
+                fontWeight: selected || today ? FontWeight.w600 : FontWeight.w500,
+                color: foreground,
+                height: 1.05,
               ),
             ),
             SizedBox(
@@ -143,9 +185,7 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
                       sub,
                       style: TextStyle(
                         fontSize: 8,
-                        color: (selected || today)
-                            ? dayColor.withValues(alpha: 0.85)
-                            : (isFestival ? Colors.red.shade600 : scheme.outline),
+                        color: secondaryForeground,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -155,32 +195,27 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (imgs.isNotEmpty)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final p in imgs.take(2))
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 1),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: Image.file(
-                                          File(p),
-                                          width: 7,
-                                          height: 7,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
+                              for (final p in imgs.take(2))
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 1),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(2),
+                                    child: Image.file(
+                                      File(p),
+                                      width: 7,
+                                      height: 7,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox.shrink(),
                                     ),
-                                ],
-                              ),
+                                  ),
+                                ),
                             if (hasDiary && imgs.isEmpty)
                               Container(
-                                width: 5,
-                                height: 5,
+                                width: 4,
+                                height: 4,
                                 decoration: BoxDecoration(
-                                  color: scheme.primary,
+                                  color: selected ? scheme.onPrimaryContainer : scheme.primary,
                                   shape: BoxShape.circle,
                                 ),
                               ),

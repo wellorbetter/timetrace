@@ -4,15 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/format.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
 
-/// 时段分布 — 24h 活跃柱状图 + 选中小时的 App 占比明细。
-/// - 支持自定义起/止小时区间，图表只画区间内的柱；
-/// - 明细固定高度（内部滚动），切换小时/展开不再挤压图表；
-/// - 明细按归一化应用名合并（与仪表盘其它图表一致），点击行联动
-///   选中该应用并跳转应用列表；与日历 24h 热力条双向联动。
+/// 24-hour activity distribution with a compact detail list for the selected
+/// hour. The visual hierarchy stays deliberately quiet: controls are secondary,
+/// the chart is the focus, and accent color is reserved for selection.
 class HourlyChartCard extends ConsumerStatefulWidget {
   const HourlyChartCard({
     required this.date,
@@ -23,19 +22,10 @@ class HourlyChartCard extends ConsumerStatefulWidget {
     super.key,
   });
 
-  /// 所选日历日（决定 getDayHourly / getHourApps 的查询日期）。
   final DateTime date;
-
-  /// 当日应用列表，用于空数据占位判断。
   final List<AppUsageItem> apps;
-
-  /// 当前选中的应用名（柱状图/应用列表联动），高亮对应明细行。
   final String? selectedName;
-
-  /// 点击某应用明细行：选中该应用并跳转到应用列表页。
   final ValueChanged<String>? onSelectApp;
-
-  /// 清除已选应用联动。
   final VoidCallback? onClearSelected;
 
   @override
@@ -44,8 +34,6 @@ class HourlyChartCard extends ConsumerStatefulWidget {
 
 class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   List<int> _hourly = List.filled(24, 0);
-
-  /// hour -> 该小时 App 活跃数据（归一化合并后，同步 FFI 缓存）。
   final Map<int, List<AppUsageDto>> _hourApps = {};
 
   int _selectedHour = -1;
@@ -57,7 +45,6 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   void initState() {
     super.initState();
     _load();
-    // 日历 24h 热力条 → 选中该小时（页面已构建时即时响应）。
     ref.listenManual(hourlyFocusProvider, (prev, next) {
       if (next == null || !mounted) return;
       _applyFocus(next);
@@ -80,12 +67,9 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  /// 同步加载当日 24h 数据；优先热力条焦点小时，否则当前小时，
-  /// 再否则第一个有数据的小时。
   void _load() {
     final api = ref.read(apiProvider);
     final date = _fmt(widget.date);
-    // FRB maps i64 lists to BigInt on native; normalize to int buckets.
     final hourly = api.getDayHourly(date: date).map((v) => v.toInt()).toList();
     _hourApps.clear();
     final focus = ref.read(hourlyFocusProvider);
@@ -144,7 +128,6 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
     });
   }
 
-  /// 该小时 App 数据，按 Rust 提供的规范化名称合并，缓存。
   List<AppUsageDto> _appsOf(int hour) {
     final cached = _hourApps[hour];
     if (cached != null) return cached;
@@ -158,11 +141,11 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
 
   List<AppUsageDto> _mergeByName(List<AppUsageDto> raw) {
     final totals = <String, int>{};
-    String exe = '';
+    final executables = <String, String>{};
     for (final a in raw) {
       final name = a.appName;
       totals[name] = (totals[name] ?? 0) + a.activeSeconds.toInt();
-      if (exe.isEmpty && a.exePath.isNotEmpty) exe = a.exePath;
+      if (a.exePath.isNotEmpty) executables.putIfAbsent(name, () => a.exePath);
     }
     final list = totals.entries
         .map(
@@ -170,7 +153,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
             appName: e.key,
             activeSeconds: e.value,
             idleSeconds: 0,
-            exePath: exe,
+            exePath: executables[e.key] ?? '',
           ),
         )
         .toList()
@@ -180,7 +163,8 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final hasData = widget.apps.isNotEmpty && _hourly.any((v) => v > 0);
     final rangeTotal = _hourly
         .sublist(_startHour, _endHour + 1)
@@ -189,8 +173,8 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
 
     final hourApps = _selectedHour >= 0
         ? _appsOf(_selectedHour)
-              .where((a) => a.activeSeconds.toInt() > 0)
-              .toList()
+            .where((a) => a.activeSeconds.toInt() > 0)
+            .toList()
         : const <AppUsageDto>[];
     final hourTotal = _selectedHour >= 0
         ? hourApps.fold<int>(0, (s, a) => s + a.activeSeconds.toInt())
@@ -198,80 +182,96 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(TimeTraceSpace.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Text(
+                Text(
                   '时段分布',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const Spacer(),
                 Text(
-                  '$_startHour:00–$_endHour:00',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                  '$_startHour:00 – $_endHour:00',
+                  style: theme.textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
-            // 24h 区间滑杆：当天 0–23 点任意起止。
             _RangeSlider(
               start: _startHour,
               end: _endHour,
-              onCommit: (s, e) => _setRange(s, e),
+              onCommit: _setRange,
             ),
             if (selName != null) ...[
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Icon(Icons.link, size: 12, color: scheme.primary),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      '已选应用：$selName',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: scheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TimeTraceSpace.xs,
+                  vertical: TimeTraceSpace.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.46),
+                  borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.link_rounded,
+                      size: 12,
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (widget.onClearSelected != null) ...[
-                    const SizedBox(width: 4),
-                    InkWell(
-                      onTap: widget.onClearSelected,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Icon(
-                          Icons.close,
-                          size: 13,
-                          color: scheme.outline,
+                    const SizedBox(width: TimeTraceSpace.xxs),
+                    Flexible(
+                      child: Text(
+                        selName,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
+                    if (widget.onClearSelected != null) ...[
+                      const SizedBox(width: TimeTraceSpace.xxs),
+                      InkWell(
+                        onTap: widget.onClearSelected,
+                        borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+                        child: Padding(
+                          padding: const EdgeInsets.all(1),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
+              const SizedBox(height: TimeTraceSpace.xxs),
             ],
-            const SizedBox(height: 2),
             Text(
-              '点柱查看该小时占比 · 当前区间活跃 ${formatDuration(rangeTotal)}',
-              style: TextStyle(fontSize: 10, color: scheme.outline),
+              '点击柱查看该小时 · 当前区间活跃 ${formatDuration(rangeTotal)}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: TimeTraceSpace.xs),
             if (!hasData)
               Expanded(
                 child: Center(
                   child: Text(
                     '该日暂无活跃数据',
-                    style: TextStyle(fontSize: 12, color: scheme.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               )
@@ -285,8 +285,7 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
                   onSelect: _selectHour,
                 ),
               ),
-              const SizedBox(height: 6),
-              // 固定高度明细：切换小时/展开不再改变图表区域大小，避免伸缩抖动。
+              const SizedBox(height: TimeTraceSpace.xs),
               SizedBox(
                 height: 112,
                 child: SingleChildScrollView(
@@ -308,7 +307,6 @@ class _HourlyChartCardState extends ConsumerState<HourlyChartCard> {
   }
 }
 
-/// 24h 柱状图（仅画 [startHour, endHour] 区间）。
 class _HourlyBarChart extends StatelessWidget {
   const _HourlyBarChart({
     required this.hourly,
@@ -338,7 +336,6 @@ class _HourlyBarChart extends StatelessWidget {
             if (!event.isInterestedForInteractions) return;
             final spot = response?.spot;
             if (spot == null) return;
-            // barGroups 只含 [startHour, endHour]，索引需换算回真实小时。
             onSelect(startHour + spot.touchedBarGroupIndex);
           },
           touchTooltipData: BarTouchTooltipData(
@@ -375,14 +372,18 @@ class _HourlyBarChart extends StatelessWidget {
                 if (h < startHour || h > endHour) return const SizedBox.shrink();
                 final span = endHour - startHour;
                 final step = span > 12 ? 6 : 3;
-                final show =
-                    h == startHour || h == endHour || (h - startHour) % step == 0;
+                final show = h == startHour ||
+                    h == endHour ||
+                    (h - startHour) % step == 0;
                 if (!show) return const SizedBox.shrink();
                 return SideTitleWidget(
                   meta: meta,
                   child: Text(
                     '$h',
-                    style: TextStyle(fontSize: 9, color: scheme.outline),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 );
               },
@@ -398,23 +399,13 @@ class _HourlyBarChart extends StatelessWidget {
               barRods: [
                 BarChartRodData(
                   toY: hourly[h].toDouble(),
-                  width: 7,
+                  width: 6,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(3),
                   ),
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: h == selectedHour
-                        ? [
-                            scheme.primary,
-                            scheme.primary.withValues(alpha: 0.7),
-                          ]
-                        : [
-                            scheme.primary.withValues(alpha: 0.35),
-                            scheme.primary.withValues(alpha: 0.7),
-                          ],
-                  ),
+                  color: h == selectedHour
+                      ? scheme.primary
+                      : scheme.primary.withValues(alpha: 0.34),
                 ),
               ],
             ),
@@ -424,7 +415,6 @@ class _HourlyBarChart extends StatelessWidget {
   }
 }
 
-/// 24h 区间滑杆：拖拽时本地更新，松手才提交，避免图表逐帧重建。
 class _RangeSlider extends StatefulWidget {
   const _RangeSlider({
     required this.start,
@@ -453,33 +443,36 @@ class _RangeSliderState extends State<_RangeSlider> {
   void didUpdateWidget(covariant _RangeSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.start != widget.start || oldWidget.end != widget.end) {
-      _values =
-          RangeValues(widget.start.toDouble(), widget.end.toDouble());
+      _values = RangeValues(widget.start.toDouble(), widget.end.toDouble());
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return RangeSlider(
-      values: _values,
-      min: 0,
-      max: 23,
-      divisions: 23,
-      labels: RangeLabels(
-        '${_values.start.round()}时',
-        '${_values.end.round()}时',
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 2,
+        activeTrackColor: scheme.primary.withValues(alpha: 0.7),
+        inactiveTrackColor: scheme.outlineVariant,
+        overlayColor: scheme.primary.withValues(alpha: 0.08),
       ),
-      activeColor: scheme.primary,
-      inactiveColor: scheme.surfaceContainerHighest,
-      onChanged: (v) => setState(() => _values = v),
-      onChangeEnd: (v) => widget.onCommit(v.start.round(), v.end.round()),
+      child: RangeSlider(
+        values: _values,
+        min: 0,
+        max: 23,
+        divisions: 23,
+        labels: RangeLabels(
+          '${_values.start.round()}时',
+          '${_values.end.round()}时',
+        ),
+        onChanged: (v) => setState(() => _values = v),
+        onChangeEnd: (v) => widget.onCommit(v.start.round(), v.end.round()),
+      ),
     );
   }
 }
 
-/// 选中小时的应用占比列表：色点 + 名称 + 进度条 + 百分比 + 时长。
-/// 最多显示 5 行，超出可"展开全部"；已选应用高亮，点击行联动。
 class _HourDetail extends StatelessWidget {
   const _HourDetail({
     required this.apps,
@@ -499,20 +492,21 @@ class _HourDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     if (apps.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: TimeTraceSpace.xxs),
         child: Text(
           '该小时暂无活跃应用',
-          style: TextStyle(fontSize: 12, color: scheme.outline),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       );
     }
 
-    final visible = expanded
-        ? apps.length
-        : (apps.length > 5 ? 5 : apps.length);
+    final visible = expanded ? apps.length : (apps.length > 5 ? 5 : apps.length);
     final hasMore = apps.length > 5;
     final pct = total <= 0 ? 0.0 : (100.0 / total);
 
@@ -528,25 +522,18 @@ class _HourDetail extends StatelessWidget {
             onTap: () => onAppTap(apps[i].appName),
           ),
         if (hasMore)
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    expanded ? '收起' : '展开全部',
-                    style: TextStyle(fontSize: 11, color: scheme.primary),
-                  ),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: scheme.primary,
-                  ),
-                ],
-              ),
+          TextButton.icon(
+            onPressed: onToggle,
+            icon: Icon(
+              expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              size: 15,
+            ),
+            label: Text(expanded ? '收起' : '展开全部'),
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.onSurfaceVariant,
+              textStyle: theme.textTheme.labelSmall,
+              minimumSize: const Size(0, 28),
+              padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xs),
             ),
           ),
       ],
@@ -569,74 +556,87 @@ class _AppRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final seconds = app.activeSeconds.toInt();
     final color = appColor(app.appName);
     final pct = (seconds * pctFactor).round();
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        height: 22,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+      borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+      child: AnimatedContainer(
+        duration: TimeTraceMotion.fast,
+        curve: TimeTraceMotion.standard,
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xxs),
         decoration: BoxDecoration(
-          color: highlighted ? scheme.primary.withValues(alpha: 0.08) : null,
-          borderRadius: BorderRadius.circular(6),
+          color: highlighted
+              ? scheme.primaryContainer.withValues(alpha: 0.52)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(TimeTraceRadius.small),
         ),
         child: Row(
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: TimeTraceSpace.xs),
             Expanded(
               child: Text(
                 app.appName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: highlighted ? FontWeight.w600 : FontWeight.normal,
-                  color: highlighted ? scheme.primary : null,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: highlighted ? FontWeight.w600 : FontWeight.w500,
+                  color: scheme.onSurface,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: TimeTraceSpace.xs),
             Container(
-              width: 56,
-              height: 6,
+              width: 52,
+              height: 4,
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(3),
+                borderRadius: BorderRadius.circular(2),
               ),
               alignment: Alignment.centerLeft,
               child: FractionallySizedBox(
                 widthFactor: (pct / 100).clamp(0.0, 1.0),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(3),
+                    color: color.withValues(alpha: 0.82),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              '$pct%',
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+            const SizedBox(width: TimeTraceSpace.xs),
+            SizedBox(
+              width: 30,
+              child: Text(
+                '$pct%',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            const SizedBox(width: 4),
-            Text(
-              formatDuration(seconds),
-              style: TextStyle(fontSize: 10, color: scheme.outline),
+            const SizedBox(width: TimeTraceSpace.xxs),
+            SizedBox(
+              width: 48,
+              child: Text(
+                formatDuration(seconds),
+                textAlign: TextAlign.right,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ),
-            if (highlighted) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.check_circle, size: 12, color: scheme.primary),
-            ],
           ],
         ),
       ),

@@ -3,16 +3,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
-import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
-import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
-import 'package:timetrace_app/src/core/widgets/app_icon.dart';
+import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import 'package:timetrace_app/src/core/platform_paths.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
 import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
+import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
+import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
-import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -22,232 +24,265 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = L10n(ref.watch(localeProvider));
     final dark = ref.watch(themeModeProvider);
+    final locale = ref.watch(localeProvider);
     final asyncSettings = ref.watch(settingsProvider);
+    final backgroundArea = Platform.isMacOS ? '菜单栏' : '系统托盘';
 
     return Scaffold(
       appBar: AppBar(title: Text(l.settings)),
-      body: asyncSettings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (settings) => ListTileTheme(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          minVerticalPadding: 2,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-            children: [
-            // ── 主题 ──
-            _SectionHeader(title: l.theme, icon: Icons.palette_outlined),
-            ListTile(
-              leading: const Icon(Icons.light_mode_outlined),
-              title: Text(l.lightMode),
-              trailing: Radio<bool>(
-                value: false,
-                groupValue: dark,
-                onChanged: (v) =>
-                    ref.read(themeModeProvider.notifier).set(v ?? false),
+      body: LayoutBuilder(
+        builder: (context, constraints) => asyncSettings.when(
+          loading: () => const Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+          error: (e, _) => Center(child: Text('加载失败: $e')),
+          data: (settings) => Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: TimeTraceLayout.readingWidth,
+              ),
+              child: ListView(
+                padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
+                children: [
+                  _SettingsGroup(
+                    icon: Icons.tune_rounded,
+                    title: '外观与偏好',
+                    subtitle: '控制主题、语言、字体和背景。',
+                    children: [
+                      _SettingsControlRow(
+                        title: l.theme,
+                        subtitle: '保持界面在不同环境下舒适易读。',
+                        control: SegmentedButton<bool>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment<bool>(
+                              value: false,
+                              icon: const Icon(Icons.light_mode_outlined),
+                              label: Text(l.lightMode),
+                            ),
+                            ButtonSegment<bool>(
+                              value: true,
+                              icon: const Icon(Icons.dark_mode_outlined),
+                              label: Text(l.darkMode),
+                            ),
+                          ],
+                          selected: {dark},
+                          onSelectionChanged: (values) => ref
+                              .read(themeModeProvider.notifier)
+                              .set(values.first),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsControlRow(
+                        title: l.language,
+                        subtitle: '切换界面显示语言。',
+                        control: SegmentedButton<AppLocale>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment<AppLocale>(
+                              value: AppLocale.zh,
+                              label: Text('中文'),
+                            ),
+                            ButtonSegment<AppLocale>(
+                              value: AppLocale.en,
+                              label: Text('English'),
+                            ),
+                          ],
+                          selected: {locale},
+                          onSelectionChanged: (values) => ref
+                              .read(localeProvider.notifier)
+                              .set(values.first),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsControlRow(
+                        title: l.font,
+                        subtitle: '优先使用当前平台原生字体，保持桌面感。',
+                        control: _fontPicker(ref, context),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsBlock(
+                        title: l.background,
+                        subtitle: '使用低饱和背景，或选择自己的图片。',
+                        child: _backgroundPicker(context, ref, l),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  _SettingsGroup(
+                    icon: Icons.view_carousel_outlined,
+                    title: '概览布局',
+                    subtitle: '调整数据视图在概览轮播中的顺序。',
+                    children: [_dashboardOrderPicker(ref)],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  _SettingsGroup(
+                    icon: Icons.monitor_heart_outlined,
+                    title: l.monitoring,
+                    subtitle: '控制记录精度、后台行为和隐私边界。',
+                    children: [
+                      _SliderSetting<int>(
+                        label: l.pollInterval,
+                        value: settings.pollIntervalMs,
+                        min: 500,
+                        max: 5000,
+                        divisions: 9,
+                        display:
+                            '${(settings.pollIntervalMs / 1000).toStringAsFixed(1)} ${l.seconds}',
+                        description: '多久检测一次当前前台应用。越短越精确，也会增加少量开销。',
+                        help: '修改后重启应用生效。',
+                        onChanged: (v) => _update(
+                          ref,
+                          settings.copyWith(pollIntervalMs: v),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SliderSetting<int>(
+                        label: l.idleThreshold,
+                        value: settings.idleThresholdMinutes,
+                        min: 1,
+                        max: 60,
+                        divisions: 59,
+                        display: '${settings.idleThresholdMinutes} ${l.minutes}',
+                        description: '键盘或鼠标停止操作多久后视为离开并暂停计时。',
+                        help: '锁屏、屏幕保护或待机会立即暂停，不受此阈值影响。',
+                        onChanged: (v) => _update(
+                          ref,
+                          settings.copyWith(idleThresholdMinutes: v),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          TimeTraceSpace.sm,
+                          0,
+                          TimeTraceSpace.sm,
+                          TimeTraceSpace.xs,
+                        ),
+                        child: Text(
+                          l.appliesOnRestart,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsToggleRow(
+                        title: '关闭窗口时隐藏到$backgroundArea',
+                        subtitle: '主窗口关闭后继续在后台记录。',
+                        value: settings.minimizeToTray,
+                        onChanged: (value) => _update(
+                          ref,
+                          settings.copyWith(minimizeToTray: value),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsToggleRow(
+                        title: '启动时隐藏主窗口',
+                        subtitle: '启动后只保留$backgroundArea入口。',
+                        value: settings.startMinimized,
+                        onChanged: (value) => _updateAndSave(
+                          ref,
+                          settings.copyWith(startMinimized: value),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SettingsToggleRow(
+                        title: '启动后自动开始追踪',
+                        subtitle: '再次启动 TimeTrace 时立即开始记录活动。',
+                        value: settings.autoStartTracking,
+                        onChanged: (value) => _update(
+                          ref,
+                          settings.copyWith(autoStartTracking: value),
+                        ),
+                      ),
+                      const _GroupDivider(),
+                      _SelfStartupTile(
+                        startMinimized: settings.startMinimized,
+                      ),
+                      const _GroupDivider(),
+                      ListTile(
+                        leading: const Icon(Icons.block_outlined),
+                        title: const Text('排除应用'),
+                        subtitle: Text(
+                          settings.excludedApps.isEmpty
+                              ? '未配置排除项'
+                              : settings.excludedApps.join('、'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () =>
+                            _editExcludedApps(context, ref, settings),
+                      ),
+                      const _GroupDivider(),
+                      const _PauseRecordTile(),
+                    ],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  _SettingsGroup(
+                    icon: Icons.storage_outlined,
+                    title: l.data,
+                    subtitle: '查看本地存储位置，导出或清理记录。',
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.folder_outlined),
+                        title: Text(l.recordingSince),
+                        subtitle: SelectableText(_dbPath(settings)),
+                      ),
+                      const _GroupDivider(),
+                      ListTile(
+                        leading: const Icon(Icons.file_download_outlined),
+                        title: Text(l.exportData),
+                        subtitle: Text('CSV · ${l.appList}'),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => _exportCsv(context, ref, l),
+                      ),
+                      const _GroupDivider(),
+                      ListTile(
+                        leading: Icon(
+                          Icons.delete_outline_rounded,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        title: Text(
+                          l.clearData,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        subtitle: const Text('删除本机全部使用记录；此操作无法撤销。'),
+                        onTap: () => _confirmClear(context, ref, l),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'TimeTrace v1.0.1 · Rust + Flutter · MIT',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          await ref.read(settingsProvider.notifier).save();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(l.saved)),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: Text(l.save),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.dark_mode_outlined),
-              title: Text(l.darkMode),
-              trailing: Radio<bool>(
-                value: true,
-                groupValue: dark,
-                onChanged: (v) =>
-                    ref.read(themeModeProvider.notifier).set(v ?? false),
-              ),
-            ),
-            const Divider(),
-
-            // ── 语言 ──
-            _SectionHeader(title: l.language, icon: Icons.translate),
-            ListTile(
-              leading: const Text('中', style: TextStyle(fontWeight: FontWeight.bold)),
-              title: const Text('中文'),
-              trailing: Radio<AppLocale>(
-                value: AppLocale.zh,
-                groupValue: ref.watch(localeProvider),
-                onChanged: (v) =>
-                    ref.read(localeProvider.notifier).set(v ?? AppLocale.zh),
-              ),
-            ),
-            ListTile(
-              leading: const Text('EN', style: TextStyle(fontWeight: FontWeight.bold)),
-              title: const Text('English'),
-              trailing: Radio<AppLocale>(
-                value: AppLocale.en,
-                groupValue: ref.watch(localeProvider),
-                onChanged: (v) =>
-                    ref.read(localeProvider.notifier).set(v ?? AppLocale.zh),
-              ),
-            ),
-            const Divider(),
-
-            // ── 字体 ──
-            _SectionHeader(
-                title: l.font, icon: Icons.font_download_outlined),
-            ..._fontPicker(ref, l, context),
-            const Divider(),
-
-            // ── 背景 ──
-            _SectionHeader(
-                title: l.background, icon: Icons.wallpaper_outlined),
-            ..._backgroundPicker(context, ref, l),
-            const Divider(),
-
-            // ── 仪表盘顺序 ──
-            _SectionHeader(title: '仪表盘顺序', icon: Icons.view_carousel_outlined),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('调整概览轮播的展示顺序',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.outline)),
-            ),
-            ..._dashboardOrderPicker(ref),
-            const Divider(),
-
-            // ── 监控 ──
-            _SectionHeader(title: l.monitoring, icon: Icons.monitor_heart_outlined),
-            _SliderTile<int>(
-              label: l.pollInterval,
-              value: settings.pollIntervalMs,
-              min: 500,
-              max: 5000,
-              divisions: 9,
-              display: '${(settings.pollIntervalMs / 1000).toStringAsFixed(1)} ${l.seconds}',
-              description: '多久检测一次当前前台应用（越小越精确，越费电）',
-              help: '检测间隔：多久检测一次当前前台应用。越小越精确，也越耗电；修改后重启应用生效。',
-              onChanged: (v) => _update(
-                ref,
-                settings.copyWith(pollIntervalMs: v),
-              ),
-            ),
-            _SliderTile<int>(
-              label: l.idleThreshold,
-              value: settings.idleThresholdMinutes,
-              min: 1,
-              max: 60,
-              divisions: 59,
-              display: '${settings.idleThresholdMinutes} ${l.minutes}',
-              description: '键盘/鼠标停止操作多久后视为离开，暂停计时',
-              help: '空闲阈值：键盘/鼠标停止操作多久后视为离开并暂停计时。锁屏/屏幕保护/待机会立即暂停，不受此阈值影响。',
-              onChanged: (v) => _update(
-                ref,
-                settings.copyWith(idleThresholdMinutes: v),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                l.appliesOnRestart,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.outline),
-              ),
-            ),
-            SwitchListTile(
-              title: const Row(children: [
-                Text('关闭窗口时最小化到托盘'),
-                SizedBox(width: 6),
-                HelpIcon(message: '关闭窗口后隐藏到系统托盘，后台继续记录。'),
-              ]),
-              value: settings.minimizeToTray,
-              onChanged: (value) => _update(
-                ref,
-                settings.copyWith(minimizeToTray: value),
-              ),
-            ),
-            SwitchListTile(
-              title: const Row(children: [
-                Text('启动时最小化'),
-                SizedBox(width: 6),
-                HelpIcon(message: '应用启动后隐藏主窗口，只保留托盘图标。'),
-              ]),
-              value: settings.startMinimized,
-              onChanged: (value) => _updateAndSave(
-                ref,
-                settings.copyWith(startMinimized: value),
-              ),
-            ),
-            SwitchListTile(
-              title: const Row(children: [
-                Text('启动后自动开始追踪'),
-                SizedBox(width: 6),
-                HelpIcon(message: '关闭后再次启动应用时，是否立即记录活动。'),
-              ]),
-              value: settings.autoStartTracking,
-              onChanged: (value) => _update(
-                ref,
-                settings.copyWith(autoStartTracking: value),
-              ),
-            ),
-            _SelfStartupTile(startMinimized: settings.startMinimized),
-            ListTile(
-              leading: const Icon(Icons.block_outlined),
-              title: const Text('排除应用'),
-              subtitle: Text(settings.excludedApps.isEmpty
-                  ? '未配置'
-                  : settings.excludedApps.join('、')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _editExcludedApps(context, ref, settings),
-            ),
-            const Divider(),
-            const _PauseRecordTile(),
-            const Divider(),
-
-            // ── 数据 ──
-            _SectionHeader(title: l.data, icon: Icons.storage_outlined),
-            ListTile(
-              leading: const Icon(Icons.folder_outlined),
-              title: Text(l.recordingSince),
-              subtitle: Text(_dbPath(settings)),
-            ),
-            // Export CSV
-            ListTile(
-              leading: const Icon(Icons.file_download_outlined),
-              title: Text(l.exportData),
-              subtitle: Text('CSV — ${l.appList}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _exportCsv(context, ref, l),
-            ),
-            // Clear data
-            ListTile(
-              leading: Icon(Icons.delete_outline,
-                  color: Theme.of(context).colorScheme.error),
-              title: Text(l.clearData,
-                  style:
-                      TextStyle(color: Theme.of(context).colorScheme.error)),
-              onTap: () => _confirmClear(context, ref, l),
-            ),
-            const Divider(),
-
-            // ── 保存 ──
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: FilledButton.icon(
-                onPressed: () async {
-                  await ref.read(settingsProvider.notifier).save();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l.saved)),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.save_outlined),
-                label: Text(l.save),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── 关于 ──
-            _SectionHeader(title: l.about, icon: Icons.info_outline),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('TimeTrace v1.0.1 · Rust + Flutter · MIT'),
-            ),
-            ],
           ),
         ),
       ),
@@ -259,44 +294,10 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     AppSettings settings,
   ) async {
-    final controller = TextEditingController(
-      text: settings.excludedApps.join('\n'),
-    );
     final result = await showDialog<List<String>>(
       context: context,
       builder: (_) => _ExcludedAppsDialog(initial: settings.excludedApps),
-      /* AlertDialog(
-        title: const Text('排除应用'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: '每行填写一个应用名或 exe 路径',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final apps = controller.text
-                  .split(RegExp(r'[\r\n,，]+'))
-                  .map((value) => value.trim())
-                  .where((value) => value.isNotEmpty)
-                  .toSet()
-                  .toList();
-              Navigator.pop(context, apps);
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),*/
     );
-    controller.dispose();
     if (result != null) {
       final notifier = ref.read(settingsProvider.notifier);
       notifier.preview(settings.copyWith(excludedApps: result));
@@ -314,135 +315,131 @@ class SettingsScreen extends ConsumerWidget {
     await notifier.save();
   }
 
-  /// Font picker with live previews.
-  List<Widget> _fontPicker(WidgetRef ref, L10n l, BuildContext context) {
+  Widget _fontPicker(WidgetRef ref, BuildContext context) {
     final selected = ref.watch(fontProvider);
-    return [
-      for (final font in AppFont.all)
-        RadioListTile<AppFont>(
-          value: font,
-          groupValue: selected,
-          onChanged: (v) {
-            if (v != null) ref.read(fontProvider.notifier).select(v);
-          },
-          title: Text(
-            font.name,
-            style: TextStyle(fontFamily: font.family),
-          ),
-          subtitle: Text(
-            font.preview,
-            style: TextStyle(
-                fontFamily: font.family,
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          dense: true,
-          secondary: Text(
-            'Aa',
-            style: TextStyle(
-                fontFamily: font.family,
-                fontSize: 18,
-                fontWeight: FontWeight.bold),
-          ),
-        ),
-    ];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: DropdownButton<AppFont>(
+        value: selected,
+        isExpanded: true,
+        underline: const SizedBox.shrink(),
+        borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+        items: [
+          for (final font in AppFont.all)
+            DropdownMenuItem<AppFont>(
+              value: font,
+              child: Text(
+                font.name,
+                style: TextStyle(fontFamily: font.family),
+              ),
+            ),
+        ],
+        onChanged: (font) {
+          if (font != null) ref.read(fontProvider.notifier).select(font);
+        },
+      ),
+    );
   }
 
-  /// Background picker: preset colors + image + clear.
-  List<Widget> _backgroundPicker(BuildContext context, WidgetRef ref, L10n l) {
+  Widget _backgroundPicker(BuildContext context, WidgetRef ref, L10n l) {
     final pref = ref.watch(backgroundProvider);
     const colors = <Color?>[
       null,
-      Color(0xFFF7F3FF),
-      Color(0xFFE8F4FD),
-      Color(0xFFFDF2E9),
-      Color(0xFFF0F7EC),
-      Color(0xFF1A1A2E),
+      Color(0xFFF1EFE8),
+      Color(0xFFE4ECE6),
+      Color(0xFFECE8DF),
+      Color(0xFFE8ECE9),
+      Color(0xFF252724),
     ];
-    return [
-      Card(
-        color: Colors.transparent,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  for (final c in colors)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => ref.read(backgroundProvider.notifier).setColor(c),
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: c ?? Theme.of(context).colorScheme.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: pref.color == c
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outlineVariant,
-                              width: pref.color == c ? 2.5 : 1,
-                            ),
-                          ),
-                          child: c == null
-                              ? Icon(Icons.close, size: 15,
-                                  color: Theme.of(context).colorScheme.outline)
-                              : null,
-                        ),
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: TimeTraceSpace.xs,
+          runSpacing: TimeTraceSpace.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final color in colors)
+              Tooltip(
+                message: color == null ? '默认背景' : '背景颜色',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () =>
+                      ref.read(backgroundProvider.notifier).setColor(color),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: color ?? scheme.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: pref.color == color
+                            ? scheme.primary
+                            : scheme.outlineVariant,
+                        width: pref.color == color ? 2 : 1,
                       ),
                     ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: l.backgroundImage,
-                    icon: const Icon(Icons.image_outlined),
-                    onPressed: () => ref.read(backgroundProvider.notifier).pickImage(),
+                    child: color == null
+                        ? Icon(
+                            Icons.restart_alt_rounded,
+                            size: 15,
+                            color: scheme.onSurfaceVariant,
+                          )
+                        : null,
                   ),
-                  if (pref.isImage || pref.color != null)
-                    IconButton(
-                      tooltip: l.clear,
-                      icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.error),
-                      onPressed: () => ref.read(backgroundProvider.notifier).clear(),
-                    ),
-                ],
-              ),
-              if (pref.isImage || pref.color != null)
-                Row(
-                  children: [
-                    const Icon(Icons.opacity_outlined, size: 16),
-                    Expanded(
-                      child: Slider(
-                        value: pref.opacity,
-                        min: 0.15,
-                        max: 1,
-                        divisions: 17,
-                        label: '${(pref.opacity * 100).round()}%',
-                        onChanged: (v) => ref.read(backgroundProvider.notifier).setOpacity(v),
-                      ),
-                    ),
-                    SizedBox(width: 38, child: Text('${(pref.opacity * 100).round()}%')),
-                  ],
                 ),
+              ),
+            OutlinedButton.icon(
+              onPressed: () =>
+                  ref.read(backgroundProvider.notifier).pickImage(),
+              icon: const Icon(Icons.image_outlined, size: 17),
+              label: Text(l.backgroundImage),
+            ),
+            if (pref.isImage || pref.color != null)
+              TextButton.icon(
+                onPressed: () => ref.read(backgroundProvider.notifier).clear(),
+                icon: const Icon(Icons.close_rounded, size: 17),
+                label: Text(l.clear),
+              ),
+          ],
+        ),
+        if (pref.isImage || pref.color != null) ...[
+          const SizedBox(height: TimeTraceSpace.xs),
+          Row(
+            children: [
+              Text('背景强度', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(width: TimeTraceSpace.sm),
+              Expanded(
+                child: Slider(
+                  value: pref.opacity,
+                  min: 0.15,
+                  max: 1,
+                  divisions: 17,
+                  label: '${(pref.opacity * 100).round()}%',
+                  onChanged: (value) => ref
+                      .read(backgroundProvider.notifier)
+                      .setOpacity(value),
+                ),
+              ),
+              SizedBox(
+                width: 42,
+                child: Text(
+                  '${(pref.opacity * 100).round()}%',
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
             ],
           ),
-        ),
-      ),
-    ];
+        ],
+      ],
+    );
   }
 
-  String _dbPath(AppSettings s) {
-    if (s.dbPath.isNotEmpty) return s.dbPath;
-    final appData = Platform.environment['APPDATA'];
-    return appData == null ? 'AppData/Roaming/TimeTrace/time.db' : '$appData\\TimeTrace\\time.db';
-  }
+  String _dbPath(AppSettings settings) =>
+      settings.dbPath.isNotEmpty ? settings.dbPath : PlatformPaths.database;
 
   void _confirmClear(BuildContext context, WidgetRef ref, L10n l) {
     showDialog<void>(
@@ -478,10 +475,13 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _exportCsv(
-      BuildContext context, WidgetRef ref, L10n l) async {
-    final dir = Platform.environment['APPDATA'] ?? '.';
-    final path = '$dir\\TimeTrace\\export.csv';
+    BuildContext context,
+    WidgetRef ref,
+    L10n l,
+  ) async {
+    final path = PlatformPaths.csvExport;
     try {
+      PlatformPaths.ensureDirectory();
       final now = DateTime.now();
       final start =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
@@ -498,10 +498,296 @@ class SettingsScreen extends ConsumerWidget {
     } catch (e) {
       AppLogger.log('export failed: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l.exportData} ${l.cancel}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${l.exportData} ${l.cancel}')),
+        );
       }
     }
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.children,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 17, color: scheme.primary),
+            const SizedBox(width: TimeTraceSpace.xs),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: TimeTraceSpace.xxs),
+        Text(subtitle, style: theme.textTheme.bodySmall),
+        const SizedBox(height: TimeTraceSpace.sm),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(TimeTraceSpace.xxs),
+            child: Column(children: children),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsControlRow extends StatelessWidget {
+  const _SettingsControlRow({
+    required this.title,
+    required this.subtitle,
+    required this.control,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget control;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(TimeTraceSpace.sm),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          final label = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                label,
+                const SizedBox(height: TimeTraceSpace.sm),
+                Align(alignment: Alignment.centerLeft, child: control),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: label),
+              const SizedBox(width: TimeTraceSpace.lg),
+              Flexible(child: control),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SettingsBlock extends StatelessWidget {
+  const _SettingsBlock({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(TimeTraceSpace.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: TimeTraceSpace.sm),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsToggleRow extends StatelessWidget {
+  const _SettingsToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: TimeTraceSpace.sm,
+        vertical: TimeTraceSpace.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          const SizedBox(width: TimeTraceSpace.md),
+          Switch(
+            value: value,
+            onChanged: enabled ? onChanged : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupDivider extends StatelessWidget {
+  const _GroupDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      indent: TimeTraceSpace.sm,
+      endIndent: TimeTraceSpace.sm,
+      color: Theme.of(context).colorScheme.outlineVariant,
+    );
+  }
+}
+
+class _SliderSetting<T> extends StatelessWidget {
+  const _SliderSetting({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.display,
+    required this.onChanged,
+    this.description,
+    this.help,
+  });
+
+  final String label;
+  final T value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String display;
+  final String? description;
+  final String? help;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(TimeTraceSpace.sm),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        if (help != null) ...[
+                          const SizedBox(width: TimeTraceSpace.xxs),
+                          HelpIcon(message: help!, size: 13),
+                        ],
+                      ],
+                    ),
+                    if (description != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        description!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: TimeTraceSpace.sm),
+              Text(
+                display,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: (value as num).toDouble().clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: display,
+            onChanged: (next) => onChanged(
+              value is int ? next.round() as T : next as T,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -549,102 +835,16 @@ class _SelfStartupTileState extends ConsumerState<_SelfStartupTile> {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: const Row(children: [
-        Text('开机启动'),
-        SizedBox(width: 6),
-        HelpIcon(message: '写入当前用户的启动项，不需要管理员权限。'),
-      ]),
+    return _SettingsToggleRow(
+      title: '开机启动',
+      subtitle: '使用当前用户级启动项，不需要管理员权限。',
       value: _enabled ?? false,
-      onChanged: _busy || _enabled == null ? null : _toggle,
+      enabled: !_busy && _enabled != null,
+      onChanged: _toggle,
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-class _SliderTile<T> extends StatelessWidget {
-  const _SliderTile({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.display,
-    required this.onChanged,
-    this.description,
-    this.help,
-  });
-
-  final String label;
-  final T value;
-  final double min;
-  final double max;
-  final int divisions;
-  final String display;
-  final String? description;
-  final String? help;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Row(
-        children: [
-          Flexible(child: Text(label)),
-          if (help != null) ...[
-            const SizedBox(width: 4),
-            HelpIcon(message: help!, size: 13),
-          ],
-        ],
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Slider(
-            value: (value as num).toDouble().clamp(min, max),
-            min: min,
-            max: max,
-            divisions: divisions,
-            label: display,
-            onChanged: (v) => onChanged(
-              value is int ? v.round() as T : v as T,
-            ),
-          ),
-        ],
-      ),
-      trailing: SizedBox(
-        width: 70,
-        child: Text(display, textAlign: TextAlign.right),
-      ),
-    );
-  }
-}
-
-/// 暂停记录开关：直接调用 bridge 暂停/恢复后台监控（不写配置，立即生效）。
 class _PauseRecordTile extends ConsumerStatefulWidget {
   const _PauseRecordTile();
 
@@ -667,71 +867,51 @@ class _PauseRecordTileState extends ConsumerState<_PauseRecordTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.pause_circle_outline),
-      title: Row(
-        children: [
-          const Flexible(child: Text('暂停记录')),
-          const SizedBox(width: 4),
-          HelpIcon(
-            message: '开启后暂停记录任何活跃时长（锁屏/待机本身也会自动暂停计时）。适合需要完全离线休息的场景。',
-            size: 13,
-          ),
-        ],
-      ),
-      subtitle: const Text('暂停后不再记录活跃时长，适合休息/离线场景'),
-      trailing: Switch(
-        value: _paused,
-        onChanged: (v) {
-          try {
-            ref.read(apiProvider).setTrackingPaused(paused: v);
-          } catch (e) {
-            AppLogger.log('setTrackingPaused failed: $e');
-          }
-          setState(() => _paused = v);
-        },
-      ),
+    return _SettingsToggleRow(
+      title: '暂停记录',
+      subtitle: '临时停止记录活跃时长，适合休息或隐私场景。',
+      value: _paused,
+      onChanged: (value) {
+        try {
+          ref.read(apiProvider).setTrackingPaused(paused: value);
+          setState(() => _paused = value);
+        } catch (e) {
+          AppLogger.log('setTrackingPaused failed: $e');
+        }
+      },
     );
   }
 }
 
-
-/// Reorderable list of carousel views (up/down arrows, persisted).
-List<Widget> _dashboardOrderPicker(WidgetRef ref) {
+Widget _dashboardOrderPicker(WidgetRef ref) {
   final order = ref.watch(dashboardOrderProvider);
   final notifier = ref.read(dashboardOrderProvider.notifier);
-  return [
-    for (var i = 0; i < order.length; i++)
-      Card(
-        color: Colors.transparent,
-        elevation: 0,
-        margin: const EdgeInsets.only(bottom: 6),
-        child: ListTile(
-          dense: true,
+  return Column(
+    children: [
+      for (var i = 0; i < order.length; i++) ...[
+        ListTile(
           leading: Icon(
             switch (order[i]) {
-              'bar' => Icons.bar_chart,
-              'pie' => Icons.pie_chart_outline,
+              'bar' => Icons.bar_chart_rounded,
+              'pie' => Icons.donut_large_rounded,
+              'hourly' => Icons.schedule_rounded,
               'summary' => Icons.summarize_outlined,
-              'apps' => Icons.apps,
+              'apps' => Icons.apps_rounded,
               _ => Icons.dashboard_outlined,
             },
           ),
-          title: Text(kViews[order[i]] ?? order[i],
-              style: const TextStyle(fontSize: 13)),
+          title: Text(kViews[order[i]] ?? order[i]),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+                icon: const Icon(Icons.keyboard_arrow_up_rounded),
                 tooltip: '上移',
-                visualDensity: VisualDensity.compact,
                 onPressed: i > 0 ? () => notifier.move(i, i - 1) : null,
               ),
               IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 tooltip: '下移',
-                visualDensity: VisualDensity.compact,
                 onPressed: i < order.length - 1
                     ? () => notifier.move(i, i + 1)
                     : null,
@@ -739,8 +919,10 @@ List<Widget> _dashboardOrderPicker(WidgetRef ref) {
             ],
           ),
         ),
-      ),
-  ];
+        if (i < order.length - 1) const _GroupDivider(),
+      ],
+    ],
+  );
 }
 
 class _ExcludedAppsDialog extends StatefulWidget {
@@ -772,33 +954,55 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
 
   Future<void> _loadProcesses() async {
     try {
-      final result = await Process.run('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        r'Get-Process | Where-Object { $_.Path } | Select-Object ProcessName,Path | ConvertTo-Csv -NoTypeInformation',
-      ]);
-      final entries = <String, _ProcessEntry>{};
-      for (final line in result.stdout.toString().split(RegExp(r'\r?\n')).skip(1)) {
-        final match = RegExp(r'^"([^"]+)","(.*)"$').firstMatch(line.trim());
-        if (match != null) {
-          final name = '${match.group(1)}.exe';
-          entries[name.toLowerCase()] = _ProcessEntry(name, match.group(2)!);
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _processes = entries.values.toList()..sort((a, b) => a.name.compareTo(b.name));
-          _loading = false;
-        });
-      }
-    } catch (_) {
+      final entries = Platform.isWindows
+          ? await _loadWindowsProcesses()
+          : Platform.isMacOS
+              ? await _loadMacProcesses()
+              : <_ProcessEntry>[];
+      if (!mounted) return;
+      setState(() {
+        _processes = entries..sort((a, b) => a.name.compareTo(b.name));
+        _loading = false;
+      });
+    } catch (e) {
+      AppLogger.log('load process catalog failed: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<List<_ProcessEntry>> _loadWindowsProcesses() async {
+    final result = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      r'Get-Process | Where-Object { $_.Path } | Select-Object ProcessName,Path | ConvertTo-Csv -NoTypeInformation',
+    ]);
+    final entries = <String, _ProcessEntry>{};
+    for (final line in result.stdout.toString().split(RegExp(r'\r?\n')).skip(1)) {
+      final match = RegExp(r'^"([^"]+)","(.*)"$').firstMatch(line.trim());
+      if (match == null) continue;
+      final name = '${match.group(1)}.exe';
+      entries[name.toLowerCase()] = _ProcessEntry(name, match.group(2)!);
+    }
+    return entries.values.toList();
+  }
+
+  Future<List<_ProcessEntry>> _loadMacProcesses() async {
+    final result = await Process.run('/bin/ps', ['-axo', 'comm=']);
+    final entries = <String, _ProcessEntry>{};
+    for (final raw in result.stdout.toString().split('\n')) {
+      final path = raw.trim();
+      if (path.isEmpty || !path.startsWith('/')) continue;
+      final name = path.split('/').last;
+      if (name.isEmpty) continue;
+      entries[name.toLowerCase()] = _ProcessEntry(name, path);
+    }
+    return entries.values.toList();
+  }
+
   Future<void> _addManually() async {
     final controller = TextEditingController();
+    final hint = Platform.isWindows ? '例如：Code.exe' : '例如：Code 或 Safari';
     final value = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -806,23 +1010,33 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: '例如：Code.exe'),
+          decoration: InputDecoration(hintText: hint),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('添加')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('添加'),
+          ),
         ],
       ),
     );
     controller.dispose();
     final name = value?.trim();
-    if (name != null && name.isNotEmpty) setState(() => _selected.add(name));
+    if (name != null && name.isNotEmpty) {
+      setState(() => _selected.add(name));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final query = _filter.text.toLowerCase();
-    final visible = _processes.where((p) => p.name.toLowerCase().contains(query)).toList();
+    final visible = _processes
+        .where((p) => p.name.toLowerCase().contains(query))
+        .toList();
     return AlertDialog(
       title: const Text('排除应用'),
       content: SizedBox(
@@ -834,12 +1048,11 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
               controller: _filter,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(Icons.search_rounded),
                 hintText: '搜索正在运行的应用',
-                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: TimeTraceSpace.xs),
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -853,8 +1066,17 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
                             return CheckboxListTile(
                               dense: true,
                               value: _selected.contains(name),
-                              secondary: AppIcon(exePath: process.path, size: 28),
+                              secondary: AppIcon(
+                                exePath: process.path,
+                                size: 28,
+                              ),
                               title: Text(name),
+                              subtitle: Text(
+                                process.path,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                               onChanged: (checked) => setState(() {
                                 if (checked == true) {
                                   _selected.add(name);
@@ -870,7 +1092,7 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: _addManually,
-                icon: const Icon(Icons.add, size: 18),
+                icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('手动添加其他程序'),
               ),
             ),
@@ -878,8 +1100,14 @@ class _ExcludedAppsDialogState extends State<_ExcludedAppsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-        FilledButton(onPressed: () => Navigator.pop(context, _selected.toList()), child: const Text('保存')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _selected.toList()),
+          child: const Text('保存'),
+        ),
       ],
     );
   }

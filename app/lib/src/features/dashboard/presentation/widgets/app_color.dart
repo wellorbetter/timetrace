@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 
-/// Deterministic color per app name (Material 3 palette).
+/// Deterministic, muted color per app name.
+///
+/// Data visualizations still need distinct series, but the palette stays close
+/// to TimeTrace's warm neutral / restrained accent direction instead of using
+/// saturated Material rainbow colors.
 Color appColor(String name) {
   const colors = [
-    Color(0xFF6750A4), Color(0xFF1976D2), Color(0xFF388E3C),
-    Color(0xFFED6C02), Color(0xFF009688), Color(0xFFD32F2F),
-    Color(0xFF9C27B0), Color(0xFF795548),
+    Color(0xFF6F857A), // sage
+    Color(0xFF71818C), // slate
+    Color(0xFF927C61), // ochre
+    Color(0xFF956F65), // clay
+    Color(0xFF7B846B), // moss
+    Color(0xFF6A8585), // muted teal
+    Color(0xFF927378), // dusty rose
+    Color(0xFF817A72), // warm stone
   ];
   var h = 0;
   for (final c in name.codeUnits) {

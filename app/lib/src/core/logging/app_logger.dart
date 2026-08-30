@@ -1,26 +1,24 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:timetrace_app/src/core/platform_paths.dart';
 
-/// Writes logs + captures unhandled errors to %APPDATA%\TimeTrace\app.log.
+/// Writes desktop logs to the platform-native TimeTrace data directory.
 class AppLogger {
   static File? _file;
 
   static void init() {
-    final dir = Platform.environment['APPDATA'] ?? '.';
-    final logDir = Directory('$dir\\TimeTrace');
-    logDir.createSync(recursive: true);
-    _file = File('${logDir.path}\\app.log');
+    PlatformPaths.ensureDirectory();
+    _file = File(PlatformPaths.appLog);
 
-    // Capture Flutter framework errors
+    // Capture Flutter framework errors.
     FlutterError.onError = (details) {
       log('FLUTTER ERROR: ${details.exception}');
       log('  at ${details.stack}');
-      // Keep default behavior
       FlutterError.presentError(details);
     };
 
-    // Capture platform/async errors
+    // Capture platform/async errors.
     PlatformDispatcher.instance.onError = (error, stack) {
       log('PLATFORM ERROR: $error');
       log('  $stack');
@@ -37,7 +35,7 @@ class AppLogger {
       final line = '[${DateTime.now().toIso8601String()}] $message\n';
       f.writeAsStringSync(line, mode: FileMode.append, flush: true);
     } catch (_) {
-      // Logging must never crash the app
+      // Logging must never crash the app.
     }
   }
 }

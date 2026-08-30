@@ -11,12 +11,14 @@ use anyhow::Result;
 use flutter_rust_bridge::frb;
 use timetrace_core::*;
 
-/// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
+/// Set up Rust-side file logging in the platform-native TimeTrace directory.
 fn setup_logging() {
     use tracing_subscriber::prelude::*;
-    let dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("TimeTrace");
-    let _ = std::fs::create_dir_all(&dir);
-    let log_path = dir.join("timetrace.log");
+
+    let log_path = rust_log_path();
+    if let Some(dir) = log_path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -110,7 +112,7 @@ pub struct DashboardDataDto {
     pub since: Option<String>,
 }
 
-/// User configuration (persisted in AppConfig.json).
+/// User configuration (persisted in config.json).
 #[derive(Debug, Clone)]
 pub struct ConfigDto {
     pub poll_interval_ms: u64,
@@ -126,32 +128,49 @@ pub struct ConfigDto {
 
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
+    db_path: PathBuf,
     monitor: std::sync::Mutex<Option<EventSourceHandle>>,
     paused: std::sync::atomic::AtomicBool,
 }
 
 impl TimeTraceApi {
     /// Create the API, opening the DB and starting the background monitor.
+    ///
+    /// An empty `db_path` selects TimeTrace's platform-native default path.
     #[frb(sync)]
     pub fn create(db_path: String) -> Result<TimeTraceApi> {
         setup_logging();
-        tracing::info!("TimeTrace bridge starting, db={}", db_path);
-        let db = Arc::new(SqliteStore::open(PathBuf::from(&db_path))?);
+        let resolved_db_path = if db_path.trim().is_empty() {
+            database_path()
+        } else {
+            PathBuf::from(db_path)
+        };
+        if let Some(parent) = resolved_db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        tracing::info!(
+            "TimeTrace bridge starting, platform={}, db={}",
+            std::env::consts::OS,
+            resolved_db_path.display()
+        );
+        let db = Arc::new(SqliteStore::open(resolved_db_path.clone())?);
 
-        // Auto-scan startup entries on first launch
+        // Auto-scan startup entries on first launch. Platforms that cannot
+        // enumerate arbitrary login items simply return an empty list.
         if DataStore::get_all_startup_entries(&*db).is_empty() {
-            let entries = WindowsStartupScanner::new().scan();
+            let entries = PlatformStartupScanner::new().scan();
             DataStore::upsert_startup_entries(&*db, &entries);
         }
 
-        // Start background monitor.
+        // Start the shared monitor with target-specific adapters selected by
+        // timetrace-core. Flutter never needs to know which implementation runs.
         let config = AppConfig::load();
         let initially_paused = !config.auto_start_tracking;
         let excluded_apps = config.excluded_apps.clone();
         let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
         let handle = run_monitor_loop(
-            Win32WindowResolver,
-            Win32IdleDetector::new(),
+            PlatformWindowResolver::new(),
+            PlatformIdleDetector::new(),
             Duration::from_millis(config.poll_interval_ms),
             Duration::from_secs(config.idle_threshold_minutes * 60),
             excluded_apps,
@@ -160,12 +179,13 @@ impl TimeTraceApi {
         if initially_paused {
             handle.pause();
         }
-        let api = TimeTraceApi {
+
+        Ok(TimeTraceApi {
             db,
+            db_path: resolved_db_path,
             monitor: std::sync::Mutex::new(Some(handle)),
             paused: std::sync::atomic::AtomicBool::new(initially_paused),
-        };
-        Ok(api)
+        })
     }
 
     /// Pause or resume the background tracking monitor.
@@ -247,18 +267,28 @@ impl TimeTraceApi {
             .collect()
     }
 
-    /// Enable/disable a startup entry.
+    /// Enable/disable a startup entry when supported by the current platform.
     #[frb(sync)]
     pub fn toggle_startup(&self, id: i64, enable: bool) -> Result<()> {
         let entries = DataStore::get_all_startup_entries(&*self.db);
-        let entry = entries.iter().find(|e| e.id == id).cloned().ok_or_else(|| anyhow::anyhow!("entry not found"))?;
-        let scanner = WindowsStartupScanner::new();
+        let entry = entries
+            .iter()
+            .find(|e| e.id == id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("entry not found"))?;
+        let scanner = PlatformStartupScanner::new();
         if enable {
             scanner.enable(&entry).map_err(|e| anyhow::anyhow!(e))?;
             DataStore::set_startup_enabled(&*self.db, id, true, None, None);
         } else {
             let r = scanner.disable(&entry).map_err(|e| anyhow::anyhow!(e))?;
-            DataStore::set_startup_enabled(&*self.db, id, false, r.backup_value.as_deref(), r.backup_path.as_deref());
+            DataStore::set_startup_enabled(
+                &*self.db,
+                id,
+                false,
+                r.backup_value.as_deref(),
+                r.backup_path.as_deref(),
+            );
         }
         Ok(())
     }
@@ -288,11 +318,12 @@ impl TimeTraceApi {
             active_seconds: active,
             idle_seconds: idle,
             total_seconds: DataStore::total_tracked_seconds(&*self.db),
-            since: DataStore::recording_started_at(&*self.db).map(|t| t.format("%Y-%m-%d").to_string()),
+            since: DataStore::recording_started_at(&*self.db)
+                .map(|t| t.format("%Y-%m-%d").to_string()),
         }
     }
 
-    /// Extract an exe icon as raw RGBA pixels.
+    /// Extract an application icon as raw RGBA pixels when supported.
     #[frb(sync)]
     pub fn get_app_icon(&self, exe_path: String) -> Option<IconDto> {
         let cleaned = clean_exe_path(&exe_path).unwrap_or_else(|| exe_path.clone());
@@ -303,8 +334,7 @@ impl TimeTraceApi {
         })
     }
 
-    /// Resolve a startup command line to its clean exe path (env-expanded,
-    /// quotes/args stripped). Returns None if no .exe is found.
+    /// Resolve a Windows startup command line to its clean executable path.
     #[frb(sync)]
     pub fn resolve_exe_path(&self, command: String) -> Option<String> {
         clean_exe_path(&command)
@@ -321,11 +351,11 @@ impl TimeTraceApi {
             start_minimized: config.start_minimized,
             auto_start_tracking: config.auto_start_tracking,
             excluded_apps: config.excluded_apps,
-            db_path: String::new(),
+            db_path: self.db_path.to_string_lossy().into_owned(),
         }
     }
 
-    /// Persist user configuration (applies on next monitor start).
+    /// Persist user configuration (monitor timing/exclusions apply next launch).
     #[frb(sync)]
     pub fn set_config(&self, config: ConfigDto) -> Result<()> {
         let mut app_config = AppConfig::load();
@@ -336,6 +366,7 @@ impl TimeTraceApi {
         app_config.auto_start_tracking = config.auto_start_tracking;
         app_config.excluded_apps = config.excluded_apps;
         app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
         // Keep the startup command's optional --minimized flag aligned with the
         // persisted preference when the user changes it after enabling startup.
         if timetrace_core::is_self_start_enabled().unwrap_or(false) {
@@ -353,7 +384,11 @@ impl TimeTraceApi {
         let this_monday = today - chrono::Duration::days(weekday);
         let last_monday = this_monday - chrono::Duration::days(7);
         let this_week = DataStore::total_tracked_in_range(&*self.db, this_monday, today);
-        let last_week = DataStore::total_tracked_in_range(&*self.db, last_monday, this_monday - chrono::Duration::days(1));
+        let last_week = DataStore::total_tracked_in_range(
+            &*self.db,
+            last_monday,
+            this_monday - chrono::Duration::days(1),
+        );
         (this_week, last_week)
     }
 
@@ -367,7 +402,12 @@ impl TimeTraceApi {
         let mut dtos = Vec::with_capacity(sessions.len());
         for (app, is_idle, dur, started) in sessions {
             if is_idle { idle += dur; } else { active += dur; }
-            dtos.push(DaySessionDto { app_name: app, is_idle, duration_secs: dur, started_at: started });
+            dtos.push(DaySessionDto {
+                app_name: app,
+                is_idle,
+                duration_secs: dur,
+                started_at: started,
+            });
         }
         DayDetailDto {
             date,
@@ -499,7 +539,7 @@ impl TimeTraceApi {
         DataStore::set_diary_image_entry(&*self.db, &path, entry_id)
     }
 
-    /// Image paths attached to a diary entry (朋友圈 album).
+    /// Image paths attached to a diary entry.
     #[frb(sync)]
     pub fn get_diary_images_for_entry(&self, entry_id: i64) -> Vec<String> {
         DataStore::get_diary_images_for_entry(&*self.db, entry_id)
@@ -527,7 +567,13 @@ impl TimeTraceApi {
         let rows = DataStore::export_rows(&*self.db, s, e);
         let mut csv = String::from("app,date,active_secs,idle_secs\n");
         for (app, date, active, idle) in rows {
-            csv.push_str(&format!("{},{},{},{}\n", csv_field(&app), csv_field(&date), active, idle));
+            csv.push_str(&format!(
+                "{},{},{},{}\n",
+                csv_field(&app),
+                csv_field(&date),
+                active,
+                idle
+            ));
         }
         csv
     }
@@ -542,42 +588,32 @@ fn csv_field(value: &str) -> String {
 }
 
 fn parse_date(s: &str) -> chrono::NaiveDate {
-    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or_else(|_| chrono::Local::now().date_naive())
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .unwrap_or_else(|_| chrono::Local::now().date_naive())
 }
 
-/// Extract a clean, env-expanded exe path from a startup command line.
-/// Handles: quoted paths, trailing args, %VAR% env vars, double backslashes.
+/// Extract a clean, env-expanded exe path from a Windows startup command line.
 fn clean_exe_path(cmd: &str) -> Option<String> {
     let lower = cmd.to_lowercase();
     let idx = lower.find(".exe").or_else(|| lower.find(".lnk"))?;
-    let end = idx + if lower[idx..].starts_with(".exe") { 4 } else { 4 };
+    let end = idx + 4;
     if end > cmd.len() {
         return None;
     }
     let before = &cmd[..end];
-    // The exe path itself may contain spaces (e.g. "C:\\Program Files\\...").
-    // Only a quoted command lets us trim leading tokens; otherwise the whole
-    // prefix up to ".exe" IS the path (arguments can only follow ".exe").
-    let start = before
-        .rfind('"')
-        .map(|q| q + 1)
-        
-        .unwrap_or(0);
+    let start = before.rfind('"').map(|q| q + 1).unwrap_or(0);
     if start >= end {
         return None;
     }
     let raw = &cmd[start..end];
 
-    // Normalize double backslashes from registry escaping: \\ → \
-    // (only when the path otherwise parses — a single backslash stays)
+    // Normalize doubled backslashes from registry escaping.
     let raw = raw.replace("\\\\", "\\");
 
-    // Expand %VAR% using process environment (windir, SystemRoot, etc.)
     let mut expanded = raw.to_string();
     for (k, v) in std::env::vars() {
         expanded = expanded.replace(&format!("%{}%", k), &v);
     }
-    // Fallback for common vars if somehow not in env
     let common = [
         ("windir", "C:\\Windows"),
         ("SystemRoot", "C:\\Windows"),
@@ -589,11 +625,12 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
         expanded = expanded.replace(&format!("%{}%", k), v);
     }
 
-    if expanded.contains("%") {
-        return None; // unresolved env var — can't iconify
+    if expanded.contains('%') {
+        return None;
     }
     Some(expanded)
 }
+
 #[cfg(test)]
 mod tests {
     use super::{clean_exe_path, csv_field};
