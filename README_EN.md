@@ -26,6 +26,13 @@
 
 TimeTrace automatically records foreground applications and active time, then brings the calendar, charts, app details, and journal into one desktop workspace. Records stay on your computer by default; AI journaling is an explicit opt-in.
 
+<p align="center">
+  <a href="#download">Download</a> ·
+  <a href="#interface-tour">Interface tour</a> ·
+  <a href="#ai-journal-and-privacy-boundary">AI &amp; privacy</a> ·
+  <a href="#build-from-source">Build</a>
+</p>
+
 ## Download
 
 Get the latest build from [GitHub Releases](https://github.com/wellorbetter/timetrace/releases/latest).
@@ -44,6 +51,44 @@ Get the latest build from [GitHub Releases](https://github.com/wellorbetter/time
 - **Desktop experience** — system tray, startup/minimize behavior, excluded apps, light/dark themes, fonts, backgrounds, and overview layout controls
 - **Data control** — choose the database folder, export CSV, pause tracking, or delete all local data
 
+## Interface tour
+
+### One calendar, five synchronized views
+
+Select a date and the right-hand carousel stays in sync across the application bars shown in the hero image, usage share, daily summary, application details, and 24-hour distribution—without sending you through separate pages.
+
+| Usage share | Daily summary |
+| --- | --- |
+| ![Application usage share](docs/screenshots/v1.1-share.png) | ![Daily activity summary](docs/screenshots/v1.1-daily-summary.png) |
+| Application details | 24-hour distribution |
+| ![Application list and durations](docs/screenshots/v1.1-app-list.png) | ![Hourly usage](docs/screenshots/v1.1-hourly.png) |
+
+### The journal lives beside the day's facts
+
+Scroll down from the overview to write Markdown, attach images, or ask AI to draft an editable journal entry from that day's factual activity. Generated entries retain their model provenance instead of pretending to be handwritten.
+
+![Journal editor and AI-generated entry](docs/screenshots/v1.1-ai-diary.png)
+
+### Make the workspace yours
+
+| Theme, font, background, and opacity | Carousel visibility and ordering |
+| --- | --- |
+| ![Appearance and background settings](docs/screenshots/v1.1-appearance.png) | ![Overview layout settings](docs/screenshots/v1.1-layout.png) |
+
+### AI is configurable, not a black box
+
+Control the model endpoint, model name, API-key environment variable, writing voice, reflection and suggestion rules, access to existing journals, and manual or scheduled generation independently.
+
+| Model service and connection check | Writing and generation controls |
+| --- | --- |
+| ![AI model settings](docs/screenshots/v1.1-ai-settings.png) | ![AI writing and schedule settings](docs/screenshots/v1.1-ai-writing.png) |
+
+### Background behavior and data remain under your control
+
+| Polling, idle threshold, tray, and startup | Data folder, export, and deletion |
+| --- | --- |
+| ![Tracking and background settings](docs/screenshots/v1.1-monitoring.png) | ![Local data management with username redacted](docs/screenshots/v1.1-data-redacted.png) |
+
 ## AI journal and privacy boundary
 
 AI journaling is off by default. While it is off, TimeTrace does not contact a model service or send usage records or journal text.
@@ -51,10 +96,6 @@ AI journaling is off by default. While it is off, TimeTrace does not contact a m
 When you opt in and generate an entry, TimeTrace sends the configured endpoint only the selected day's necessary usage facts: aggregate active/idle time, session and context-switch counts, peak time, top applications, and a bounded usage history. Window titles, file paths, and raw events are excluded. Existing journal text is also excluded unless you separately enable “Allow existing journal entries.”
 
 The API key comes from a system environment variable that you name; TimeTrace stores the variable name, not the key. The connection test sends no TimeTrace data. Your configured model provider's privacy policy and pricing still apply.
-
-| AI journal | AI settings |
-| --- | --- |
-| ![AI-generated journal](docs/screenshots/v1.1-ai-diary.png) | ![AI journal settings](docs/screenshots/v1.1-ai-settings.png) |
 
 ## Local data
 
