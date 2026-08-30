@@ -20,6 +20,22 @@ Widget recapReportDesktopPreview() => MaterialApp(
   ),
 );
 
+@Preview(name: '回顾 · AI 增强桌面', size: Size(1180, 760))
+Widget recapReportAiDesktopPreview() => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  theme: TimetraceTheme.dark(),
+  home: Scaffold(
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: RecapReportView(
+        result: _previewAiResult,
+        generatedAt: DateTime(2026, 8, 30, 13, 19),
+        aiEnabled: true,
+      ),
+    ),
+  ),
+);
+
 final _previewSnapshot = RecapSnapshot(
   label: '今天',
   start: _previewDate,
@@ -42,6 +58,44 @@ final _previewSnapshot = RecapSnapshot(
   peakHour: 0,
   peakHourActiveSeconds: 5700,
   diaryEntries: [],
+  activityFacts: [
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T00:04:00Z',
+      appName: 'TFTTencentClient-Win64-Shipping',
+      durationSeconds: 5700,
+    ),
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T01:40:00Z',
+      appName: 'Microsoft Edge',
+      durationSeconds: 1041,
+    ),
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T02:03:00Z',
+      appName: '英雄联盟',
+      durationSeconds: 776,
+    ),
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T02:18:00Z',
+      appName: 'TimeTrace',
+      durationSeconds: 253,
+    ),
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T02:24:00Z',
+      appName: '资源管理器',
+      durationSeconds: 141,
+    ),
+    RecapActivityFact(
+      date: _previewDate,
+      startedAt: '2026-08-30T02:28:00Z',
+      appName: 'QQ',
+      durationSeconds: 131,
+    ),
+  ],
 );
 
 final _previewResult = RecapResult(
@@ -55,6 +109,15 @@ final _previewResult = RecapResult(
   ],
   snapshot: _previewSnapshot,
   origin: RecapOrigin.local,
+);
+
+final _previewAiResult = RecapResult(
+  headline: '主要在 TFT 客户端活动，零点前后最集中',
+  summary: '今天的大部分活跃时间集中在 TFTTencentClient-Win64-Shipping，随后短暂切换到 Edge 与英雄联盟；00:00–01:00 是记录中最活跃的时段。',
+  insights: _previewResult.insights,
+  snapshot: _previewSnapshot,
+  origin: RecapOrigin.ai,
+  model: 'deepseek-v4-flash',
 );
 
 final _previewDate = DateTime(2026, 8, 30);

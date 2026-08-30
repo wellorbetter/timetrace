@@ -42,11 +42,7 @@ void main() {
           activeSeconds: 2 * 3600,
           idleSeconds: 0,
         ),
-        RecapAppFact(
-          name: 'Terminal',
-          activeSeconds: 3600,
-          idleSeconds: 0,
-        ),
+        RecapAppFact(name: 'Terminal', activeSeconds: 3600, idleSeconds: 0),
       ],
       sessionCount: 14,
       contextSwitches: 8,
@@ -88,5 +84,42 @@ void main() {
     expect(aiJson['diary_entries'], isNull);
     expect(aiJson['diary_entry_count'], 1);
     expect(aiJson.toString(), isNot(contains('这段文字默认不应发送给外部模型')));
+  });
+
+  test('AI serialization sends only the latest bounded timeline sample', () {
+    final snapshot = RecapSnapshot(
+      label: '今天',
+      start: DateTime(2026, 8, 27),
+      end: DateTime(2026, 8, 27),
+      activeSeconds: 3600,
+      idleSeconds: 0,
+      previousActiveSeconds: 0,
+      topApps: const [],
+      sessionCount: 30,
+      contextSwitches: 29,
+      longestActiveStreakSeconds: 3600,
+      peakHour: 10,
+      peakHourActiveSeconds: 3600,
+      diaryEntries: const [],
+      activityFacts: List.generate(
+        30,
+        (index) => RecapActivityFact(
+          date: DateTime(2026, 8, 27),
+          startedAt:
+              '2026-08-27T${(index % 24).toString().padLeft(2, '0')}:00:00Z',
+          appName: '应用 $index',
+          durationSeconds: 120,
+        ),
+      ),
+    );
+
+    final json = snapshot.toJson(includeDiaryEntries: false);
+    final timeline = json['activity_timeline']! as List<Object?>;
+
+    expect(json['activity_fact_count'], 30);
+    expect(json['activity_timeline_truncated'], isTrue);
+    expect(timeline, hasLength(24));
+    expect(timeline.first.toString(), contains('应用 6'));
+    expect(timeline.last.toString(), contains('应用 29'));
   });
 }

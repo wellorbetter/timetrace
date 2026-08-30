@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
@@ -18,9 +20,7 @@ void main() {
     expect(explicit.enabled, isTrue);
   });
 
-  testWidgets('defaults to local recap and hides cloud setup', (
-    tester,
-  ) async {
+  testWidgets('defaults to local recap and hides cloud setup', (tester) async {
     tester.view.physicalSize = const Size(420, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -52,7 +52,10 @@ void main() {
     );
     expect(find.byKey(const ValueKey('recap-ai-diary-toggle')), findsOneWidget);
     expect(find.byKey(const ValueKey('recap-ai-key-guide')), findsOneWidget);
-    expect(find.textContaining('setx DEEPSEEK_API_KEY'), findsOneWidget);
+    final setupCommand = Platform.isWindows
+        ? 'setx DEEPSEEK_API_KEY'
+        : 'export DEEPSEEK_API_KEY';
+    expect(find.textContaining(setupCommand), findsOneWidget);
   });
 
   testWidgets('connected state exposes a no-usage-data connection check', (

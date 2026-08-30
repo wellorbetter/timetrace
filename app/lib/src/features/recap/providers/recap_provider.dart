@@ -104,8 +104,7 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
     );
     final apps = api.getUsageSplit(start: startText, end: endText).toList()
       ..sort(
-        (a, b) =>
-            b.activeSeconds.toInt().compareTo(a.activeSeconds.toInt()),
+        (a, b) => b.activeSeconds.toInt().compareTo(a.activeSeconds.toInt()),
       );
     final topApps = apps
         .where((app) => app.activeSeconds.toInt() > 0)
@@ -135,6 +134,7 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
     var longestStreak = 0;
     int? peakHour;
     var peakHourSeconds = 0;
+    final activityFacts = <RecapActivityFact>[];
 
     // Full behavior metrics for a day/week. A month intentionally stays on
     // range-level aggregate calls until Rust exposes a batched recap query.
@@ -148,6 +148,23 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
         sessionCount += metrics.$1;
         contextSwitches += metrics.$2;
         if (metrics.$3 > longestStreak) longestStreak = metrics.$3;
+        activityFacts.addAll(
+          detail.sessions
+              .where(
+                (session) =>
+                    !session.isIdle &&
+                    session.durationSecs.toInt() > 0 &&
+                    session.appName.trim().isNotEmpty,
+              )
+              .map(
+                (session) => RecapActivityFact(
+                  date: day,
+                  startedAt: session.startedAt,
+                  appName: session.appName,
+                  durationSeconds: session.durationSecs.toInt(),
+                ),
+              ),
+        );
 
         final buckets = api.getDayHourly(date: dayText);
         for (var hour = 0; hour < 24 && hour < buckets.length; hour++) {
@@ -176,6 +193,7 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
       peakHour: peakHour,
       peakHourActiveSeconds: peakHourSeconds,
       diaryEntries: diary,
+      activityFacts: activityFacts,
     );
   }
 }

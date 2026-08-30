@@ -60,4 +60,36 @@ void main() {
     expect(find.byIcon(Icons.link_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('many applications are grouped into four slices plus other', (
+    tester,
+  ) async {
+    final manyApps = List.generate(
+      8,
+      (index) => AppUsageItem(
+        appName: '应用 $index',
+        activeSeconds: 3600 - index * 300,
+        idleSeconds: 0,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 620,
+            height: 380,
+            child: PieChartCard(apps: manyApps),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('应用 0'), findsOneWidget);
+    expect(find.text('应用 3'), findsOneWidget);
+    expect(find.text('其他'), findsOneWidget);
+    expect(find.text('应用 4'), findsNothing);
+    expect(find.text('前 4 项 + 其他'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -16,13 +16,12 @@ void main() {
     await _pumpReport(tester);
 
     expect(find.text('本地回顾'), findsOneWidget);
-    expect(find.text('关键事实'), findsOneWidget);
+    expect(find.text('事实依据'), findsOneWidget);
     expect(find.text('时间分配'), findsOneWidget);
+    expect(find.text('活动时间线'), findsOneWidget);
     expect(find.text('AI 增强'), findsNothing);
 
-    final disclosure = find.byKey(
-      const ValueKey('recap-snapshot-disclosure'),
-    );
+    final disclosure = find.byKey(const ValueKey('recap-snapshot-disclosure'));
     await tester.ensureVisible(disclosure);
     await tester.tap(disclosure);
     await tester.pumpAndSettle();
@@ -44,6 +43,35 @@ void main() {
     expect(find.byKey(const ValueKey('recap-summary-surface')), findsOneWidget);
     expect(find.text('活跃时长'), findsOneWidget);
     expect(find.text('最常用'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('activity facts stay in a bounded internal list', (tester) async {
+    tester.view.physicalSize = const Size(1000, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpReport(tester);
+
+    final timeline = find.byKey(const ValueKey('recap-activity-list'));
+    await tester.ensureVisible(timeline);
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(timeline).height, lessThanOrEqualTo(220));
+    expect(find.text('应用 01'), findsOneWidget);
+
+    final scrollable = find.descendant(
+      of: timeline,
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('应用 10'),
+      120,
+      scrollable: scrollable,
+    );
+
+    expect(find.text('应用 10'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -85,16 +113,21 @@ final _snapshot = RecapSnapshot(
   peakHour: 10,
   peakHourActiveSeconds: 1800,
   diaryEntries: [],
+  activityFacts: List.generate(
+    12,
+    (index) => RecapActivityFact(
+      date: DateTime(2026, 8, 30),
+      startedAt: '2026-08-30T${index.toString().padLeft(2, '0')}:00:00Z',
+      appName: '应用 ${index.toString().padLeft(2, '0')}',
+      durationSeconds: 900,
+    ),
+  ),
 );
 
 final _result = RecapResult(
   headline: '今天主要时间集中在一个应用',
   summary: '活跃 2 小时，最长连续活跃 45 分钟。',
-  insights: [
-    '最常用应用活跃 1 小时 30 分。',
-    '记录到 36 个活跃片段。',
-    '应用切换 28 次。',
-  ],
+  insights: ['最常用应用活跃 1 小时 30 分。', '记录到 36 个活跃片段。', '应用切换 28 次。'],
   snapshot: _snapshot,
   origin: RecapOrigin.local,
 );

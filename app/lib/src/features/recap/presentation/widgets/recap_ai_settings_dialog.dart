@@ -104,10 +104,7 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
   Widget build(BuildContext context) {
     final media = MediaQuery.sizeOf(context);
     final colors = Theme.of(context).colorScheme;
-    final contentWidth = math.max(
-      0.0,
-      math.min(700.0, media.width - 80),
-    );
+    final contentWidth = math.max(0.0, math.min(700.0, media.width - 80));
     return AlertDialog(
       key: const ValueKey('recap-ai-settings-dialog'),
       insetPadding: const EdgeInsets.all(TimeTraceSpace.md),
@@ -133,11 +130,7 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
               color: colors.secondaryContainer,
               borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             ),
-            child: Icon(
-              Icons.notes_rounded,
-              size: 19,
-              color: colors.primary,
-            ),
+            child: Icon(Icons.notes_rounded, size: 19, color: colors.primary),
           ),
           const SizedBox(width: TimeTraceSpace.sm),
           const Expanded(child: Text('回顾设置')),
@@ -276,10 +269,7 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _AiEnhancementToggle extends StatelessWidget {
-  const _AiEnhancementToggle({
-    required this.enabled,
-    required this.onChanged,
-  });
+  const _AiEnhancementToggle({required this.enabled, required this.onChanged});
 
   final bool enabled;
   final ValueChanged<bool> onChanged;
@@ -302,7 +292,7 @@ class _AiEnhancementToggle extends StatelessWidget {
         title: const Text('使用 AI 增强'),
         subtitle: Text(
           enabled
-              ? '开启后，聚合事实会发送到你配置的模型服务。'
+              ? '开启后，应用名称、活跃时长与时间段会发送到你配置的模型服务。'
               : '关闭时只在本机生成回顾，不需要 API Key。',
         ),
         value: enabled,
@@ -684,7 +674,7 @@ class _DataScopeTile extends StatelessWidget {
       key: const ValueKey('recap-ai-diary-toggle'),
       secondary: const Icon(Icons.shield_outlined),
       title: const Text('允许使用日记文字'),
-      subtitle: const Text('默认关闭。开启后，已发布日记会随聚合事实一起发送给模型。'),
+      subtitle: const Text('默认关闭。开启后，已发布日记会随回顾事实一起发送给模型。'),
       value: includeDiaryEntries,
       onChanged: onChanged,
     ),

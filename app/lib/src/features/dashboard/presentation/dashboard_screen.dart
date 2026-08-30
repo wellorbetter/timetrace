@@ -90,6 +90,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
   final GlobalKey _calendarKey = GlobalKey();
   double _calendarH = 0;
+  final GlobalKey _appsViewportKey = GlobalKey();
+  final ScrollController _appsScrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -112,6 +114,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   void dispose() {
     _carouselCtrl.dispose();
     _carouselDot.dispose();
+    _appsScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -120,11 +123,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
 
-    var delta = realIdx - _carouselIndex;
+    final currentAbsolute = _carouselCtrl.hasClients
+        ? (_carouselCtrl.page?.round() ?? _carouselAbs)
+        : _carouselAbs;
+    final currentIndex = currentAbsolute % pageCount;
+    var delta = realIdx - currentIndex;
     if (delta > pageCount / 2) delta -= pageCount;
     if (delta < -pageCount / 2) delta += pageCount;
-    final target = _carouselAbs + delta;
-    if (target == _carouselAbs) return;
+    final target = currentAbsolute + delta;
+    if (target == currentAbsolute) return;
 
     if (animate) {
       _carouselCtrl.animateToPage(
@@ -166,18 +173,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       });
 
       if (fromAppsPage) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || i >= _rowKeys.length) return;
-          final rowContext = _rowKeys[i].currentContext;
-          if (rowContext != null) {
-            Scrollable.ensureVisible(
-              rowContext,
-              duration: TimeTraceMotion.normal,
-              curve: TimeTraceMotion.standard,
-              alignment: 0.2,
-            );
-          }
-        });
+        _scrollAppsToRow(i);
       }
     } catch (_) {
       if (mounted) setState(() => _loadingPages = false);
@@ -193,22 +189,46 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final appsIdx = order.indexOf('apps');
     if (appsIdx >= 0) {
       _goToReal(appsIdx);
-      _scrollToRow(idx);
+      _scrollAppsToRow(idx);
     }
   }
 
-  void _scrollToRow(int i) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || i >= _rowKeys.length) return;
-      final rowContext = _rowKeys[i].currentContext;
-      if (rowContext != null) {
-        Scrollable.ensureVisible(
-          rowContext,
+  void _scrollAppsToRow(int i) {
+    Future<void>.delayed(TimeTraceMotion.normal, () {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || i >= _rowKeys.length || !_appsScrollCtrl.hasClients) {
+          return;
+        }
+        final rowContext = _rowKeys[i].currentContext;
+        final viewportContext = _appsViewportKey.currentContext;
+        final rowBox = rowContext?.findRenderObject() as RenderBox?;
+        final viewportBox = viewportContext?.findRenderObject() as RenderBox?;
+        if (rowBox == null || viewportBox == null) return;
+
+        final rowTop = rowBox
+            .localToGlobal(Offset.zero, ancestor: viewportBox)
+            .dy;
+        final rowBottom = rowTop + rowBox.size.height;
+        final viewportHeight = viewportBox.size.height;
+        var target = _appsScrollCtrl.offset;
+        if (rowTop < TimeTraceSpace.xs) {
+          target += rowTop - TimeTraceSpace.xs;
+        } else if (rowBottom > viewportHeight - TimeTraceSpace.xs) {
+          target += rowBottom - viewportHeight + TimeTraceSpace.xs;
+        } else {
+          return;
+        }
+        final safeTarget = target.clamp(
+          _appsScrollCtrl.position.minScrollExtent,
+          _appsScrollCtrl.position.maxScrollExtent,
+        );
+        _appsScrollCtrl.animateTo(
+          safeTarget.toDouble(),
           duration: TimeTraceMotion.normal,
           curve: TimeTraceMotion.standard,
-          alignment: 0.2,
         );
-      }
+      });
     });
   }
 
@@ -253,7 +273,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   final appsIdx = order.indexOf('apps');
                   if (appsIdx >= 0) {
                     _goToReal(appsIdx);
-                    _scrollToRow(i);
+                    _scrollAppsToRow(i);
                   }
                 },
                 tall: true,
@@ -269,7 +289,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   final appsIdx = order.indexOf('apps');
                   if (appsIdx >= 0) {
                     _goToReal(appsIdx, animate: true);
-                    _scrollToRow(i);
+                    _scrollAppsToRow(i);
                   }
                 },
               ),
@@ -288,7 +308,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 },
               ),
       'summary' => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.sm),
+        padding: EdgeInsets.zero,
         child: Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -300,18 +320,26 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       'apps' =>
         apps.isEmpty
             ? _placeholder('暂无使用数据')
-            : Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: TimeTraceSpace.xxs,
-                ),
-                child: SingleChildScrollView(
-                  child: AppListSection(
-                    apps: apps,
-                    selected: _selected,
-                    pages: _pages,
-                    loading: _loadingPages,
-                    onSelect: (i) => _selectApp(i, fromAppsPage: true),
-                    rowKeys: _rowKeys,
+            : LayoutBuilder(
+                builder: (context, constraints) => Scrollbar(
+                  controller: _appsScrollCtrl,
+                  child: SingleChildScrollView(
+                    key: _appsViewportKey,
+                    controller: _appsScrollCtrl,
+                    primary: false,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: AppListSection(
+                        apps: apps,
+                        selected: _selected,
+                        pages: _pages,
+                        loading: _loadingPages,
+                        onSelect: (i) => _selectApp(i, fromAppsPage: true),
+                        rowKeys: _rowKeys,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -376,8 +404,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         final compactHeight = constraints.maxHeight < 860;
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
-        final horizontalPadding = constraints.maxWidth <
-                TimeTraceLayout.compactBreakpoint
+        final horizontalPadding =
+            constraints.maxWidth < TimeTraceLayout.compactBreakpoint
             ? TimeTraceSpace.sm
             : TimeTraceSpace.lg;
 
@@ -415,9 +443,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ],
                 ),
                 SizedBox(
-                  height: compactHeight
-                      ? TimeTraceSpace.xs
-                      : TimeTraceSpace.sm,
+                  height: compactHeight ? TimeTraceSpace.xs : TimeTraceSpace.sm,
                 ),
                 DashboardSummaryStrip(
                   state: state,
@@ -425,9 +451,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   compact: compactHeight,
                 ),
                 SizedBox(
-                  height: compactHeight
-                      ? TimeTraceSpace.sm
-                      : TimeTraceSpace.md,
+                  height: compactHeight ? TimeTraceSpace.sm : TimeTraceSpace.md,
                 ),
                 if (apps.isEmpty)
                   Container(
@@ -470,52 +494,54 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         ? 350.0
                         : (screenSize.twoColumn ? 400.0 : 360.0);
 
-                    final carousel = Column(
+                    final carouselViewport = Row(
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left_rounded),
-                                tooltip: '上一个视图',
-                                onPressed: () => _carouselCtrl.previousPage(
-                                  duration: TimeTraceMotion.normal,
-                                  curve: TimeTraceMotion.standard,
-                                ),
-                              ),
-                              Expanded(
-                                child: PageView.builder(
-                                  controller: _carouselCtrl,
-                                  onPageChanged: (i) {
-                                    _carouselAbs = i;
-                                    _carouselIndex = i % pageCount;
-                                    _carouselDot.value = _carouselIndex;
-                                  },
-                                  itemCount: _carouselInit * 2,
-                                  itemBuilder: (context, i) => _KeepAlivePage(
-                                    child: RepaintBoundary(
-                                      child: _buildPage(
-                                        order[i % pageCount],
-                                        day: calendarDay,
-                                        order: order,
-                                        apps: apps,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right_rounded),
-                                tooltip: '下一个视图',
-                                onPressed: () => _carouselCtrl.nextPage(
-                                  duration: TimeTraceMotion.normal,
-                                  curve: TimeTraceMotion.standard,
-                                ),
-                              ),
-                            ],
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left_rounded),
+                          tooltip: '上一个视图',
+                          onPressed: () => _carouselCtrl.previousPage(
+                            duration: TimeTraceMotion.normal,
+                            curve: TimeTraceMotion.standard,
                           ),
                         ),
-                        const SizedBox(height: TimeTraceSpace.xs),
+                        Expanded(
+                          child: PageView.builder(
+                            controller: _carouselCtrl,
+                            allowImplicitScrolling: false,
+                            onPageChanged: (i) {
+                              _carouselAbs = i;
+                              _carouselIndex = i % pageCount;
+                              _carouselDot.value = _carouselIndex;
+                            },
+                            itemCount: _carouselInit * 2,
+                            itemBuilder: (context, i) => _KeepAlivePage(
+                              child: RepaintBoundary(
+                                child: _buildPage(
+                                  order[i % pageCount],
+                                  day: calendarDay,
+                                  order: order,
+                                  apps: apps,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right_rounded),
+                          tooltip: '下一个视图',
+                          onPressed: () => _carouselCtrl.nextPage(
+                            duration: TimeTraceMotion.normal,
+                            curve: TimeTraceMotion.standard,
+                          ),
+                        ),
+                      ],
+                    );
+
+                    Widget carouselAtHeight(double pageHeight) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(height: pageHeight, child: carouselViewport),
+                        const SizedBox(height: TimeTraceSpace.xxs),
                         ValueListenableBuilder<int>(
                           valueListenable: _carouselDot,
                           builder: (context, dot, _) => _CarouselIndicator(
@@ -531,9 +557,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       key: _calendarKey,
                       child: Padding(
                         padding: EdgeInsets.all(
-                          compactHeight
-                              ? TimeTraceSpace.xs
-                              : TimeTraceSpace.sm,
+                          compactHeight ? TimeTraceSpace.xs : TimeTraceSpace.sm,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,7 +613,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     if (narrow) {
                       return Column(
                         children: [
-                          SizedBox(height: carouselHeight, child: carousel),
+                          carouselAtHeight(carouselHeight),
                           const SizedBox(height: TimeTraceSpace.md),
                           calendar,
                         ],
@@ -603,11 +627,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         const SizedBox(width: TimeTraceSpace.md),
                         Expanded(
                           flex: 7,
-                          child: SizedBox(
-                            height: _calendarH > 0
-                                ? _calendarH
-                                : carouselHeight,
-                            child: carousel,
+                          child: carouselAtHeight(
+                            _calendarH > 0 ? _calendarH : carouselHeight,
                           ),
                         ),
                       ],
