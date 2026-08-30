@@ -8,9 +8,9 @@ use std::sync::Arc;
 use chrono::{DateTime, Local, Utc};
 use tracing::{debug, info};
 
-use crate::engine::app_identity::normalize_app_name;
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 use crate::contracts::storage::{DataStore, SessionRecord};
+use crate::engine::app_identity::normalize_app_name;
 
 pub struct SessionAggregator {
     db: Arc<dyn DataStore>,
@@ -22,10 +22,18 @@ pub struct SessionAggregator {
 
 impl SessionAggregator {
     pub fn new(db: Arc<dyn DataStore>) -> Self {
-        Self { db, current_session_id: None, current_app_path: None, current_app_name: None, current_page_id: None }
+        Self {
+            db,
+            current_session_id: None,
+            current_app_path: None,
+            current_app_name: None,
+            current_page_id: None,
+        }
     }
 
-    pub fn db(&self) -> &dyn DataStore { &*self.db }
+    pub fn db(&self) -> &dyn DataStore {
+        &*self.db
+    }
 
     fn close_page(&mut self, end_time: DateTime<Utc>) {
         if let Some(pid) = self.current_page_id.take() {
@@ -78,10 +86,15 @@ impl SessionAggregator {
 impl EventSink for SessionAggregator {
     fn accept(&mut self, event: TrackedEvent) {
         match event {
-            TrackedEvent::AppSwitched { current, timestamp, .. } => {
+            TrackedEvent::AppSwitched {
+                current, timestamp, ..
+            } => {
                 // Same app (exe)? Just a page change -- record page visit.
                 if self.current_app_path.as_deref() == Some(current.exe_path.as_str()) {
-                    debug!("Page change in {}: {:?}", current.display_name, current.window_title);
+                    debug!(
+                        "Page change in {}: {:?}",
+                        current.display_name, current.window_title
+                    );
                     self.start_page(&current, timestamp);
                     return;
                 }
@@ -101,17 +114,27 @@ impl EventSink for SessionAggregator {
                 self.open_session(&AppInfo::idle(), idle_start);
             }
 
-            TrackedEvent::IdleEnded { current_app, timestamp, .. } => {
-                info!("Aggregator: IdleEnded - closing idle session, opening {}", current_app.display_name);
+            TrackedEvent::IdleEnded {
+                current_app,
+                timestamp,
+                ..
+            } => {
+                info!(
+                    "Aggregator: IdleEnded - closing idle session, opening {}",
+                    current_app.display_name
+                );
                 self.close_session(timestamp);
                 self.open_session(&current_app, timestamp);
             }
 
-            TrackedEvent::GapDetected { timestamp } => {
-                info!("Aggregator: GapDetected - closing dangling session at {timestamp}");
+            TrackedEvent::GapDetected { timestamp }
+            | TrackedEvent::TrackingPaused { timestamp }
+            | TrackedEvent::TrackingResumed { timestamp }
+            | TrackedEvent::ForegroundExcluded { timestamp }
+            | TrackedEvent::ForegroundUnavailable { timestamp } => {
+                info!("Aggregator: invalid activity boundary - closing session at {timestamp}");
                 self.close_session(timestamp);
             }
-
         }
     }
 }
@@ -168,8 +191,15 @@ mod tests {
         let mut agg = SessionAggregator::new(db.clone());
 
         let code = AppInfo::new("C:/chrome.exe".into(), "chrome".into());
-        agg.accept(TrackedEvent::AppSwitched { previous: None, current: code, timestamp: chrono::Utc::now() });
-        agg.accept(TrackedEvent::IdleStarted { timestamp: chrono::Utc::now(), grace: std::time::Duration::from_secs(0) });
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: code,
+            timestamp: chrono::Utc::now(),
+        });
+        agg.accept(TrackedEvent::IdleStarted {
+            timestamp: chrono::Utc::now(),
+            grace: std::time::Duration::from_secs(0),
+        });
         agg.accept(TrackedEvent::IdleEnded {
             idle_duration: std::time::Duration::from_secs(120),
             current_app: AppInfo::new("C:/chrome.exe".into(), "chrome".into()),
@@ -178,7 +208,10 @@ mod tests {
 
         let today = chrono::Local::now().date_naive();
         let split = db.get_usage_split(today, today);
-        assert!(split.iter().all(|s| s.app_name != "__IDLE__"), "idle must not appear as app row");
+        assert!(
+            split.iter().all(|s| s.app_name != "__IDLE__"),
+            "idle must not appear as app row"
+        );
     }
     #[test]
     fn test_gap_detected_closes_session_at_gap_time() {
@@ -194,7 +227,10 @@ mod tests {
         let gap = chrono::Utc::now() - chrono::Duration::minutes(10);
         agg.accept(TrackedEvent::GapDetected { timestamp: gap });
         let sessions = db.get_sessions_by_date(chrono::Local::now().date_naive());
-        let app = sessions.iter().find(|s| s.app_name == "chrome").expect("code session");
+        let app = sessions
+            .iter()
+            .find(|s| s.app_name == "chrome")
+            .expect("code session");
         let d = (app.ended_at.expect("closed") - app.started_at).num_seconds();
         assert!((d - 1200).abs() < 60, "expected ~20min session, got {d}s");
     }
@@ -215,12 +251,107 @@ mod tests {
             grace: std::time::Duration::from_secs(300),
         });
         let sessions = db.get_sessions_by_date(chrono::Local::now().date_naive());
-        let app = sessions.iter().find(|s| s.app_name == "chrome").expect("code session");
+        let app = sessions
+            .iter()
+            .find(|s| s.app_name == "chrome")
+            .expect("code session");
         let d = (app.ended_at.expect("closed") - app.started_at).num_seconds();
-        assert!((d - 1500).abs() < 60, "expected ~25min session (grace excluded), got {d}s");
+        assert!(
+            (d - 1500).abs() < 60,
+            "expected ~25min session (grace excluded), got {d}s"
+        );
         assert!(
             sessions.iter().any(|s| s.is_idle && s.ended_at.is_none()),
             "idle session should still be open"
         );
+    }
+
+    #[test]
+    fn pause_and_resume_same_app_never_attributes_paused_time() {
+        let db = Arc::new(MemoryStore::new());
+        let mut agg = SessionAggregator::new(db.clone());
+        let app = AppInfo::new("C:/editor.exe".into(), "editor".into());
+        let start = Utc::now() - chrono::Duration::minutes(20);
+        let paused_at = start + chrono::Duration::minutes(5);
+        let resumed_at = start + chrono::Duration::minutes(15);
+
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: app.clone(),
+            timestamp: start,
+        });
+        agg.accept(TrackedEvent::TrackingPaused {
+            timestamp: paused_at,
+        });
+        agg.accept(TrackedEvent::TrackingResumed {
+            timestamp: resumed_at,
+        });
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: app,
+            timestamp: resumed_at,
+        });
+
+        let sessions = db.get_sessions_by_date(Local::now().date_naive());
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].duration_secs, Some(5 * 60));
+        assert_eq!(sessions[1].started_at, resumed_at);
+        assert!(sessions[1].ended_at.is_none());
+    }
+
+    #[test]
+    fn pause_then_different_app_opens_only_the_resumed_identity() {
+        let db = Arc::new(MemoryStore::new());
+        let mut agg = SessionAggregator::new(db.clone());
+        let start = Utc::now() - chrono::Duration::minutes(10);
+        let paused_at = start + chrono::Duration::minutes(2);
+        let resumed_at = start + chrono::Duration::minutes(8);
+
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: AppInfo::new("C:/a.exe".into(), "A".into()),
+            timestamp: start,
+        });
+        agg.accept(TrackedEvent::TrackingPaused {
+            timestamp: paused_at,
+        });
+        agg.accept(TrackedEvent::TrackingResumed {
+            timestamp: resumed_at,
+        });
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: AppInfo::new("C:/b.exe".into(), "B".into()),
+            timestamp: resumed_at,
+        });
+
+        let sessions = db.get_sessions_by_date(Local::now().date_naive());
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].app_name, "A");
+        assert_eq!(sessions[0].duration_secs, Some(2 * 60));
+        assert_eq!(sessions[1].app_name, "B");
+        assert_eq!(sessions[1].started_at, resumed_at);
+    }
+
+    #[test]
+    fn excluded_and_unavailable_states_close_open_sessions() {
+        for boundary in [
+            TrackedEvent::ForegroundExcluded {
+                timestamp: Utc::now(),
+            },
+            TrackedEvent::ForegroundUnavailable {
+                timestamp: Utc::now(),
+            },
+        ] {
+            let db = Arc::new(MemoryStore::new());
+            let mut agg = SessionAggregator::new(db.clone());
+            let started_at = Utc::now() - chrono::Duration::minutes(1);
+            agg.accept(TrackedEvent::AppSwitched {
+                previous: None,
+                current: AppInfo::new("C:/a.exe".into(), "A".into()),
+                timestamp: started_at,
+            });
+            agg.accept(boundary);
+            assert!(db.get_active_session().is_none());
+        }
     }
 }

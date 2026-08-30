@@ -18,7 +18,11 @@ pub struct AppInfo {
 
 impl AppInfo {
     pub fn new(exe_path: String, display_name: String) -> Self {
-        Self { exe_path, display_name, window_title: None }
+        Self {
+            exe_path,
+            display_name,
+            window_title: None,
+        }
     }
 
     pub fn with_title(mut self, title: String) -> Self {
@@ -43,7 +47,7 @@ impl AppInfo {
 /// Events produced by the foreground monitor.
 ///
 /// The monitor thread sends these to the aggregator via a channel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackedEvent {
     /// Foreground window changed to a different application.
     AppSwitched {
@@ -84,6 +88,49 @@ pub enum TrackedEvent {
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 
+    /// Manual tracking entered its paused state at an exact user boundary.
+    TrackingPaused {
+        /// Timestamp captured when pause was requested.
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+
+    /// Manual tracking left its paused state.
+    ///
+    /// This event never fabricates an application session; the next eligible
+    /// foreground observation opens one.
+    TrackingResumed {
+        /// Timestamp captured when resume was requested.
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+
+    /// The foreground application is deliberately excluded from tracking.
+    ForegroundExcluded {
+        /// When the excluded boundary was observed.
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+
+    /// No stable foreground application could be resolved.
+    ForegroundUnavailable {
+        /// When the unavailable boundary was observed.
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+}
+
+/// Serialized commands understood by the foreground monitor loop.
+#[derive(Debug, Clone)]
+pub enum MonitorCommand {
+    /// Stop the monitor permanently.
+    Stop,
+    /// Apply a manual tracking pause state at an exact request timestamp.
+    SetPaused {
+        paused: bool,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+    /// Wake the monitor because the platform reported a foreground change.
+    ForegroundHint {
+        /// When the platform reported the change, before queueing latency.
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
 }
 
 /// Produces `TrackedEvent`s on its own thread/timer.
@@ -101,40 +148,79 @@ pub trait EventSource: Send {
 /// Dropping this handle signals the source to stop.
 /// Use `pause()` / `resume()` for temporary suspension without full teardown.
 pub struct EventSourceHandle {
-    stop_tx: std::sync::mpsc::Sender<()>,
+    control_tx: std::sync::mpsc::Sender<MonitorCommand>,
     hook_stop_tx: std::sync::mpsc::Sender<()>,
-    pause_tx: std::sync::mpsc::Sender<bool>,
+    requested_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    transition_lock: std::sync::Arc<std::sync::Mutex<()>>,
 }
 
 impl EventSourceHandle {
-    pub fn new(
-        stop_tx: std::sync::mpsc::Sender<()>,
-        pause_tx: std::sync::mpsc::Sender<bool>,
+    /// Construct a handle for a running monitor.
+    pub(crate) fn new(
+        control_tx: std::sync::mpsc::Sender<MonitorCommand>,
         hook_stop_tx: std::sync::mpsc::Sender<()>,
+        requested_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        transition_lock: std::sync::Arc<std::sync::Mutex<()>>,
     ) -> Self {
-        Self { stop_tx, hook_stop_tx, pause_tx }
+        Self {
+            control_tx,
+            hook_stop_tx,
+            requested_paused,
+            transition_lock,
+        }
     }
 
     /// Signal the event source to stop permanently.
     pub fn stop(self) {
-        let _ = self.stop_tx.send(());
+        let _ = self.control_tx.send(MonitorCommand::Stop);
         let _ = self.hook_stop_tx.send(());
     }
 
     /// Pause event production (tracking suspended).
     pub fn pause(&self) {
-        let _ = self.pause_tx.send(true);
+        self.pause_at(chrono::Utc::now());
     }
 
     /// Resume event production.
     pub fn resume(&self) {
-        let _ = self.pause_tx.send(false);
+        self.resume_at(chrono::Utc::now());
+    }
+
+    /// Pause at a supplied timestamp.
+    ///
+    /// The timestamped variant exists for deterministic integration tests and
+    /// for callers that capture the user action before crossing a queue.
+    pub fn pause_at(&self, timestamp: chrono::DateTime<chrono::Utc>) {
+        let _guard = match self.transition_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        self.requested_paused
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = self.control_tx.send(MonitorCommand::SetPaused {
+            paused: true,
+            timestamp,
+        });
+    }
+
+    /// Resume at a supplied timestamp without reopening a session directly.
+    pub fn resume_at(&self, timestamp: chrono::DateTime<chrono::Utc>) {
+        let _guard = match self.transition_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        self.requested_paused
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        let _ = self.control_tx.send(MonitorCommand::SetPaused {
+            paused: false,
+            timestamp,
+        });
     }
 }
 
 impl Drop for EventSourceHandle {
     fn drop(&mut self) {
-        let _ = self.stop_tx.send(());
+        let _ = self.control_tx.send(MonitorCommand::Stop);
         let _ = self.hook_stop_tx.send(());
     }
 }

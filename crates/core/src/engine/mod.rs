@@ -1,5 +1,6 @@
-pub mod app_identity;
+pub mod activity_snapshot;
 pub mod aggregator;
+pub mod app_identity;
 pub mod monitor;
 pub mod process_sysinfo;
 
@@ -17,8 +18,12 @@ pub mod startup_macos;
 #[cfg(target_os = "macos")]
 pub mod window_macos;
 
+pub use activity_snapshot::{
+    ActivityApp, ActivitySnapshot, ActivitySnapshotProjector, ActivitySnapshotReader,
+    ActivityState, FanoutEventSink,
+};
 pub use aggregator::SessionAggregator;
-pub use monitor::run_monitor_loop;
+pub use monitor::{run_monitor_loop, run_monitor_loop_with_initial_pause};
 pub use process_sysinfo::SysinfoProcessQuery;
 
 // Platform-neutral names used by the Flutter bridge and new cross-platform code.

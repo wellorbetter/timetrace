@@ -3,18 +3,19 @@
 //! Exposes the Rust core to Flutter/Dart via flutter_rust_bridge.
 //! All methods are synchronous; data is small and local.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
 use flutter_rust_bridge::frb;
+use timetrace_core::engine::app_identity::{normalize_timeout_rule_path, privacy_safe_app_name};
 use timetrace_core::*;
 
 /// Set up Rust-side file logging in the platform-native TimeTrace directory.
 fn setup_logging() {
-    use tracing_subscriber::prelude::*;
-
     let log_path = rust_log_path();
     if let Some(dir) = log_path.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -125,6 +126,76 @@ pub struct ConfigDto {
     pub auto_start_tracking: bool,
     pub excluded_apps: Vec<String>,
     pub db_path: String,
+    pub pomodoro: PomodoroConfigDto,
+    pub app_timeout: AppTimeoutConfigDto,
+}
+
+/// Persisted Pomodoro preferences exposed to Flutter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PomodoroConfigDto {
+    pub enabled: bool,
+    pub focus_minutes: u64,
+    pub short_break_minutes: u64,
+    pub long_break_minutes: u64,
+    pub long_break_interval: u64,
+    pub auto_start_next: bool,
+    pub notifications_enabled: bool,
+    pub notification_sound: bool,
+}
+
+/// Persisted application timeout defaults exposed to Flutter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppTimeoutConfigDto {
+    pub enabled: bool,
+    pub default_threshold_minutes: u64,
+    pub default_cooldown_minutes: u64,
+    pub notifications_enabled: bool,
+    pub notification_sound: bool,
+}
+
+/// Constant-time privacy-minimal foreground activity projection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivitySnapshotDto {
+    pub revision: i64,
+    /// Stable lowercase value: active/idle/excluded/paused/unavailable.
+    pub state: String,
+    pub tracking_paused: bool,
+    pub is_idle: bool,
+    pub app_path: Option<String>,
+    pub app_name: Option<String>,
+    pub observed_at: String,
+}
+
+/// One eligible running application for timeout-rule selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningAppDto {
+    pub app_path: String,
+    pub app_name: String,
+}
+
+/// Durable application timeout rule exposed to Flutter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppTimeoutRuleDto {
+    pub id: i64,
+    pub app_path: String,
+    pub app_name: String,
+    pub threshold_secs: i64,
+    pub cooldown_secs: i64,
+    pub enabled: bool,
+    pub notify_repeatedly: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// User-editable application timeout rule fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppTimeoutRuleDraftDto {
+    pub app_path: String,
+    pub app_name: String,
+    pub threshold_secs: i64,
+    pub cooldown_secs: i64,
+    pub enabled: bool,
+    pub notify_repeatedly: bool,
 }
 
 // ── Main API ──
@@ -132,8 +203,10 @@ pub struct ConfigDto {
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
     db_path: PathBuf,
-    monitor: std::sync::Mutex<Option<EventSourceHandle>>,
-    paused: std::sync::atomic::AtomicBool,
+    monitor: Mutex<Option<EventSourceHandle>>,
+    paused: AtomicBool,
+    activity_snapshot: ActivitySnapshotReader,
+    process_query: SysinfoProcessQuery,
 }
 
 impl TimeTraceApi {
@@ -174,43 +247,107 @@ impl TimeTraceApi {
         // timetrace-core. Flutter never needs to know which implementation runs.
         let initially_paused = !config.auto_start_tracking;
         let excluded_apps = config.excluded_apps.clone();
-        let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
-        let handle = run_monitor_loop(
+        let projector = ActivitySnapshotProjector::new(initially_paused);
+        let activity_snapshot = projector.reader();
+        let sink = FanoutEventSink::new(vec![
+            Box::new(SessionAggregator::new(db.clone())),
+            Box::new(projector),
+        ]);
+        let handle = run_monitor_loop_with_initial_pause(
             PlatformWindowResolver::new(),
             PlatformIdleDetector::new(),
             Duration::from_millis(config.poll_interval_ms),
-            Duration::from_secs(config.idle_threshold_minutes * 60),
+            Duration::from_secs(config.idle_threshold_minutes.saturating_mul(60)),
             excluded_apps,
-            sink,
+            initially_paused,
+            Box::new(sink),
         );
-        if initially_paused {
-            handle.pause();
-        }
 
         Ok(TimeTraceApi {
             db,
             db_path: resolved_db_path,
-            monitor: std::sync::Mutex::new(Some(handle)),
-            paused: std::sync::atomic::AtomicBool::new(initially_paused),
+            monitor: Mutex::new(Some(handle)),
+            paused: AtomicBool::new(initially_paused),
+            activity_snapshot,
+            process_query: SysinfoProcessQuery::new(),
         })
     }
 
     /// Pause or resume the background tracking monitor.
     #[frb(sync)]
     pub fn set_tracking_paused(&self, paused: bool) {
-        if let Ok(guard) = self.monitor.lock() {
-            if let Some(h) = guard.as_ref() {
-                if paused { h.pause(); } else { h.resume(); }
-                self.paused.store(paused, std::sync::atomic::Ordering::SeqCst);
-                tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
+        let guard = match self.monitor.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if self.paused.swap(paused, Ordering::SeqCst) == paused {
+            return;
+        }
+        if let Some(handle) = guard.as_ref() {
+            if paused {
+                handle.pause();
+            } else {
+                handle.resume();
             }
         }
+        tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
     }
 
     /// Whether tracking is currently paused.
     #[frb(sync)]
     pub fn is_tracking_paused(&self) -> bool {
-        self.paused.load(std::sync::atomic::Ordering::SeqCst)
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Return the latest in-memory activity snapshot without querying SQLite
+    /// or installing another foreground hook.
+    #[frb(sync)]
+    pub fn get_activity_snapshot(&self) -> ActivitySnapshotDto {
+        activity_snapshot_dto(
+            self.activity_snapshot.snapshot(),
+            self.paused.load(Ordering::SeqCst),
+        )
+    }
+
+    /// Refresh and list eligible running applications for rule selection.
+    /// Processes without a readable stable path are omitted without elevation.
+    #[frb(sync)]
+    pub fn list_running_apps(&self) -> Vec<RunningAppDto> {
+        self.process_query.refresh();
+        running_app_dtos(self.process_query.list_processes())
+    }
+
+    /// List all locally persisted application timeout rules.
+    #[frb(sync)]
+    pub fn list_app_timeout_rules(&self) -> Result<Vec<AppTimeoutRuleDto>, String> {
+        AppTimeoutRuleRepository::list_rules(&*self.db)
+            .map(|rules| rules.into_iter().map(AppTimeoutRuleDto::from).collect())
+            .map_err(rule_error_code)
+    }
+
+    /// Insert or update a timeout rule by normalized executable identity.
+    #[frb(sync)]
+    pub fn upsert_app_timeout_rule(
+        &self,
+        draft: AppTimeoutRuleDraftDto,
+    ) -> Result<AppTimeoutRuleDto, String> {
+        let draft = AppTimeoutRuleDraft {
+            app_path: draft.app_path,
+            app_name: draft.app_name,
+            threshold_secs: draft.threshold_secs,
+            cooldown_secs: draft.cooldown_secs,
+            enabled: draft.enabled,
+            notify_repeatedly: draft.notify_repeatedly,
+        };
+        AppTimeoutRuleRepository::upsert_rule(&*self.db, &draft)
+            .map(AppTimeoutRuleDto::from)
+            .map_err(rule_error_code)
+    }
+
+    /// Delete a timeout rule by stable ID.
+    #[frb(sync)]
+    pub fn delete_app_timeout_rule(&self, id: i64) -> Result<(), String> {
+        AppTimeoutRuleRepository::delete_rule(&*self.db, id).map_err(rule_error_code)
     }
 
     /// One-call dashboard payload: usage split + overall stats.
@@ -252,7 +389,12 @@ impl TimeTraceApi {
         let e = parse_date(&end);
         DataStore::get_usage_split(&*self.db, s, e)
             .into_iter()
-            .map(|x| AppUsageDto { app_name: x.app_name, active_seconds: x.active_seconds, idle_seconds: x.idle_seconds, exe_path: x.exe_path })
+            .map(|x| AppUsageDto {
+                app_name: x.app_name,
+                active_seconds: x.active_seconds,
+                idle_seconds: x.idle_seconds,
+                exe_path: x.exe_path,
+            })
             .collect()
     }
 
@@ -270,7 +412,13 @@ impl TimeTraceApi {
     pub fn get_startup_entries(&self) -> Vec<StartupDto> {
         DataStore::get_all_startup_entries(&*self.db)
             .into_iter()
-            .map(|e| StartupDto { id: e.id, name: e.name, exe_path: e.command, source: e.source, enabled: e.enabled })
+            .map(|e| StartupDto {
+                id: e.id,
+                name: e.name,
+                exe_path: e.command,
+                source: e.source,
+                enabled: e.enabled,
+            })
             .collect()
     }
 
@@ -309,8 +457,7 @@ impl TimeTraceApi {
     /// Configures current-user startup without requiring administrator rights.
     #[frb(sync)]
     pub fn set_self_start_enabled(&self, enabled: bool, minimized: bool) -> Result<()> {
-        timetrace_core::set_self_start_enabled(enabled, minimized)
-            .map_err(|e| anyhow::anyhow!(e))
+        timetrace_core::set_self_start_enabled(enabled, minimized).map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Overall recording statistics.
@@ -351,29 +498,17 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn get_config(&self) -> ConfigDto {
         let config = AppConfig::load();
-        ConfigDto {
-            poll_interval_ms: config.poll_interval_ms,
-            idle_threshold_minutes: config.idle_threshold_minutes,
-            minimize_to_tray: config.minimize_to_tray,
-            start_minimized: config.start_minimized,
-            auto_start_tracking: config.auto_start_tracking,
-            excluded_apps: config.excluded_apps,
-            db_path: self.db_path.to_string_lossy().into_owned(),
-        }
+        config_dto(config, self.db_path.to_string_lossy().into_owned())
     }
 
     /// Persist user configuration (monitor timing/exclusions apply next launch).
     #[frb(sync)]
     pub fn set_config(&self, config: ConfigDto) -> Result<()> {
         let mut app_config = AppConfig::load();
-        app_config.poll_interval_ms = config.poll_interval_ms;
-        app_config.idle_threshold_minutes = config.idle_threshold_minutes;
-        app_config.minimize_to_tray = config.minimize_to_tray;
-        app_config.start_minimized = config.start_minimized;
-        app_config.auto_start_tracking = config.auto_start_tracking;
-        app_config.excluded_apps = config.excluded_apps;
-        app_config.db_path = config.db_path;
-        app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        apply_config_dto(&mut app_config, config);
+        app_config
+            .save()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
         // Keep the startup command's optional --minimized flag aligned with the
         // persisted preference when the user changes it after enabling startup.
@@ -409,7 +544,11 @@ impl TimeTraceApi {
         let mut idle = 0i64;
         let mut dtos = Vec::with_capacity(sessions.len());
         for (app, is_idle, dur, started) in sessions {
-            if is_idle { idle += dur; } else { active += dur; }
+            if is_idle {
+                idle += dur;
+            } else {
+                active += dur;
+            }
             dtos.push(DaySessionDto {
                 app_name: app,
                 is_idle,
@@ -445,11 +584,7 @@ impl TimeTraceApi {
 
     /// All diary entries in a range with ids + status, newest first.
     #[frb(sync)]
-    pub fn get_diary_entries_detailed(
-        &self,
-        start: String,
-        end: String,
-    ) -> Vec<DiaryEntryDto> {
+    pub fn get_diary_entries_detailed(&self, start: String, end: String) -> Vec<DiaryEntryDto> {
         DataStore::get_diary_entries_detailed(&*self.db, parse_date(&start), parse_date(&end))
             .into_iter()
             .map(|entry| DiaryEntryDto {
@@ -483,12 +618,7 @@ impl TimeTraceApi {
         content: String,
         source_model: String,
     ) -> Result<i64, String> {
-        DataStore::publish_ai_diary(
-            &*self.db,
-            parse_date(&date),
-            &content,
-            &source_model,
-        )
+        DataStore::publish_ai_diary(&*self.db, parse_date(&date), &content, &source_model)
     }
 
     /// The day's draft content, if any.
@@ -605,6 +735,182 @@ impl TimeTraceApi {
     }
 }
 
+impl From<PomodoroConfig> for PomodoroConfigDto {
+    fn from(config: PomodoroConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            focus_minutes: config.focus_minutes,
+            short_break_minutes: config.short_break_minutes,
+            long_break_minutes: config.long_break_minutes,
+            long_break_interval: config.long_break_interval,
+            auto_start_next: config.auto_start_next,
+            notifications_enabled: config.notifications_enabled,
+            notification_sound: config.notification_sound,
+        }
+    }
+}
+
+impl From<PomodoroConfigDto> for PomodoroConfig {
+    fn from(config: PomodoroConfigDto) -> Self {
+        Self {
+            enabled: config.enabled,
+            focus_minutes: config.focus_minutes,
+            short_break_minutes: config.short_break_minutes,
+            long_break_minutes: config.long_break_minutes,
+            long_break_interval: config.long_break_interval,
+            auto_start_next: config.auto_start_next,
+            notifications_enabled: config.notifications_enabled,
+            notification_sound: config.notification_sound,
+        }
+    }
+}
+
+impl From<AppTimeoutConfig> for AppTimeoutConfigDto {
+    fn from(config: AppTimeoutConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            default_threshold_minutes: config.default_threshold_minutes,
+            default_cooldown_minutes: config.default_cooldown_minutes,
+            notifications_enabled: config.notifications_enabled,
+            notification_sound: config.notification_sound,
+        }
+    }
+}
+
+impl From<AppTimeoutConfigDto> for AppTimeoutConfig {
+    fn from(config: AppTimeoutConfigDto) -> Self {
+        Self {
+            enabled: config.enabled,
+            default_threshold_minutes: config.default_threshold_minutes,
+            default_cooldown_minutes: config.default_cooldown_minutes,
+            notifications_enabled: config.notifications_enabled,
+            notification_sound: config.notification_sound,
+        }
+    }
+}
+
+impl From<AppTimeoutRuleRecord> for AppTimeoutRuleDto {
+    fn from(rule: AppTimeoutRuleRecord) -> Self {
+        Self {
+            id: rule.id,
+            app_path: rule.app_path,
+            app_name: rule.app_name,
+            threshold_secs: rule.threshold_secs,
+            cooldown_secs: rule.cooldown_secs,
+            enabled: rule.enabled,
+            notify_repeatedly: rule.notify_repeatedly,
+            created_at: rule.created_at.to_rfc3339(),
+            updated_at: rule.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+fn config_dto(config: AppConfig, db_path: String) -> ConfigDto {
+    ConfigDto {
+        poll_interval_ms: config.poll_interval_ms,
+        idle_threshold_minutes: config.idle_threshold_minutes,
+        minimize_to_tray: config.minimize_to_tray,
+        start_minimized: config.start_minimized,
+        auto_start_tracking: config.auto_start_tracking,
+        excluded_apps: config.excluded_apps,
+        db_path,
+        pomodoro: config.pomodoro.into(),
+        app_timeout: config.app_timeout.into(),
+    }
+}
+
+fn apply_config_dto(config: &mut AppConfig, dto: ConfigDto) {
+    config.poll_interval_ms = dto.poll_interval_ms;
+    config.idle_threshold_minutes = dto.idle_threshold_minutes;
+    config.minimize_to_tray = dto.minimize_to_tray;
+    config.start_minimized = dto.start_minimized;
+    config.auto_start_tracking = dto.auto_start_tracking;
+    config.excluded_apps = dto.excluded_apps;
+    config.db_path = dto.db_path;
+    config.pomodoro = dto.pomodoro.into();
+    config.app_timeout = dto.app_timeout.into();
+}
+
+fn activity_snapshot_dto(snapshot: ActivitySnapshot, force_paused: bool) -> ActivitySnapshotDto {
+    let state = if force_paused {
+        ActivityState::Paused
+    } else {
+        snapshot.state
+    };
+    let app = if state == ActivityState::Active {
+        snapshot.app
+    } else {
+        None
+    };
+    let tracking_paused =
+        force_paused || snapshot.tracking_paused || state == ActivityState::Paused;
+    ActivitySnapshotDto {
+        revision: i64::try_from(snapshot.revision).unwrap_or(i64::MAX),
+        state: activity_state_name(state).to_string(),
+        tracking_paused,
+        is_idle: state == ActivityState::Idle,
+        app_path: app.as_ref().map(|application| application.app_path.clone()),
+        app_name: app.map(|application| application.app_name),
+        observed_at: snapshot.observed_at.to_rfc3339(),
+    }
+}
+
+fn activity_state_name(state: ActivityState) -> &'static str {
+    match state {
+        ActivityState::Active => "active",
+        ActivityState::Idle => "idle",
+        ActivityState::Excluded => "excluded",
+        ActivityState::Paused => "paused",
+        ActivityState::Unavailable => "unavailable",
+    }
+}
+
+fn running_app_dtos(processes: Vec<ProcessInfo>) -> Vec<RunningAppDto> {
+    let mut applications = BTreeMap::<String, String>::new();
+    for process in processes {
+        if process.status != ProcessStatus::Running {
+            continue;
+        }
+        let Some(raw_path) = process.exe_path.as_deref() else {
+            continue;
+        };
+        let Ok(app_path) = normalize_timeout_rule_path(raw_path) else {
+            continue;
+        };
+        let app_name = running_app_name(&process.name, raw_path);
+        if app_name.trim().is_empty() {
+            continue;
+        }
+        applications
+            .entry(app_path)
+            .and_modify(|current| {
+                if app_name.to_lowercase() < current.to_lowercase() {
+                    *current = app_name.clone();
+                }
+            })
+            .or_insert(app_name);
+    }
+    applications
+        .into_iter()
+        .map(|(app_path, app_name)| RunningAppDto { app_path, app_name })
+        .collect()
+}
+
+fn running_app_name(process_name: &str, raw_path: &str) -> String {
+    privacy_safe_app_name(raw_path, Some(process_name))
+}
+
+fn rule_error_code(error: AppTimeoutRuleError) -> String {
+    match error {
+        AppTimeoutRuleError::InvalidPath => "invalid_path",
+        AppTimeoutRuleError::EmptyAppName => "empty_app_name",
+        AppTimeoutRuleError::InvalidDuration => "invalid_duration",
+        AppTimeoutRuleError::NotFound => "not_found",
+        AppTimeoutRuleError::Storage => "storage_unavailable",
+    }
+    .to_string()
+}
+
 fn csv_field(value: &str) -> String {
     if value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
@@ -659,12 +965,42 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clean_exe_path, csv_field};
+    use super::*;
+
+    fn process(name: &str, path: Option<&str>) -> ProcessInfo {
+        process_with_status(name, path, ProcessStatus::Running)
+    }
+
+    fn process_with_status(name: &str, path: Option<&str>, status: ProcessStatus) -> ProcessInfo {
+        ProcessInfo {
+            pid: 1,
+            name: name.to_string(),
+            exe_path: path.map(str::to_string),
+            cpu_percent: 99.0,
+            memory_mb: 1024.0,
+            status,
+        }
+    }
+
+    fn valid_app_path() -> &'static str {
+        #[cfg(target_os = "windows")]
+        {
+            r"C:\Apps\Editor.exe"
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            "/Applications/Editor.app/Contents/MacOS/Editor"
+        }
+    }
 
     #[test]
     fn spaced_unquoted_path_kept_intact() {
-        let p = clean_exe_path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").unwrap();
-        assert_eq!(p, r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe");
+        let p = clean_exe_path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+            .unwrap();
+        assert_eq!(
+            p,
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        );
     }
 
     #[test]
@@ -685,5 +1021,207 @@ mod tests {
         assert_eq!(csv_field("A, B"), "\"A, B\"");
         assert_eq!(csv_field("A \"quoted\""), "\"A \"\"quoted\"\"\"");
         assert_eq!(csv_field("A\nB"), "\"A\nB\"");
+    }
+
+    #[test]
+    fn nested_config_dtos_round_trip_every_field() {
+        let config = AppConfig {
+            poll_interval_ms: 900,
+            idle_threshold_minutes: 7,
+            minimize_to_tray: false,
+            start_minimized: true,
+            auto_start_tracking: false,
+            excluded_apps: vec!["private-app".to_string()],
+            db_path: "old.db".to_string(),
+            pomodoro: PomodoroConfig {
+                enabled: true,
+                focus_minutes: 50,
+                short_break_minutes: 10,
+                long_break_minutes: 25,
+                long_break_interval: 3,
+                auto_start_next: true,
+                notifications_enabled: false,
+                notification_sound: false,
+            },
+            app_timeout: AppTimeoutConfig {
+                enabled: true,
+                default_threshold_minutes: 75,
+                default_cooldown_minutes: 20,
+                notifications_enabled: false,
+                notification_sound: false,
+            },
+        };
+
+        let dto = config_dto(config, "active.db".to_string());
+        assert_eq!(dto.db_path, "active.db");
+        assert_eq!(dto.pomodoro.focus_minutes, 50);
+        assert_eq!(dto.pomodoro.long_break_interval, 3);
+        assert_eq!(dto.app_timeout.default_threshold_minutes, 75);
+
+        let mut restored = AppConfig::default();
+        apply_config_dto(&mut restored, dto);
+        assert_eq!(restored.poll_interval_ms, 900);
+        assert_eq!(restored.idle_threshold_minutes, 7);
+        assert!(!restored.minimize_to_tray);
+        assert!(restored.start_minimized);
+        assert!(!restored.auto_start_tracking);
+        assert_eq!(restored.excluded_apps, vec!["private-app"]);
+        assert_eq!(restored.db_path, "active.db");
+        assert!(restored.pomodoro.enabled);
+        assert_eq!(restored.pomodoro.focus_minutes, 50);
+        assert!(restored.pomodoro.auto_start_next);
+        assert!(!restored.pomodoro.notifications_enabled);
+        assert!(restored.app_timeout.enabled);
+        assert_eq!(restored.app_timeout.default_cooldown_minutes, 20);
+        assert!(!restored.app_timeout.notification_sound);
+    }
+
+    #[test]
+    fn activity_snapshot_mapping_is_stable_and_pause_overlay_is_immediate() {
+        let observed_at = chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap();
+        let snapshot = ActivitySnapshot {
+            revision: u64::MAX,
+            state: ActivityState::Active,
+            tracking_paused: false,
+            app: Some(ActivityApp {
+                app_path: valid_app_path().to_string(),
+                app_name: "Editor".to_string(),
+            }),
+            observed_at,
+        };
+
+        let active = activity_snapshot_dto(snapshot.clone(), false);
+        assert_eq!(active.revision, i64::MAX);
+        assert_eq!(active.state, "active");
+        assert!(!active.tracking_paused);
+        assert!(!active.is_idle);
+        assert_eq!(active.app_path.as_deref(), Some(valid_app_path()));
+        assert_eq!(active.app_name.as_deref(), Some("Editor"));
+        assert_eq!(active.observed_at, observed_at.to_rfc3339());
+
+        let paused = activity_snapshot_dto(snapshot, true);
+        assert_eq!(paused.state, "paused");
+        assert!(paused.tracking_paused);
+        assert!(!paused.is_idle);
+        assert!(paused.app_path.is_none());
+        assert!(paused.app_name.is_none());
+
+        let idle = activity_snapshot_dto(
+            ActivitySnapshot {
+                revision: 2,
+                state: ActivityState::Idle,
+                tracking_paused: false,
+                app: None,
+                observed_at,
+            },
+            false,
+        );
+        assert_eq!(idle.state, "idle");
+        assert!(idle.is_idle);
+    }
+
+    #[test]
+    fn running_app_projection_filters_invalid_paths_and_deduplicates_identity() {
+        #[cfg(target_os = "windows")]
+        let duplicate_path = "c:/apps/EDITOR.EXE";
+        #[cfg(not(target_os = "windows"))]
+        let duplicate_path = valid_app_path();
+
+        let apps = running_app_dtos(vec![
+            process("Editor.exe", Some(valid_app_path())),
+            process("Editor Helper", Some(duplicate_path)),
+            process("Protected", None),
+            process("Ambiguous", Some("relative.exe")),
+        ]);
+
+        assert_eq!(apps.len(), 1);
+        assert!(!apps[0].app_path.is_empty());
+        assert!(!apps[0].app_name.is_empty());
+        assert!(!apps[0].app_name.contains(['\\', '/', ':']));
+    }
+
+    #[test]
+    fn running_app_projection_filters_non_running_processes() {
+        let apps = running_app_dtos(vec![
+            process_with_status(
+                "Suspended",
+                Some(valid_app_path()),
+                ProcessStatus::Suspended,
+            ),
+            process_with_status("Unknown", Some(valid_app_path()), ProcessStatus::Unknown),
+        ]);
+
+        assert!(apps.is_empty());
+    }
+
+    #[test]
+    fn running_app_projection_never_uses_private_parent_as_name() {
+        #[cfg(target_os = "windows")]
+        let private_runtime = r"C:\Users\Alice\secret-client\node.exe";
+        #[cfg(not(target_os = "windows"))]
+        let private_runtime = "/Users/alice/secret-client/node";
+
+        let apps = running_app_dtos(vec![process("node.exe", Some(private_runtime))]);
+
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].app_name, "Node.js");
+        assert!(!apps[0].app_name.contains("secret-client"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn running_app_projection_omits_paths_without_portable_ordinal_identity() {
+        let apps = running_app_dtos(vec![process("Greek.exe", Some(r"C:\Apps\Σ.exe"))]);
+        assert!(apps.is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn running_app_projection_omits_lossy_windows_replacement_paths() {
+        let apps = running_app_dtos(vec![process("Lossy.exe", Some("C:\\Apps\\\u{fffd}.exe"))]);
+        assert!(apps.is_empty());
+    }
+
+    #[test]
+    fn timeout_rule_errors_cross_the_bridge_as_safe_stable_codes() {
+        assert_eq!(
+            rule_error_code(AppTimeoutRuleError::InvalidPath),
+            "invalid_path"
+        );
+        assert_eq!(
+            rule_error_code(AppTimeoutRuleError::EmptyAppName),
+            "empty_app_name"
+        );
+        assert_eq!(
+            rule_error_code(AppTimeoutRuleError::InvalidDuration),
+            "invalid_duration"
+        );
+        assert_eq!(rule_error_code(AppTimeoutRuleError::NotFound), "not_found");
+        assert_eq!(
+            rule_error_code(AppTimeoutRuleError::Storage),
+            "storage_unavailable"
+        );
+    }
+
+    #[test]
+    fn timeout_rule_dto_uses_seconds_and_rfc3339_timestamps() {
+        let created_at = chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap();
+        let updated_at = created_at + chrono::Duration::minutes(1);
+        let dto = AppTimeoutRuleDto::from(AppTimeoutRuleRecord {
+            id: 9,
+            app_path: valid_app_path().to_string(),
+            app_name: "Editor".to_string(),
+            threshold_secs: 3600,
+            cooldown_secs: 900,
+            enabled: true,
+            notify_repeatedly: false,
+            created_at,
+            updated_at,
+        });
+        assert_eq!(dto.id, 9);
+        assert_eq!(dto.threshold_secs, 3600);
+        assert_eq!(dto.cooldown_secs, 900);
+        assert_eq!(dto.created_at, created_at.to_rfc3339());
+        assert_eq!(dto.updated_at, updated_at.to_rfc3339());
     }
 }

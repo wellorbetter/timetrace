@@ -12,9 +12,11 @@ use rusqlite::{Connection, params};
 use tracing::{debug, warn};
 
 use crate::contracts::{
-    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, DiaryEntryRecord, DiarySource,
-    SessionRecord, StartupEntryRecord,
+    AppMetaRecord, AppTimeoutRuleDraft, AppTimeoutRuleError, AppTimeoutRuleRecord,
+    AppTimeoutRuleRepository, AppUsageSplit, AppUsageSummary, DataStore, DiaryEntryRecord,
+    DiarySource, MAX_APP_TIMEOUT_DURATION_SECS, SessionRecord, StartupEntryRecord,
 };
+use crate::engine::app_identity::normalize_timeout_rule_path;
 use crate::storage::schema;
 
 /// Apply guarded one-time migrations. Returns Err only on real failures.
@@ -85,6 +87,10 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(schema::MIGRATIONS_V4[1])?;
         tracing::info!("diary_entries migrated: source_model column");
     }
+
+    // Migration 5: rule storage is additive and deliberately idempotent. It
+    // is not coupled to historical usage cleanup or diary migrations.
+    conn.execute_batch(schema::MIGRATIONS_V5)?;
     Ok(())
 }
 
@@ -1023,6 +1029,124 @@ impl DataStore for SqliteStore {
     }
 }
 
+impl AppTimeoutRuleRepository for SqliteStore {
+    fn list_rules(&self) -> Result<Vec<AppTimeoutRuleRecord>, AppTimeoutRuleError> {
+        let conn = self.lock();
+        let mut statement = conn
+            .prepare(
+                "SELECT id, app_path, app_name, threshold_secs, cooldown_secs,
+                        enabled, notify_repeatedly, created_at, updated_at
+                 FROM app_timeout_rules
+                 ORDER BY app_name COLLATE NOCASE, id",
+            )
+            .map_err(|error| {
+                warn!("Failed to prepare timeout rule list query: {error}");
+                AppTimeoutRuleError::Storage
+            })?;
+        let rows = statement
+            .query_map([], Self::row_to_timeout_rule)
+            .map_err(|error| {
+                warn!("Failed to query timeout rules: {error}");
+                AppTimeoutRuleError::Storage
+            })?;
+
+        let mut rules = Vec::new();
+        for row in rows {
+            match row {
+                Ok(rule) => rules.push(rule),
+                Err(error) => {
+                    warn!("Failed to decode a timeout rule: {error}");
+                    return Err(AppTimeoutRuleError::Storage);
+                }
+            }
+        }
+        Ok(rules)
+    }
+
+    fn upsert_rule(
+        &self,
+        draft: &AppTimeoutRuleDraft,
+    ) -> Result<AppTimeoutRuleRecord, AppTimeoutRuleError> {
+        let app_path = normalize_timeout_rule_path(&draft.app_path)
+            .map_err(|_| AppTimeoutRuleError::InvalidPath)?;
+        let app_name = draft.app_name.trim();
+        if app_name.is_empty() {
+            return Err(AppTimeoutRuleError::EmptyAppName);
+        }
+        if !(1..=MAX_APP_TIMEOUT_DURATION_SECS).contains(&draft.threshold_secs)
+            || !(1..=MAX_APP_TIMEOUT_DURATION_SECS).contains(&draft.cooldown_secs)
+        {
+            return Err(AppTimeoutRuleError::InvalidDuration);
+        }
+
+        let now = Utc::now().to_rfc3339();
+        let mut conn = self.lock();
+        let transaction = conn.transaction().map_err(|error| {
+            warn!("Failed to start timeout rule transaction: {error}");
+            AppTimeoutRuleError::Storage
+        })?;
+        transaction
+            .execute(
+                "INSERT INTO app_timeout_rules
+                    (app_path, app_name, threshold_secs, cooldown_secs, enabled,
+                     notify_repeatedly, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                 ON CONFLICT(app_path) DO UPDATE SET
+                    app_name = excluded.app_name,
+                    threshold_secs = excluded.threshold_secs,
+                    cooldown_secs = excluded.cooldown_secs,
+                    enabled = excluded.enabled,
+                    notify_repeatedly = excluded.notify_repeatedly,
+                    updated_at = excluded.updated_at",
+                params![
+                    app_path,
+                    app_name,
+                    draft.threshold_secs,
+                    draft.cooldown_secs,
+                    i64::from(draft.enabled),
+                    i64::from(draft.notify_repeatedly),
+                    now,
+                ],
+            )
+            .map_err(|error| {
+                warn!("Failed to upsert timeout rule: {error}");
+                AppTimeoutRuleError::Storage
+            })?;
+
+        let rule = transaction
+            .query_row(
+                "SELECT id, app_path, app_name, threshold_secs, cooldown_secs,
+                        enabled, notify_repeatedly, created_at, updated_at
+                 FROM app_timeout_rules WHERE app_path = ?1",
+                params![app_path],
+                Self::row_to_timeout_rule,
+            )
+            .map_err(|error| {
+                warn!("Failed to read timeout rule after upsert: {error}");
+                AppTimeoutRuleError::Storage
+            })?;
+        transaction.commit().map_err(|error| {
+            warn!("Failed to commit timeout rule upsert: {error}");
+            AppTimeoutRuleError::Storage
+        })?;
+        Ok(rule)
+    }
+
+    fn delete_rule(&self, id: i64) -> Result<(), AppTimeoutRuleError> {
+        let conn = self.lock();
+        let changed = conn
+            .execute("DELETE FROM app_timeout_rules WHERE id = ?1", params![id])
+            .map_err(|error| {
+                warn!("Failed to delete timeout rule: {error}");
+                AppTimeoutRuleError::Storage
+            })?;
+        if changed == 0 {
+            return Err(AppTimeoutRuleError::NotFound);
+        }
+        Ok(())
+    }
+}
+
 // ── Internal helpers ──
 
 impl SqliteStore {
@@ -1038,6 +1162,20 @@ impl SqliteStore {
             is_idle: row.get::<_, i32>(7)? != 0,
             date: NaiveDate::parse_from_str(&row.get::<_, String>(8)?, "%Y-%m-%d")
                 .unwrap_or_default(),
+        })
+    }
+
+    fn row_to_timeout_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppTimeoutRuleRecord> {
+        Ok(AppTimeoutRuleRecord {
+            id: row.get(0)?,
+            app_path: row.get(1)?,
+            app_name: row.get(2)?,
+            threshold_secs: row.get(3)?,
+            cooldown_secs: row.get(4)?,
+            enabled: row.get::<_, i64>(5)? != 0,
+            notify_repeatedly: row.get::<_, i64>(6)? != 0,
+            created_at: parse_dt(row.get(7)?),
+            updated_at: parse_dt(row.get(8)?),
         })
     }
 }
@@ -1666,5 +1804,192 @@ mod sqlite_tests {
                 .is_err()
         );
         assert!(store.get_diary_entries_detailed(day, day).is_empty());
+    }
+
+    fn rule_path(name: &str) -> String {
+        #[cfg(target_os = "windows")]
+        {
+            format!(r"C:\Apps\{name}.exe")
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            format!("/Applications/{name}.app/Contents/MacOS/{name}")
+        }
+    }
+
+    fn rule_draft(name: &str) -> AppTimeoutRuleDraft {
+        AppTimeoutRuleDraft {
+            app_path: rule_path(name),
+            app_name: name.to_string(),
+            threshold_secs: 60 * 60,
+            cooldown_secs: 30 * 60,
+            enabled: true,
+            notify_repeatedly: false,
+        }
+    }
+
+    #[test]
+    fn timeout_rule_migration_is_idempotent_and_preserves_legacy_usage() {
+        let path = temp_path("legacy_timeout_rules");
+        let legacy = Connection::open(&path).unwrap();
+        legacy
+            .execute_batch(
+                "CREATE TABLE usage_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    app_path TEXT NOT NULL,
+                    app_name TEXT NOT NULL,
+                    window_title TEXT,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    duration_secs INTEGER,
+                    is_idle INTEGER NOT NULL DEFAULT 0,
+                    date TEXT NOT NULL
+                );
+                INSERT INTO usage_sessions
+                    (app_path, app_name, started_at, ended_at, duration_secs, is_idle, date)
+                VALUES
+                    ('legacy.exe', 'Legacy', '2026-08-30T10:00:00Z',
+                     '2026-08-30T10:01:00Z', 60, 0, '2026-08-30');",
+            )
+            .unwrap();
+        drop(legacy);
+
+        let store = SqliteStore::open(path.clone()).unwrap();
+        assert!(store.list_rules().unwrap().is_empty());
+        let legacy_count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM usage_sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(legacy_count, 1);
+        drop(store);
+
+        let reopened = SqliteStore::open(path).unwrap();
+        assert!(reopened.list_rules().unwrap().is_empty());
+        let index_count: i64 = reopened
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'index' AND name = 'idx_app_timeout_rules_enabled_path'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(index_count, 1);
+    }
+
+    #[test]
+    fn timeout_rule_upsert_retains_identity_and_updates_fields() {
+        let store = temp_store();
+        let first = store.upsert_rule(&rule_draft("Editor")).unwrap();
+        assert!(first.id > 0);
+        assert_eq!(first.threshold_secs, 3600);
+
+        let mut edited = rule_draft("Editor");
+        edited.app_name = "Code Editor".to_string();
+        edited.threshold_secs = 45 * 60;
+        edited.cooldown_secs = 10 * 60;
+        edited.enabled = false;
+        edited.notify_repeatedly = true;
+        let second = store.upsert_rule(&edited).unwrap();
+
+        assert_eq!(second.id, first.id);
+        assert_eq!(second.created_at, first.created_at);
+        assert_eq!(second.app_name, "Code Editor");
+        assert_eq!(second.threshold_secs, 2700);
+        assert_eq!(second.cooldown_secs, 600);
+        assert!(!second.enabled);
+        assert!(second.notify_repeatedly);
+        assert_eq!(store.list_rules().unwrap(), vec![second]);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn timeout_rule_upsert_matches_windows_case_and_separator_variants() {
+        let store = temp_store();
+        let first = store.upsert_rule(&rule_draft("Editor")).unwrap();
+        let mut duplicate = rule_draft("Editor");
+        duplicate.app_path = "c:/apps/EDITOR.EXE".to_string();
+        duplicate.threshold_secs = 120;
+        let updated = store.upsert_rule(&duplicate).unwrap();
+
+        assert_eq!(updated.id, first.id);
+        assert_eq!(updated.threshold_secs, 120);
+        assert_eq!(store.list_rules().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn timeout_rule_delete_and_clear_usage_have_separate_lifecycles() {
+        let store = temp_store();
+        let rule = store.upsert_rule(&rule_draft("Browser")).unwrap();
+        let now = Utc::now();
+        store.insert_session(&sess("Browser", now, 30, false));
+
+        store.clear_all_data();
+        assert!(store.get_sessions_by_date(now.date_naive()).is_empty());
+        assert_eq!(store.list_rules().unwrap().len(), 1);
+
+        store.delete_rule(rule.id).unwrap();
+        assert!(store.list_rules().unwrap().is_empty());
+        assert_eq!(
+            store.delete_rule(rule.id),
+            Err(AppTimeoutRuleError::NotFound)
+        );
+    }
+
+    #[test]
+    fn timeout_rule_validation_rejects_ambiguous_inputs() {
+        let store = temp_store();
+        let mut draft = rule_draft("Editor");
+        draft.app_path = "relative.exe".to_string();
+        assert_eq!(
+            store.upsert_rule(&draft),
+            Err(AppTimeoutRuleError::InvalidPath)
+        );
+
+        #[cfg(target_os = "windows")]
+        {
+            draft = rule_draft("Editor");
+            draft.app_path = r"\\?\C:\Apps\Editor.exe.".to_string();
+            assert_eq!(
+                store.upsert_rule(&draft),
+                Err(AppTimeoutRuleError::InvalidPath)
+            );
+
+            draft = rule_draft("Editor");
+            draft.app_path = r"C:\Apps\Σ.exe".to_string();
+            assert_eq!(
+                store.upsert_rule(&draft),
+                Err(AppTimeoutRuleError::InvalidPath),
+                "portable lowercase must not be stored as Windows ordinal identity"
+            );
+
+            draft = rule_draft("Editor");
+            draft.app_path = "C:\\Apps\\\u{fffd}.exe".to_string();
+            assert_eq!(
+                store.upsert_rule(&draft),
+                Err(AppTimeoutRuleError::InvalidPath),
+                "lossy Windows replacement characters must not become rule identities"
+            );
+        }
+
+        draft = rule_draft("Editor");
+        draft.app_name = "   ".to_string();
+        assert_eq!(
+            store.upsert_rule(&draft),
+            Err(AppTimeoutRuleError::EmptyAppName)
+        );
+
+        draft = rule_draft("Editor");
+        draft.threshold_secs = 0;
+        assert_eq!(
+            store.upsert_rule(&draft),
+            Err(AppTimeoutRuleError::InvalidDuration)
+        );
+        draft.threshold_secs = 60;
+        draft.cooldown_secs = MAX_APP_TIMEOUT_DURATION_SECS + 1;
+        assert_eq!(
+            store.upsert_rule(&draft),
+            Err(AppTimeoutRuleError::InvalidDuration)
+        );
     }
 }
