@@ -76,6 +76,9 @@ class RecapNotifier extends AsyncNotifier<RecapState> {
       previousEnd: previous.$2,
     );
     final local = _local.generate(snapshot);
+    if (!settings.enabled) {
+      return RecapState(result: local, generatedAt: DateTime.now());
+    }
     final attempt = await _ai.enhance(local: local, settings: settings);
     return RecapState(
       result: attempt.result,

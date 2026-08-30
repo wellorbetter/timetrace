@@ -9,7 +9,7 @@ class LocalRecapEngine {
         headline: '${snapshot.label}还没有足够的活动记录',
         summary: 'TimeTrace 暂时没有检测到可用于回顾的活跃使用数据。继续使用电脑后，这里会自动形成回顾。',
         insights: const [
-          'AI Recap 只基于本机记录生成，不会虚构没有发生的活动。',
+          '本地回顾只基于设备内已有记录，不会虚构没有发生的活动。',
         ],
         snapshot: snapshot,
         origin: RecapOrigin.local,

@@ -134,13 +134,13 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
               borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             ),
             child: Icon(
-              Icons.auto_awesome_outlined,
+              Icons.notes_rounded,
               size: 19,
               color: colors.primary,
             ),
           ),
           const SizedBox(width: TimeTraceSpace.sm),
-          const Expanded(child: Text('AI Recap 设置')),
+          const Expanded(child: Text('回顾设置')),
         ],
       ),
       content: SizedBox(
@@ -151,63 +151,24 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '配置默认回顾方式。AI 设置只在这里出现，不占用主导航。',
+                '默认在本机生成事实回顾；只有你主动开启后才会使用模型服务。',
                 style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: colors.onSurfaceVariant),
               ),
-              const SizedBox(height: TimeTraceSpace.lg),
-              _SectionLabel(title: '生成方式', subtitle: 'AI 总结为默认；本地总结始终作为离线回退。'),
-              const SizedBox(height: TimeTraceSpace.xs),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cards = [
-                    _GenerationModeCard(
-                      key: const ValueKey('recap-ai-mode-cloud'),
-                      icon: Icons.cloud_outlined,
-                      title: 'AI 总结',
-                      badge: '默认',
-                      description: '发送聚合后的应用名与时长，生成更自然的回顾。',
-                      selected: _enabled,
-                      onTap: () => setState(() => _enabled = true),
-                    ),
-                    _GenerationModeCard(
-                      key: const ValueKey('recap-ai-mode-local'),
-                      icon: Icons.offline_bolt_outlined,
-                      title: '本地总结',
-                      badge: '免费 · 离线',
-                      description: '使用固定规则生成事实回顾，数据完全不离开设备。',
-                      selected: !_enabled,
-                      onTap: () => setState(() => _enabled = false),
-                    ),
-                  ];
-                  if (constraints.maxWidth >= 600) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: cards.first),
-                        const SizedBox(width: TimeTraceSpace.xs),
-                        Expanded(child: cards.last),
-                      ],
-                    );
-                  }
-                  return Column(
-                    children: [
-                      cards.first,
-                      const SizedBox(height: TimeTraceSpace.xs),
-                      cards.last,
-                    ],
-                  );
-                },
+              const SizedBox(height: TimeTraceSpace.md),
+              _AiEnhancementToggle(
+                enabled: _enabled,
+                onChanged: (value) => setState(() => _enabled = value),
               ),
               if (_enabled) ...[
-                const SizedBox(height: TimeTraceSpace.lg),
+                const SizedBox(height: TimeTraceSpace.md),
                 const _SectionLabel(
-                  title: '模型',
-                  subtitle: 'Flash 适合日常回顾；Pro 更深入，但生成稍慢。',
+                  title: '模型服务',
+                  subtitle: 'Flash 适合日常回顾；兼容模式可接入其他服务。',
                 ),
                 const SizedBox(height: TimeTraceSpace.xs),
                 _ModelSelector(selected: _preset, onSelected: _selectPreset),
-                const SizedBox(height: TimeTraceSpace.lg),
+                const SizedBox(height: TimeTraceSpace.sm),
                 _CredentialSection(
                   environmentController: _keyEnv,
                   hasApiKey: _hasApiKey,
@@ -230,7 +191,7 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
                 const SizedBox(height: TimeTraceSpace.sm),
                 _AdvancedSettings(endpoint: _endpoint, model: _model),
               ] else ...[
-                const SizedBox(height: TimeTraceSpace.md),
+                const SizedBox(height: TimeTraceSpace.sm),
                 _LocalModeNotice(colors: colors),
               ],
             ],
@@ -314,118 +275,38 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-class _GenerationModeCard extends StatelessWidget {
-  const _GenerationModeCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.badge,
-    required this.description,
-    required this.selected,
-    required this.onTap,
+class _AiEnhancementToggle extends StatelessWidget {
+  const _AiEnhancementToggle({
+    required this.enabled,
+    required this.onChanged,
   });
 
-  final IconData icon;
-  final String title;
-  final String badge;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '生成方式：$title',
-      child: Material(
-        color: selected
-            ? colors.secondaryContainer.withValues(alpha: 0.62)
-            : colors.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-          side: BorderSide(
-            color: selected ? colors.primary : colors.outlineVariant,
-            width: selected ? 1.5 : 1,
-          ),
+    return Material(
+      color: colors.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: SwitchListTile(
+        key: const ValueKey('recap-ai-enabled-switch'),
+        secondary: Icon(
+          enabled ? Icons.auto_awesome_outlined : Icons.lock_outline_rounded,
+          color: colors.primary,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(TimeTraceSpace.sm),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? colors.primaryContainer
-                        : colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(
-                      TimeTraceRadius.control,
-                    ),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 20,
-                    color: selected ? colors.primary : colors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: TimeTraceSpace.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colors.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              badge,
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: TimeTraceSpace.xxs),
-                      Text(
-                        description,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: colors.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: TimeTraceSpace.xs),
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: 21,
-                  color: selected ? colors.primary : colors.outline,
-                ),
-              ],
-            ),
-          ),
+        title: const Text('使用 AI 增强'),
+        subtitle: Text(
+          enabled
+              ? '开启后，聚合事实会发送到你配置的模型服务。'
+              : '关闭时只在本机生成回顾，不需要 API Key。',
         ),
+        value: enabled,
+        onChanged: onChanged,
       ),
     );
   }
@@ -442,119 +323,55 @@ class _ModelSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final items = [
-        (
-          _ModelPreset.flash,
-          Icons.bolt_outlined,
-          'DeepSeek Flash',
-          '更快，适合每日回顾',
-        ),
-        (
-          _ModelPreset.pro,
-          Icons.psychology_outlined,
-          'DeepSeek Pro',
-          '更深入，适合周月回顾',
-        ),
-        (_ModelPreset.custom, Icons.tune_rounded, '兼容模型', '自定义 Endpoint 与模型名'),
-      ];
-      final cards = [
-        for (final item in items)
-          _ModelCard(
-            key: ValueKey('recap-ai-model-${item.$1.name}'),
-            icon: item.$2,
-            title: item.$3,
-            subtitle: item.$4,
-            selected: selected == item.$1,
-            onTap: () => onSelected(item.$1),
-          ),
-      ];
-      if (constraints.maxWidth >= 640) {
-        return Row(
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              Expanded(child: cards[i]),
-              if (i != cards.length - 1)
-                const SizedBox(width: TimeTraceSpace.xs),
-            ],
+      if (constraints.maxWidth < 500) {
+        return DropdownButtonFormField<_ModelPreset>(
+          key: ValueKey('recap-ai-model-selector-${selected.name}'),
+          initialValue: selected,
+          decoration: const InputDecoration(labelText: '模型'),
+          items: const [
+            DropdownMenuItem(
+              value: _ModelPreset.flash,
+              child: Text('DeepSeek Flash · 日常回顾'),
+            ),
+            DropdownMenuItem(
+              value: _ModelPreset.pro,
+              child: Text('DeepSeek Pro · 深入回顾'),
+            ),
+            DropdownMenuItem(
+              value: _ModelPreset.custom,
+              child: Text('兼容模型 · 自定义接入'),
+            ),
           ],
+          onChanged: (value) {
+            if (value != null) onSelected(value);
+          },
         );
       }
-      return Column(
-        children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            cards[i],
-            if (i != cards.length - 1)
-              const SizedBox(height: TimeTraceSpace.xs),
-          ],
+      return SegmentedButton<_ModelPreset>(
+        key: const ValueKey('recap-ai-model-selector'),
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<_ModelPreset>(
+            value: _ModelPreset.flash,
+            icon: Icon(Icons.bolt_outlined),
+            label: Text('Flash'),
+          ),
+          ButtonSegment<_ModelPreset>(
+            value: _ModelPreset.pro,
+            icon: Icon(Icons.psychology_outlined),
+            label: Text('Pro'),
+          ),
+          ButtonSegment<_ModelPreset>(
+            value: _ModelPreset.custom,
+            icon: Icon(Icons.tune_rounded),
+            label: Text('兼容模型'),
+          ),
         ],
+        selected: {selected},
+        onSelectionChanged: (values) => onSelected(values.first),
       );
     },
   );
-}
-
-class _ModelCard extends StatelessWidget {
-  const _ModelCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: selected
-          ? colors.secondaryContainer.withValues(alpha: 0.54)
-          : colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-        side: BorderSide(
-          color: selected ? colors.primary : colors.outlineVariant,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(TimeTraceSpace.sm),
-          child: Row(
-            children: [
-              Icon(icon, size: 19, color: colors.primary),
-              const SizedBox(width: TimeTraceSpace.xs),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.labelLarge),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.labelSmall
-                          ?.copyWith(color: colors.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                selected ? Icons.check_circle : Icons.circle_outlined,
-                size: 18,
-                color: selected ? colors.primary : colors.outline,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _CredentialSection extends StatelessWidget {
@@ -921,6 +738,7 @@ class _LocalModeNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    key: const ValueKey('recap-ai-mode-local'),
     padding: const EdgeInsets.all(TimeTraceSpace.sm),
     decoration: BoxDecoration(
       color: colors.surfaceContainerLow,
@@ -934,7 +752,7 @@ class _LocalModeNotice extends StatelessWidget {
         const SizedBox(width: TimeTraceSpace.xs),
         Expanded(
           child: Text(
-            '本地总结不需要 API Key。AI Recap 仍会展示同一份事实快照、指标和时间分配，只是总结文字由本地规则生成。',
+            '当前使用本地事实回顾，不需要 API Key，也不会发送任何数据。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),

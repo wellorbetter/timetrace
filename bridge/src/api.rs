@@ -140,8 +140,13 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn create(db_path: String) -> Result<TimeTraceApi> {
         setup_logging();
+        let config = AppConfig::load();
         let resolved_db_path = if db_path.trim().is_empty() {
-            database_path()
+            if config.db_path.trim().is_empty() {
+                database_path()
+            } else {
+                PathBuf::from(config.db_path.trim())
+            }
         } else {
             PathBuf::from(db_path)
         };
@@ -164,7 +169,6 @@ impl TimeTraceApi {
 
         // Start the shared monitor with target-specific adapters selected by
         // timetrace-core. Flutter never needs to know which implementation runs.
-        let config = AppConfig::load();
         let initially_paused = !config.auto_start_tracking;
         let excluded_apps = config.excluded_apps.clone();
         let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
@@ -365,6 +369,7 @@ impl TimeTraceApi {
         app_config.start_minimized = config.start_minimized;
         app_config.auto_start_tracking = config.auto_start_tracking;
         app_config.excluded_apps = config.excluded_apps;
+        app_config.db_path = config.db_path;
         app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
         // Keep the startup command's optional --minimized flag aligned with the

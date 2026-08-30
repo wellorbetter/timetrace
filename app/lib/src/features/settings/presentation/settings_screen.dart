@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
@@ -228,9 +229,30 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: '查看本地存储位置，导出或清理记录。',
                     children: [
                       ListTile(
+                        key: const ValueKey('data-location-tile'),
                         leading: const Icon(Icons.folder_outlined),
-                        title: Text(l.recordingSince),
-                        subtitle: SelectableText(_dbPath(settings)),
+                        title: const Text('数据存储位置'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SelectableText(_dbPath(settings)),
+                            const SizedBox(height: TimeTraceSpace.xxs),
+                            Text(
+                              '选择文件夹后，下次启动将使用其中的 time.db；原数据库会保留。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                        trailing: OutlinedButton.icon(
+                          key: const ValueKey('choose-data-location'),
+                          onPressed: () => _chooseDatabaseLocation(
+                            context,
+                            ref,
+                            settings,
+                          ),
+                          icon: const Icon(Icons.folder_open_outlined, size: 17),
+                          label: const Text('选择'),
+                        ),
                       ),
                       const _GroupDivider(),
                       ListTile(
@@ -440,6 +462,82 @@ class SettingsScreen extends ConsumerWidget {
 
   String _dbPath(AppSettings settings) =>
       settings.dbPath.isNotEmpty ? settings.dbPath : PlatformPaths.database;
+
+  Future<void> _chooseDatabaseLocation(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final current = File(_dbPath(settings));
+    final directory = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择 TimeTrace 数据存储文件夹',
+      initialDirectory: current.parent.path,
+      lockParentWindow: true,
+    );
+    if (directory == null || !context.mounted) return;
+
+    final selected = Directory(directory);
+    final target = File(
+      '$directory${Platform.pathSeparator}time.db',
+    ).absolute.path;
+    if (target == current.absolute.path) return;
+
+    try {
+      final probe = File(
+        '$directory${Platform.pathSeparator}.timetrace-write-check',
+      );
+      await selected.create(recursive: true);
+      await probe.writeAsString('TimeTrace');
+      await probe.delete();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('所选文件夹不可写，请选择其他位置。')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更改数据存储位置？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('新位置将在下次启动 TimeTrace 时生效。'),
+            const SizedBox(height: TimeTraceSpace.sm),
+            SelectableText(target),
+            const SizedBox(height: TimeTraceSpace.sm),
+            Text(
+              '现有数据不会自动搬移或删除；需要继续使用旧记录时，请先复制原来的 time.db。',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('使用此位置'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final notifier = ref.read(settingsProvider.notifier);
+    notifier.preview(settings.copyWith(dbPath: target));
+    await notifier.save();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('数据位置已保存，重启 TimeTrace 后生效。')),
+    );
+  }
 
   void _confirmClear(BuildContext context, WidgetRef ref, L10n l) {
     showDialog<void>(

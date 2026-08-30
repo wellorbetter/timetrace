@@ -1,6 +1,6 @@
 class RecapAiSettings {
   const RecapAiSettings({
-    this.enabled = true,
+    this.enabled = false,
     this.endpoint = 'https://api.deepseek.com/chat/completions',
     this.model = 'deepseek-v4-flash',
     this.apiKeyEnv = 'DEEPSEEK_API_KEY',
@@ -35,6 +35,9 @@ class RecapAiSettings {
 
   Map<String, Object> toJson() => {
     'enabled': enabled,
+    // Old builds defaulted AI to on. Requiring this consent marker prevents
+    // those implicit defaults from becoming a silent cloud opt-in.
+    'explicit_ai_opt_in': enabled,
     'endpoint': endpoint,
     'model': model,
     'api_key_env': apiKeyEnv,
@@ -43,7 +46,8 @@ class RecapAiSettings {
 
   factory RecapAiSettings.fromJson(Map<String, Object?> json) =>
       RecapAiSettings(
-        enabled: json['enabled'] as bool? ?? true,
+        enabled:
+            json['enabled'] == true && json['explicit_ai_opt_in'] == true,
         endpoint:
             json['endpoint'] as String? ??
             'https://api.deepseek.com/chat/completions',

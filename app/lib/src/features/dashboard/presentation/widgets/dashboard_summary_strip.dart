@@ -3,7 +3,6 @@ import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
-import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_preview_card.dart';
 
 /// Quiet overview metrics used above the main dashboard canvas.
 ///
@@ -70,25 +69,16 @@ class DashboardSummaryStrip extends StatelessWidget {
         final width =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
           children: [
-            Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final item in items)
-                  SizedBox(
-                    width: width,
-                    height: compact ? 88 : 108,
-                    child: _SummaryCard(metric: item, compact: compact),
-                  ),
-              ],
-            ),
-            SizedBox(
-              height: compact ? TimeTraceSpace.xs : TimeTraceSpace.sm,
-            ),
-            RecapPreviewCard(compact: compact),
+            for (final item in items)
+              SizedBox(
+                width: width,
+                height: compact ? 88 : 108,
+                child: _SummaryCard(metric: item, compact: compact),
+              ),
           ],
         );
       },

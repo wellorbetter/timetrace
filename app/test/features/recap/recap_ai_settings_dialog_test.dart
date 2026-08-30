@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
@@ -7,7 +5,20 @@ import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_ai_settings_dialog.dart';
 
 void main() {
-  testWidgets('defaults to AI summary and keeps setup out of app settings', (
+  test('old settings cannot become an implicit AI opt-in', () {
+    final migrated = RecapAiSettings.fromJson({
+      'enabled': true,
+      'model': 'deepseek-v4-flash',
+    });
+    expect(migrated.enabled, isFalse);
+
+    final explicit = RecapAiSettings.fromJson(
+      const RecapAiSettings(enabled: true).toJson(),
+    );
+    expect(explicit.enabled, isTrue);
+  });
+
+  testWidgets('defaults to local recap and hides cloud setup', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(420, 900);
@@ -17,32 +28,31 @@ void main() {
 
     await _pumpDialog(tester, environment: const {});
 
-    expect(find.text('AI Recap 设置'), findsOneWidget);
-    expect(find.text('AI 总结'), findsOneWidget);
-    expect(find.text('默认'), findsOneWidget);
-    expect(find.text('未配置'), findsOneWidget);
-    expect(find.byKey(const ValueKey('recap-ai-key-guide')), findsOneWidget);
-    final command = Platform.isWindows
-        ? 'setx DEEPSEEK_API_KEY'
-        : 'export DEEPSEEK_API_KEY';
-    expect(find.textContaining(command), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('local mode hides cloud credentials and privacy controls', (
-    tester,
-  ) async {
-    await _pumpDialog(tester, environment: const {});
-
-    await tester.tap(find.byKey(const ValueKey('recap-ai-mode-local')));
-    await tester.pumpAndSettle();
-
+    expect(find.text('回顾设置'), findsOneWidget);
+    expect(find.text('使用 AI 增强'), findsOneWidget);
+    expect(find.byKey(const ValueKey('recap-ai-mode-local')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('recap-ai-credential-section')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('recap-ai-diary-toggle')), findsNothing);
-    expect(find.textContaining('本地总结不需要 API Key'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('enabling AI reveals model, credential and privacy controls', (
+    tester,
+  ) async {
+    await _pumpDialog(tester, environment: const {});
+
+    await tester.tap(find.byKey(const ValueKey('recap-ai-enabled-switch')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('recap-ai-credential-section')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('recap-ai-diary-toggle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recap-ai-key-guide')), findsOneWidget);
+    expect(find.textContaining('setx DEEPSEEK_API_KEY'), findsOneWidget);
   });
 
   testWidgets('connected state exposes a no-usage-data connection check', (
@@ -52,6 +62,7 @@ void main() {
     await _pumpDialog(
       tester,
       environment: const {'DEEPSEEK_API_KEY': 'never-render-this-value'},
+      initial: const RecapAiSettings(enabled: true),
       onTestConnection: (_) async {
         calls++;
         return null;
@@ -101,6 +112,8 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('recap-ai-enabled-switch')));
+    await tester.pumpAndSettle();
     final diarySwitch = find.byKey(const ValueKey('recap-ai-diary-toggle'));
     await tester.ensureVisible(diarySwitch);
     await tester.tap(diarySwitch);
@@ -117,6 +130,7 @@ void main() {
 Future<void> _pumpDialog(
   WidgetTester tester, {
   required Map<String, String> environment,
+  RecapAiSettings initial = const RecapAiSettings(),
   Future<String?> Function(RecapAiSettings)? onTestConnection,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -124,7 +138,7 @@ Future<void> _pumpDialog(
     home: Scaffold(
       body: Center(
         child: RecapAiSettingsDialog(
-          initial: const RecapAiSettings(),
+          initial: initial,
           environment: environment,
           onTestConnection: onTestConnection ?? (_) async => null,
         ),
