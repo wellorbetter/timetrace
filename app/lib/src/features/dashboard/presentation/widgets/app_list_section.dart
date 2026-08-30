@@ -44,7 +44,7 @@ class AppListSection extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '应用排行',
+                  '应用分布',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -161,12 +161,16 @@ class _AppRow extends StatelessWidget {
               ),
             const SizedBox(width: TimeTraceSpace.xs),
             Expanded(
-              child: Text(
-                app.appName,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              child: Tooltip(
+                message: app.appName,
+                child: Text(
+                  app.appName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
                 ),
               ),
             ),

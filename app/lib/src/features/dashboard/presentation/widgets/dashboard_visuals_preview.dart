@@ -5,7 +5,6 @@ import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 
 @Preview(name: '概览数据 · 桌面交互', size: Size(1120, 650))
@@ -44,12 +43,6 @@ class _DashboardVisualPreviewState extends State<_DashboardVisualPreview> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          DashboardSummaryStrip(
-            state: _previewState,
-            apps: _previewApps,
-            compact: constraints.maxHeight < 700,
-          ),
-          const SizedBox(height: 12),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'bar', label: Text('排行')),
@@ -62,11 +55,7 @@ class _DashboardVisualPreviewState extends State<_DashboardVisualPreview> {
           const SizedBox(height: 12),
           Expanded(
             child: switch (_view) {
-              'pie' => PieChartCard(
-                apps: _previewApps,
-                selectedIndex: _selected,
-                onSelectApp: (index) => setState(() => _selected = index),
-              ),
+              'pie' => const PieChartCard(apps: _previewApps),
               'apps' => SingleChildScrollView(
                 child: AppListSection(
                   apps: _previewApps,
@@ -107,13 +96,6 @@ const _previewApps = [
   AppUsageItem(appName: 'Terminal', activeSeconds: 64, idleSeconds: 0),
   AppUsageItem(appName: 'Figma', activeSeconds: 31, idleSeconds: 0),
 ];
-
-const _previewState = DashboardState(
-  apps: _previewApps,
-  totalActiveSeconds: 17768,
-  totalIdleSeconds: 320,
-  lifetimeSeconds: 62000,
-);
 
 const _previewPages = [
   PageDto(title: 'TimeTrace · 回顾页面', seconds: 241),

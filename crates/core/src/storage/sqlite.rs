@@ -12,7 +12,8 @@ use rusqlite::{params, Connection};
 use tracing::{debug, warn};
 
 use crate::contracts::{
-    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord, StartupEntryRecord,
+    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, DiaryEntryRecord, DiarySource,
+    SessionRecord, StartupEntryRecord,
 };
 use crate::storage::schema;
 
@@ -61,6 +62,28 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
             conn.execute_batch(stmt)?;
         }
         tracing::info!("diary_entries migrated: status column");
+    }
+
+    // Migration 4: diary provenance and optional source model. These columns
+    // are additive so entry ids, timestamps, publication status, and image
+    // links remain untouched.
+    let has_source: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('diary_entries') WHERE name = 'source'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_source == 0 {
+        conn.execute_batch(schema::MIGRATIONS_V4[0])?;
+        tracing::info!("diary_entries migrated: source column");
+    }
+    let has_source_model: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('diary_entries') WHERE name = 'source_model'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_source_model == 0 {
+        conn.execute_batch(schema::MIGRATIONS_V4[1])?;
+        tracing::info!("diary_entries migrated: source_model column");
     }
     Ok(())
 }
@@ -572,15 +595,23 @@ impl DataStore for SqliteStore {
         &self,
         start: NaiveDate,
         end: NaiveDate,
-    ) -> Vec<(i64, String, String, String)> {
+    ) -> Vec<DiaryEntryRecord> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Ok(mut stmt) = conn.prepare(
-            "SELECT id, date, content, status FROM diary_entries
+            "SELECT id, date, content, status, source, source_model FROM diary_entries
              WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, id DESC",
         ) {
             if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                let source = row.get::<_, String>(4)?;
+                Ok(DiaryEntryRecord {
+                    id: row.get(0)?,
+                    date: row.get(1)?,
+                    content: row.get(2)?,
+                    status: row.get(3)?,
+                    source: DiarySource::from_stored(&source),
+                    source_model: row.get(5)?,
+                })
             }) {
                 out.extend(rows.flatten());
             }
@@ -646,6 +677,34 @@ impl DataStore for SqliteStore {
         conn.last_insert_rowid()
     }
 
+    fn publish_ai_diary(
+        &self,
+        date: NaiveDate,
+        content: &str,
+        source_model: &str,
+    ) -> Result<i64, String> {
+        if content.trim().is_empty() {
+            return Err("AI diary content must not be empty".to_string());
+        }
+        if source_model.trim().is_empty() {
+            return Err("AI diary source model must not be empty".to_string());
+        }
+
+        let mut conn = self.lock();
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO diary_entries
+                (date, content, created_at, updated_at, status, source, source_model)
+             VALUES (?1, ?2, ?3, ?3, 'published', 'ai_generated', ?4)",
+            params![date.to_string(), content, now, source_model.trim()],
+        )
+        .map_err(|e| e.to_string())?;
+        let id = tx.last_insert_rowid();
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(id)
+    }
+
     /// The day's draft content, if any.
     fn get_diary_draft(&self, date: NaiveDate) -> Option<String> {
         let conn = self.lock();
@@ -661,10 +720,23 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE diary_entries SET content = ?1, updated_at = ?2 WHERE id = ?3",
+            "UPDATE diary_entries
+             SET content = ?1,
+                 updated_at = ?2,
+                 source = CASE
+                     WHEN source = 'ai_generated' THEN 'ai_assisted'
+                     ELSE source
+                 END
+             WHERE id = ?3",
             params![content, now, id],
         )
-        .map(|_| ())
+        .and_then(|changed| {
+            if changed == 0 {
+                Err(rusqlite::Error::QueryReturnedNoRows)
+            } else {
+                Ok(())
+            }
+        })
         .map_err(|e| e.to_string())
     }
 
@@ -1090,7 +1162,7 @@ impl DataStore for MemoryStore {
         &self,
         _start: NaiveDate,
         _end: NaiveDate,
-    ) -> Vec<(i64, String, String, String)> {
+    ) -> Vec<DiaryEntryRecord> {
         vec![]
     }
 
@@ -1100,6 +1172,15 @@ impl DataStore for MemoryStore {
 
     fn publish_diary(&self, _date: NaiveDate, _content: &str) -> i64 {
         1
+    }
+
+    fn publish_ai_diary(
+        &self,
+        _date: NaiveDate,
+        _content: &str,
+        _source_model: &str,
+    ) -> Result<i64, String> {
+        Ok(1)
     }
 
     fn get_diary_draft(&self, _date: NaiveDate) -> Option<String> {
@@ -1211,13 +1292,21 @@ mod sqlite_tests {
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    fn temp_store() -> SqliteStore {
+    fn temp_path(label: &str) -> PathBuf {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let path = std::env::temp_dir().join(format!("tt_sqlite_test_{}_{}.db", std::process::id(), n));
+        let path = std::env::temp_dir().join(format!(
+            "tt_sqlite_{label}_{}_{}.db",
+            std::process::id(),
+            n
+        ));
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(&format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(&format!("{}-shm", path.display()));
-        SqliteStore::open(path).unwrap()
+        path
+    }
+
+    fn temp_store() -> SqliteStore {
+        SqliteStore::open(temp_path("test")).unwrap()
     }
 
     fn sess(app: &str, started: DateTime<Utc>, dur: i64, idle: bool) -> SessionRecord {
@@ -1319,5 +1408,138 @@ mod sqlite_tests {
         let code_hourly = store.get_app_hourly("code", day);
         assert_eq!(code_hourly[10], 300);
         assert_eq!(code_hourly[11], 300);
+    }
+
+    #[test]
+    fn test_diary_provenance_migration_preserves_legacy_rows_and_images() {
+        let path = temp_path("legacy_diary");
+        let legacy = Connection::open(&path).unwrap();
+        legacy
+            .execute_batch(
+                "CREATE TABLE diary_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL UNIQUE,
+                    content TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE diary_images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                INSERT INTO diary_entries
+                    (id, date, content, created_at, updated_at)
+                VALUES
+                    (42, '2026-08-29', 'legacy diary',
+                     '2026-08-29T08:00:00Z', '2026-08-29T09:00:00Z');
+                INSERT INTO diary_images (id, date, path, created_at)
+                VALUES
+                    (7, '2026-08-29', 'legacy-image.png',
+                     '2026-08-29T08:30:00Z');",
+            )
+            .unwrap();
+        drop(legacy);
+
+        let store = SqliteStore::open(path).unwrap();
+        let day = NaiveDate::from_ymd_opt(2026, 8, 29).unwrap();
+        let entries = store.get_diary_entries_detailed(day, day);
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.id, 42);
+        assert_eq!(entry.date, "2026-08-29");
+        assert_eq!(entry.content, "legacy diary");
+        assert_eq!(entry.status, "published");
+        assert_eq!(entry.source, DiarySource::Manual);
+        assert_eq!(entry.source_model, None);
+
+        let conn = store.lock();
+        let timestamps: (String, String) = conn
+            .query_row(
+                "SELECT created_at, updated_at FROM diary_entries WHERE id = 42",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(timestamps.0, "2026-08-29T08:00:00Z");
+        assert_eq!(timestamps.1, "2026-08-29T09:00:00Z");
+        let image: (i64, String, Option<i64>) = conn
+            .query_row(
+                "SELECT id, path, entry_id FROM diary_images WHERE id = 7",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(image, (7, "legacy-image.png".to_string(), Some(42)));
+    }
+
+    #[test]
+    fn test_ai_diary_publish_and_user_edit_preserve_provenance() {
+        let store = temp_store();
+        let day = NaiveDate::from_ymd_opt(2026, 8, 30).unwrap();
+
+        let ai_id = store
+            .publish_ai_diary(day, "AI wrote this diary", "deepseek-v4-flash")
+            .unwrap();
+        let manual_id = store.add_diary_entry(day, "Handwritten diary");
+
+        let initial = store.get_diary_entries_detailed(day, day);
+        let ai = initial.iter().find(|entry| entry.id == ai_id).unwrap();
+        assert_eq!(ai.status, "published");
+        assert_eq!(ai.source, DiarySource::AiGenerated);
+        assert_eq!(ai.source_model.as_deref(), Some("deepseek-v4-flash"));
+        let manual = initial
+            .iter()
+            .find(|entry| entry.id == manual_id)
+            .unwrap();
+        assert_eq!(manual.source, DiarySource::Manual);
+        assert_eq!(manual.source_model, None);
+
+        store
+            .update_diary_entry(ai_id, "User refined the AI diary")
+            .unwrap();
+        store
+            .update_diary_entry(manual_id, "User refined the manual diary")
+            .unwrap();
+
+        let edited = store.get_diary_entries_detailed(day, day);
+        let ai = edited.iter().find(|entry| entry.id == ai_id).unwrap();
+        assert_eq!(ai.source, DiarySource::AiAssisted);
+        assert_eq!(ai.source_model.as_deref(), Some("deepseek-v4-flash"));
+        let manual = edited
+            .iter()
+            .find(|entry| entry.id == manual_id)
+            .unwrap();
+        assert_eq!(manual.source, DiarySource::Manual);
+        assert_eq!(manual.source_model, None);
+    }
+
+    #[test]
+    fn test_ai_diary_publish_rejects_incomplete_rows_atomically() {
+        let store = temp_store();
+        let day = NaiveDate::from_ymd_opt(2026, 8, 30).unwrap();
+
+        assert!(store.publish_ai_diary(day, "", "model").is_err());
+        assert!(store.publish_ai_diary(day, "content", "  ").is_err());
+        assert!(store.get_diary_entries_detailed(day, day).is_empty());
+
+        store
+            .lock()
+            .execute_batch(
+                "CREATE TRIGGER reject_ai_diary
+                 BEFORE INSERT ON diary_entries
+                 WHEN NEW.source = 'ai_generated'
+                 BEGIN
+                     SELECT RAISE(ABORT, 'forced storage failure');
+                 END;",
+            )
+            .unwrap();
+        assert!(
+            store
+                .publish_ai_diary(day, "valid content", "valid-model")
+                .is_err()
+        );
+        assert!(store.get_diary_entries_detailed(day, day).is_empty());
     }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
+import 'package:timetrace_app/src/features/settings/providers/ai_diary_scheduler_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 class TimetraceApp extends ConsumerStatefulWidget {
@@ -19,11 +21,20 @@ class TimetraceApp extends ConsumerStatefulWidget {
 }
 
 class _TimetraceAppState extends ConsumerState<TimetraceApp>
-    with WindowListener {
+    with WindowListener, WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(ref.read(aiDiaryDailySchedulerProvider).start());
     _setupDesktopWindow();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    windowManager.removeListener(this);
+    super.dispose();
   }
 
   Future<void> _setupDesktopWindow() async {
@@ -60,6 +71,18 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
   }
 
   @override
+  void onWindowFocus() {
+    unawaited(ref.read(aiDiaryDailySchedulerProvider).checkNow());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(aiDiaryDailySchedulerProvider).checkNow());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final dark = ref.watch(themeModeProvider);
@@ -85,8 +108,7 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
           children: [
             if (background.isImage && background.imagePath != null)
               Image.file(File(background.imagePath!), fit: BoxFit.cover),
-            if (background.color != null)
-              ColoredBox(color: background.color!),
+            if (background.color != null) ColoredBox(color: background.color!),
             ColoredBox(
               color: scheme.surface.withValues(
                 alpha: hasCustom ? 1 - background.opacity : 1,

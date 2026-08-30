@@ -5,46 +5,49 @@ import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 void main() {
-  test('dashboard hides optional charts by default', () {
-    expect(dashboardVisibleOrder(kDefaultOrder, kDefaultHiddenViews), [
+  test('all original charts and history are visible by default', () {
+    expect(kDefaultOrder, [
+      'bar',
+      'pie',
       'summary',
       'apps',
       'hourly',
+      'history',
     ]);
-    expect(dashboardVisibleOrder(kDefaultOrder, const {}), kDefaultOrder);
+    expect(kDefaultHiddenViews, isEmpty);
+    expect(
+      dashboardVisibleOrder(kDefaultOrder, kDefaultHiddenViews),
+      kDefaultOrder,
+    );
+    expect(dashboardVisibleOrder(kDefaultOrder, const {'pie', 'apps'}), [
+      'bar',
+      'summary',
+      'hourly',
+      'history',
+    ]);
+    expect(kOptionalViews, containsAll(kDefaultOrder));
   });
 
-  testWidgets('summary rail keeps the long top application readable', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: TimetraceTheme.light(),
-        home: const Scaffold(
-          body: SizedBox(
-            width: 1080,
-            child: DashboardSummaryStrip(
-              state: _state,
-              apps: _apps,
-              compact: true,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final appName = find.text('TFTTencentClient-Win64-Shipping');
-    expect(appName, findsOneWidget);
-    expect(tester.widget<Text>(appName).maxLines, 2);
+  test('week and month use explicit local calendar bounds', () {
+    final now = DateTime(2026, 8, 30, 22, 45);
     expect(
-      find.byKey(const ValueKey('dashboard-summary-rail')),
-      findsOneWidget,
+      dashboardRangeDateBounds(
+        const DateRangeSelection(DateRange.week),
+        now: now,
+      ),
+      (DateTime(2026, 8, 24), DateTime(2026, 8, 30)),
     );
-    expect(tester.takeException(), isNull);
+    expect(
+      dashboardRangeDateBounds(
+        const DateRangeSelection(DateRange.month),
+        now: now,
+      ),
+      (DateTime(2026, 8), DateTime(2026, 8, 30)),
+    );
   });
 
   testWidgets('application bars cap dense data without shrinking labels', (
@@ -69,9 +72,17 @@ void main() {
       ),
     );
 
-    expect(find.text('前 6 / 10 个 · 点击查看会话'), findsOneWidget);
+    expect(find.text('前 6 / 10 应用 · 点击柱查看会话'), findsOneWidget);
     expect(find.byType(FittedBox), findsNothing);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(6));
+    expect(find.byType(FractionallySizedBox), findsNWidgets(6));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Tooltip &&
+            widget.message?.contains('TFTTencentClient-Win64-Shipping') == true,
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('应用 01'));
     await tester.pumpAndSettle();
@@ -124,13 +135,6 @@ const _apps = [
   ),
   AppUsageItem(appName: 'Edge', activeSeconds: 1200, idleSeconds: 0),
 ];
-
-const _state = DashboardState(
-  apps: _apps,
-  totalActiveSeconds: 15600,
-  totalIdleSeconds: 300,
-  lifetimeSeconds: 50000,
-);
 
 final _manyApps = List.generate(
   10,

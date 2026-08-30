@@ -65,13 +65,16 @@ pub struct StatsDto {
     pub since: Option<String>,
 }
 
-/// A diary entry with its publish status ('draft' | 'published').
+/// A diary entry with its publish status and structured provenance.
 #[derive(Debug, Clone)]
 pub struct DiaryEntryDto {
     pub id: i64,
     pub date: String,
     pub content: String,
     pub status: String,
+    /// `manual` | `ai_generated` | `ai_assisted`.
+    pub source: String,
+    pub source_model: Option<String>,
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.
@@ -449,11 +452,13 @@ impl TimeTraceApi {
     ) -> Vec<DiaryEntryDto> {
         DataStore::get_diary_entries_detailed(&*self.db, parse_date(&start), parse_date(&end))
             .into_iter()
-            .map(|(id, date, content, status)| DiaryEntryDto {
-                id,
-                date,
-                content,
-                status,
+            .map(|entry| DiaryEntryDto {
+                id: entry.id,
+                date: entry.date,
+                content: entry.content,
+                status: entry.status,
+                source: entry.source.as_str().to_string(),
+                source_model: entry.source_model,
             })
             .collect()
     }
@@ -468,6 +473,22 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn publish_diary(&self, date: String, content: String) -> i64 {
         DataStore::publish_diary(&*self.db, parse_date(&date), &content)
+    }
+
+    /// Atomically publish an AI-authored diary with model provenance.
+    #[frb(sync)]
+    pub fn publish_ai_diary(
+        &self,
+        date: String,
+        content: String,
+        source_model: String,
+    ) -> Result<i64, String> {
+        DataStore::publish_ai_diary(
+            &*self.db,
+            parse_date(&date),
+            &content,
+            &source_model,
+        )
     }
 
     /// The day's draft content, if any.

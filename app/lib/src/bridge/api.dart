@@ -115,6 +115,13 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Publish: promote the day's draft or insert a new published entry.
   PlatformInt64 publishDiary({required String date, required String content});
 
+  /// Atomically publish an AI-authored diary with model provenance.
+  PlatformInt64 publishAiDiary({
+    required String date,
+    required String content,
+    required String sourceModel,
+  });
+
   /// Remove a diary image.
   void removeDiaryImage({required String path});
 
@@ -333,23 +340,32 @@ class DaySessionDto {
           startedAt == other.startedAt;
 }
 
-/// A diary entry with its publish status ('draft' | 'published').
+/// A diary entry with its publish status and structured provenance.
 class DiaryEntryDto {
   final PlatformInt64 id;
   final String date;
   final String content;
   final String status;
+  final String source;
+  final String? sourceModel;
 
   const DiaryEntryDto({
     required this.id,
     required this.date,
     required this.content,
     required this.status,
+    required this.source,
+    this.sourceModel,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ date.hashCode ^ content.hashCode ^ status.hashCode;
+      id.hashCode ^
+      date.hashCode ^
+      content.hashCode ^
+      status.hashCode ^
+      source.hashCode ^
+      sourceModel.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -359,7 +375,9 @@ class DiaryEntryDto {
           id == other.id &&
           date == other.date &&
           content == other.content &&
-          status == other.status;
+          status == other.status &&
+          source == other.source &&
+          sourceModel == other.sourceModel;
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.

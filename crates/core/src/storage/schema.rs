@@ -51,7 +51,10 @@ pub const CREATE_TABLES: &[&str] = &[
         content         TEXT    NOT NULL DEFAULT '',
         created_at      TEXT    NOT NULL,
         updated_at      TEXT    NOT NULL,
-        status          TEXT    NOT NULL DEFAULT 'published'
+        status          TEXT    NOT NULL DEFAULT 'published',
+        source          TEXT    NOT NULL DEFAULT 'manual'
+                                CHECK(source IN ('manual', 'ai_generated', 'ai_assisted')),
+        source_model    TEXT
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
@@ -82,7 +85,8 @@ pub const MIGRATIONS: &[&str] = &[
         updated_at      TEXT    NOT NULL
     )",
     "INSERT OR IGNORE INTO diary_entries_v2 (id, date, content, created_at, updated_at)
-     SELECT id, date, content, COALESCE(updated_at, date || 'T00:00:00'), updated_at
+     SELECT id, date, content, COALESCE(created_at, date || 'T00:00:00'),
+            COALESCE(updated_at, created_at, date || 'T00:00:00')
      FROM diary_entries",
     "DROP TABLE diary_entries",
     "ALTER TABLE diary_entries_v2 RENAME TO diary_entries",
@@ -102,6 +106,14 @@ pub const MIGRATIONS_V2: &[&str] = &[
 /// Migration 3: diary_entries.status — add column, existing rows are published.
 pub const MIGRATIONS_V3: &[&str] = &[
     "ALTER TABLE diary_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'published'",
+];
+
+/// Migration 4: structured diary provenance. Existing entries are handwritten
+/// and therefore backfill to `manual`; model metadata is intentionally nullable.
+pub const MIGRATIONS_V4: &[&str] = &[
+    "ALTER TABLE diary_entries ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'
+        CHECK(source IN ('manual', 'ai_generated', 'ai_assisted'))",
+    "ALTER TABLE diary_entries ADD COLUMN source_model TEXT",
 ];
 
 /// Enable WAL mode and set pragmas for performance.

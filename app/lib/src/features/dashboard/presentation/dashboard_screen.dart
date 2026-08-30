@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
@@ -7,11 +8,14 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart'
+    hide DiaryRange, DiarySection;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/range_summary_panel.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/widgets/usage_history_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/hourly_focus_provider.dart';
@@ -90,11 +94,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   double _calendarH = 0;
   final GlobalKey _appsViewportKey = GlobalKey();
   final ScrollController _appsScrollCtrl = ScrollController();
+  late List<String> _lastVisibleOrder;
 
   @override
   void initState() {
     super.initState();
     final order = _activeOrder();
+    _lastVisibleOrder = order;
     final pageCount = order.isEmpty ? 1 : order.length;
     _carouselInit = (_kCarouselBase ~/ pageCount) * pageCount;
     _carouselCtrl = PageController(initialPage: _carouselInit);
@@ -106,12 +112,22 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       final idx = orderNow.indexOf('hourly');
       if (idx >= 0) _goToReal(idx, animate: false);
     });
+    ref.listenManual(dashboardOrderProvider, (previous, next) {
+      _scheduleVisibleOrderSync();
+    });
     ref.listenManual(dashboardHiddenViewsProvider, (previous, next) {
-      final summaryIndex = _activeOrder().indexOf('summary');
-      if (summaryIndex < 0) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _goToReal(summaryIndex, animate: false);
+      _scheduleVisibleOrderSync();
+    });
+    ref.listenManual(dashboardRangeProvider, (previous, next) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (!mounted) return;
+      setState(() {
+        _selected = null;
+        _pages = null;
+        _loadingPages = false;
       });
+      if (_appsScrollCtrl.hasClients) _appsScrollCtrl.jumpTo(0);
+      ref.read(hourlyFocusProvider.notifier).clear();
     });
   }
 
@@ -153,6 +169,53 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     ref.read(dashboardOrderProvider),
     ref.read(dashboardHiddenViewsProvider),
   );
+
+  void _scheduleVisibleOrderSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nextOrder = _activeOrder();
+      if (nextOrder.isEmpty || listEquals(nextOrder, _lastVisibleOrder)) return;
+
+      final previousIndex = _lastVisibleOrder.isEmpty
+          ? 0
+          : _carouselIndex.clamp(0, _lastVisibleOrder.length - 1).toInt();
+      final previousKey = _lastVisibleOrder.isEmpty
+          ? null
+          : _lastVisibleOrder[previousIndex];
+      final matchingIndex = previousKey == null
+          ? -1
+          : nextOrder.indexOf(previousKey);
+      final nextIndex = matchingIndex < 0 ? 0 : matchingIndex;
+      final currentAbsolute = _carouselCtrl.hasClients
+          ? (_carouselCtrl.page?.round() ?? _carouselAbs)
+          : _carouselAbs;
+      final target = _nearestAbsolutePage(
+        currentAbsolute,
+        nextOrder.length,
+        nextIndex,
+      );
+
+      _lastVisibleOrder = List<String>.of(nextOrder);
+      _carouselAbs = target;
+      _carouselIndex = nextIndex;
+      _carouselDot.value = nextIndex;
+      if (_carouselCtrl.hasClients) _carouselCtrl.jumpToPage(target);
+    });
+  }
+
+  int _nearestAbsolutePage(int current, int pageCount, int realIndex) {
+    final aligned = current - current % pageCount;
+    final candidates = [
+      aligned + realIndex - pageCount,
+      aligned + realIndex,
+      aligned + realIndex + pageCount,
+    ];
+    candidates.sort(
+      (left, right) =>
+          (left - current).abs().compareTo((right - current).abs()),
+    );
+    return candidates.first;
+  }
 
   void _selectApp(int i, {bool fromAppsPage = false}) {
     if (i < 0 || i >= _visibleApps.length) return;
@@ -252,12 +315,30 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
+  DiaryRange _diaryRangeFor(DateRangeSelection selection) {
+    return switch (selection.range) {
+      DateRange.today ||
+      DateRange.yesterday ||
+      DateRange.custom => DiaryRange.day,
+      DateRange.week => DiaryRange.week,
+      DateRange.month => DiaryRange.month,
+    };
+  }
+
   Widget _buildPage(
     String key, {
     required DateTime day,
+    required DateRangeSelection selection,
+    required DashboardState state,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
+    final (rangeStart, rangeEnd) = dashboardRangeDateBounds(selection);
+    final rangeLabel = switch (selection.range) {
+      DateRange.week => '本周累计',
+      DateRange.month => '本月累计',
+      _ => null,
+    };
     final Widget page = switch (key) {
       'bar' =>
         apps.isEmpty
@@ -275,26 +356,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 },
                 tall: true,
               ),
-      'pie' =>
-        apps.isEmpty
-            ? _placeholder('暂无使用数据')
-            : PieChartCard(
-                apps: apps,
-                selectedIndex: _selected,
-                onSelectApp: (i) {
-                  if (_selected != i) _selectApp(i);
-                  final appsIdx = order.indexOf('apps');
-                  if (appsIdx >= 0) {
-                    _goToReal(appsIdx, animate: true);
-                    _scrollAppsToRow(i);
-                  }
-                },
-              ),
+      'pie' => apps.isEmpty ? _placeholder('暂无使用数据') : PieChartCard(apps: apps),
       'hourly' =>
         apps.isEmpty
             ? _placeholder('暂无使用数据')
             : HourlyChartCard(
                 date: day,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd,
+                rangeLabel: rangeLabel,
                 apps: apps,
                 selectedName: _selected != null && _selected! < apps.length
                     ? apps[_selected!].appName
@@ -305,12 +375,20 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 },
               ),
       'summary' => Padding(
-        padding: EdgeInsets.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Card(
+          key: const ValueKey('dashboard-summary-card'),
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.all(TimeTraceSpace.sm),
-            child: DaySummaryPanel(date: day),
+            padding: const EdgeInsets.all(12),
+            child: switch (selection.range) {
+              DateRange.week || DateRange.month => RangeSummaryPanel(
+                start: rangeStart,
+                end: rangeEnd,
+                state: state,
+              ),
+              _ => DaySummaryPanel(date: day),
+            },
           ),
         ),
       ),
@@ -340,6 +418,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 ),
               ),
+      'history' => const UsageHistoryCard(),
       _ => const SizedBox.shrink(),
     };
 
@@ -398,27 +477,14 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenSize = screenSizeOf(constraints);
-        final compactHeight = constraints.maxHeight < 860;
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
-        final horizontalPadding =
-            constraints.maxWidth < TimeTraceLayout.compactBreakpoint
-            ? TimeTraceSpace.sm
-            : TimeTraceSpace.lg;
 
-        return Align(
-          alignment: Alignment.topCenter,
+        return Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: TimeTraceLayout.dashboardWidth,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1000),
             child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                compactHeight ? TimeTraceSpace.sm : TimeTraceSpace.md,
-                horizontalPadding,
-                compactHeight ? TimeTraceSpace.md : TimeTraceSpace.xl,
-              ),
+              padding: const EdgeInsets.all(12),
               children: [
                 Wrap(
                   spacing: TimeTraceSpace.xs,
@@ -439,17 +505,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                   ],
                 ),
-                SizedBox(
-                  height: compactHeight ? TimeTraceSpace.xs : TimeTraceSpace.sm,
-                ),
-                DashboardSummaryStrip(
-                  state: state,
-                  apps: apps,
-                  compact: compactHeight,
-                ),
-                SizedBox(
-                  height: compactHeight ? TimeTraceSpace.sm : TimeTraceSpace.md,
-                ),
+                const SizedBox(height: 12),
                 if (apps.isEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: TimeTraceSpace.md),
@@ -488,19 +544,21 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     final order = dashboardVisibleOrder(allViews, hiddenViews);
                     final pageCount = order.length;
                     final carouselHeight = narrow
-                        ? (compactHeight ? 300.0 : 330.0)
-                        : compactHeight
-                        ? 350.0
+                        ? 330.0
                         : (screenSize.twoColumn ? 400.0 : 360.0);
 
                     final carouselViewport = Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left_rounded),
+                          icon: Icon(
+                            Icons.chevron_left,
+                            size: 22,
+                            color: scheme.primary,
+                          ),
                           tooltip: '上一个视图',
                           onPressed: () => _carouselCtrl.previousPage(
-                            duration: TimeTraceMotion.normal,
-                            curve: TimeTraceMotion.standard,
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
                           ),
                         ),
                         Expanded(
@@ -512,12 +570,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                               _carouselIndex = i % pageCount;
                               _carouselDot.value = _carouselIndex;
                             },
-                            itemCount: _carouselInit * 2,
                             itemBuilder: (context, i) => _KeepAlivePage(
                               child: RepaintBoundary(
                                 child: _buildPage(
                                   order[i % pageCount],
                                   day: calendarDay,
+                                  selection: selection,
+                                  state: state,
                                   order: order,
                                   apps: apps,
                                 ),
@@ -526,11 +585,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right_rounded),
+                          icon: Icon(
+                            Icons.chevron_right,
+                            size: 22,
+                            color: scheme.primary,
+                          ),
                           tooltip: '下一个视图',
                           onPressed: () => _carouselCtrl.nextPage(
-                            duration: TimeTraceMotion.normal,
-                            curve: TimeTraceMotion.standard,
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
                           ),
                         ),
                       ],
@@ -539,8 +602,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     Widget carouselAtHeight(double pageHeight) => Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(height: pageHeight, child: carouselViewport),
-                        const SizedBox(height: TimeTraceSpace.xxs),
+                        SizedBox(
+                          key: const ValueKey('dashboard-carousel'),
+                          height: pageHeight,
+                          child: carouselViewport,
+                        ),
+                        const SizedBox(height: 6),
                         ValueListenableBuilder<int>(
                           valueListenable: _carouselDot,
                           builder: (context, dot, _) => _CarouselIndicator(
@@ -552,59 +619,57 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ],
                     );
 
-                    final calendar = Card(
-                      key: _calendarKey,
-                      child: Padding(
-                        padding: EdgeInsets.all(
-                          compactHeight ? TimeTraceSpace.xs : TimeTraceSpace.sm,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_month_outlined,
-                                  size: 17,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(width: TimeTraceSpace.xs),
-                                Text(
-                                  '日历',
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                    final calendar = KeyedSubtree(
+                      key: const ValueKey('dashboard-calendar'),
+                      child: Card(
+                        key: _calendarKey,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_month,
+                                    size: 18,
+                                    color: scheme.primary,
                                   ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  switch (selection.range) {
-                                    DateRange.today => '今天',
-                                    DateRange.yesterday => '昨天',
-                                    DateRange.week => '本周',
-                                    DateRange.month => '本月',
-                                    DateRange.custom => '所选日',
-                                  },
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '日历',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: scheme.primary,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(
-                              height: compactHeight
-                                  ? TimeTraceSpace.xxs
-                                  : TimeTraceSpace.xs,
-                            ),
-                            CalendarGrid(
-                              selected: calendarDay,
-                              onSelected: (day) => ref
-                                  .read(dashboardRangeProvider.notifier)
-                                  .selectDay(day),
-                              rowHeight: narrow
-                                  ? (compactHeight ? 42 : 48)
-                                  : (compactHeight ? 42 : 52),
-                            ),
-                          ],
+                                  const Spacer(),
+                                  Text(
+                                    switch (selection.range) {
+                                      DateRange.today => '今天',
+                                      DateRange.yesterday => '昨天',
+                                      DateRange.week => '本周',
+                                      DateRange.month => '本月',
+                                      DateRange.custom => '所选日',
+                                    },
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: scheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              CalendarGrid(
+                                selected: calendarDay,
+                                onSelected: (day) => ref
+                                    .read(dashboardRangeProvider.notifier)
+                                    .selectDay(day),
+                                rowHeight: narrow ? 48 : 52,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -613,7 +678,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       return Column(
                         children: [
                           carouselAtHeight(carouselHeight),
-                          const SizedBox(height: TimeTraceSpace.md),
+                          const SizedBox(height: 12),
                           calendar,
                         ],
                       );
@@ -623,7 +688,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(flex: 5, child: calendar),
-                        const SizedBox(width: TimeTraceSpace.md),
+                        const SizedBox(width: 12),
                         Expanded(
                           flex: 7,
                           child: carouselAtHeight(
@@ -633,6 +698,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ],
                     );
                   },
+                ),
+                const SizedBox(height: 12),
+                DiarySection(
+                  date: calendarDay,
+                  range: _diaryRangeFor(selection),
                 ),
               ],
             ),
@@ -657,31 +727,17 @@ class _CarouselIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (order.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final safeIndex = selectedIndex.clamp(0, order.length - 1).toInt();
     final currentLabel = kViews[order[safeIndex]] ?? '数据视图';
 
     return Semantics(
+      key: const ValueKey('dashboard-carousel-indicator'),
       liveRegion: true,
       label: '当前轮播视图：$currentLabel，${safeIndex + 1}/${order.length}',
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 58,
-            child: Text(
-              currentLabel,
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: TimeTraceSpace.xs),
           for (var i = 0; i < order.length; i++)
             Semantics(
               button: true,
@@ -694,19 +750,19 @@ class _CarouselIndicator extends StatelessWidget {
                   onTap: () => onSelected(i),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: TimeTraceSpace.xxs,
-                      vertical: TimeTraceSpace.xs,
+                      horizontal: 4,
+                      vertical: TimeTraceSpace.xxs,
                     ),
                     child: AnimatedContainer(
                       duration: TimeTraceMotion.fast,
                       curve: TimeTraceMotion.standard,
-                      width: safeIndex == i ? 18 : 7,
-                      height: 4,
+                      width: safeIndex == i ? 18 : 8,
+                      height: 8,
                       decoration: BoxDecoration(
                         color: safeIndex == i
                             ? scheme.primary
                             : scheme.outlineVariant,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),

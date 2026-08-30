@@ -12,13 +12,16 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/core/widgets/image_album.dart';
 import 'package:timetrace_app/src/core/widgets/markdown_diary_editor.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
+import 'package:timetrace_app/src/features/recap/domain/ai_diary_models.dart';
+import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
 
 enum DiaryRange { day, week, month }
 
-/// Flat, document-like desktop diary feed.
+/// Main-dashboard diary, enhanced with an optional AI writing action.
 ///
-/// The editor is a single bordered surface. Published entries are grouped by
-/// date and rendered as document blocks on a subtle timeline instead of cards.
+/// The visual and interaction model intentionally follows the original diary:
+/// one editor surface followed by collapsible day groups of independent posts.
+/// AI is only another way to create a post; it does not replace the diary UI.
 class DiarySection extends ConsumerStatefulWidget {
   const DiarySection({
     required this.date,
@@ -39,6 +42,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
   int? _editingId;
   List<String> _staged = [];
   final Set<String> _collapsedDays = {};
+  int _aiRequestToken = 0;
+  bool _isAiGenerating = false;
+  AiDiaryGenerationOutcome? _aiOutcome;
+  String? _aiOutcomeDate;
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -50,6 +57,15 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       _editingId = null;
       _staged = [];
       _collapsedDays.clear();
+    }
+    if (!_sameDay(oldWidget.date, widget.date) ||
+        oldWidget.range != widget.range) {
+      // AI feedback belongs to the date that started the request. Invalidating
+      // the token also prevents a late Future from painting onto a new date.
+      _aiRequestToken++;
+      _isAiGenerating = false;
+      _aiOutcome = null;
+      _aiOutcomeDate = null;
     }
   }
 
@@ -203,6 +219,89 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     }
   }
 
+  bool _isCurrentAiRequest(int token, String date, DiaryRange range) =>
+      mounted &&
+      token == _aiRequestToken &&
+      date == calFmt(widget.date) &&
+      range == widget.range;
+
+  Future<void> _generateAiDiary({bool allowDuplicate = false}) async {
+    if (widget.range != DiaryRange.day || _isAiGenerating) return;
+
+    final requestDate = calFmt(widget.date);
+    final requestRange = widget.range;
+    final requestToken = ++_aiRequestToken;
+    setState(() {
+      _isAiGenerating = true;
+      _aiOutcome = null;
+      _aiOutcomeDate = requestDate;
+    });
+
+    AiDiaryGenerationOutcome outcome;
+    try {
+      outcome = await ref
+          .read(aiDiaryGenerationProvider.notifier)
+          .generateForDate(widget.date, allowDuplicate: allowDuplicate);
+    } catch (error) {
+      AppLogger.log('AI diary generation failed: $error');
+      outcome = const AiDiaryGenerationOutcome(
+        status: AiDiaryGenerationStatus.failed,
+        message: '日记未能生成，可以稍后重试。',
+      );
+    }
+
+    if (!_isCurrentAiRequest(requestToken, requestDate, requestRange)) return;
+    if (!mounted) return;
+
+    if (outcome.status == AiDiaryGenerationStatus.duplicate &&
+        !allowDuplicate) {
+      setState(() {
+        _isAiGenerating = false;
+        _aiOutcome = null;
+      });
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('这一天已有 AI 日记'),
+          content: const Text('再次生成会新增一篇，不会覆盖已有内容。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('继续生成'),
+            ),
+          ],
+        ),
+      );
+      if (!_isCurrentAiRequest(requestToken, requestDate, requestRange)) {
+        return;
+      }
+      if (confirmed == true) {
+        await _generateAiDiary(allowDuplicate: true);
+      }
+      return;
+    }
+
+    setState(() {
+      _isAiGenerating = false;
+      _aiOutcome = outcome;
+      _aiOutcomeDate = requestDate;
+    });
+
+    if (!outcome.isSuccess) return;
+    if (!mounted) return;
+
+    ref.invalidate(calendarDataProvider);
+    ref.invalidate(diaryDraftProvider(requestDate));
+    widget.onContentChanged?.call();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('AI 日记已生成并发布')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -210,6 +309,12 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     final date = calFmt(widget.date);
     final draft = ref.watch(diaryDraftProvider(date)).value;
     final data = ref.watch(calendarDataProvider).value;
+    final aiSettings = ref.watch(recapAiSettingsProvider).value;
+    final showAiAction =
+        widget.range == DiaryRange.day &&
+        aiSettings != null &&
+        aiSettings.isConfigured;
+    final visibleAiOutcome = _aiOutcomeDate == date ? _aiOutcome : null;
     final all = data?.entries ?? const <DiaryEntryDto>[];
     final bounds = _bounds();
     final entries = all
@@ -225,23 +330,38 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       children: [
         Row(
           children: [
-            Text(
-              '日记',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Icon(Icons.edit_note_rounded, size: 16, color: scheme.primary),
             const SizedBox(width: TimeTraceSpace.xs),
             Text(
-              switch (widget.range) {
-                DiaryRange.day => '所选日',
-                DiaryRange.week => '本周',
-                DiaryRange.month => '本月',
-              },
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+              '日记',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: scheme.primary,
               ),
             ),
+            if (showAiAction) ...[
+              const SizedBox(width: TimeTraceSpace.sm),
+              TextButton.icon(
+                key: const ValueKey('ai-diary-generate'),
+                onPressed: _isAiGenerating ? null : _generateAiDiary,
+                icon: _isAiGenerating
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.8),
+                      )
+                    : const Icon(Icons.auto_awesome_outlined, size: 15),
+                label: Text(_isAiGenerating ? '正在写…' : 'AI 写今日日记'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: scheme.primaryContainer,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TimeTraceSpace.sm,
+                    vertical: TimeTraceSpace.xxs,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
             const Spacer(),
             Text(
               date,
@@ -249,58 +369,142 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 color: scheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(width: TimeTraceSpace.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TimeTraceSpace.xs,
+                vertical: TimeTraceSpace.xxs,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+              ),
+              child: Text(
+                switch (widget.range) {
+                  DiaryRange.day => '所选日',
+                  DiaryRange.week => '近一周',
+                  DiaryRange.month => '本月',
+                },
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSecondaryContainer,
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: TimeTraceSpace.sm),
-        MarkdownDiaryEditor(
-          key: ValueKey('desktop-diary-$date'),
-          initialText: draft ?? '',
-          maxLines: 4,
-          onAutoSave: _autosave,
-          onPublish: _publish,
-        ),
-        if (draft != null && draft.trim().isNotEmpty) ...[
+        if (showAiAction && _isAiGenerating) ...[
           const SizedBox(height: TimeTraceSpace.xxs),
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: scheme.tertiary,
-                  shape: BoxShape.circle,
-                ),
+          Text(
+            '正在根据当天使用记录整理日记…',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ] else if (showAiAction &&
+            visibleAiOutcome != null &&
+            !visibleAiOutcome.isSuccess) ...[
+          const SizedBox(height: TimeTraceSpace.xxs),
+          _AiDiaryInlineFeedback(
+            message: visibleAiOutcome.message ?? '日记未能生成。',
+            canRetry: visibleAiOutcome.shouldRetry,
+            onRetry: _generateAiDiary,
+          ),
+        ],
+        const SizedBox(height: TimeTraceSpace.sm),
+        Container(
+          key: const ValueKey('diary-editor-surface'),
+          padding: const EdgeInsets.all(TimeTraceSpace.xs),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(TimeTraceRadius.card),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              const SizedBox(width: TimeTraceSpace.xs),
-              Expanded(
-                child: Text(
-                  '草稿已自动保存，发布后会进入下方时间线。',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              MarkdownDiaryEditor(
+                key: ValueKey('diary-$date'),
+                initialText: draft ?? '',
+                maxLines: 4,
+                onAutoSave: _autosave,
+                onPublish: _publish,
+              ),
+              if (_editingId == null &&
+                  draft != null &&
+                  draft.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: TimeTraceSpace.xxs),
+                  child: Row(
+                    children: [
+                      Container(
+                        key: const ValueKey('diary-draft-badge'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TimeTraceSpace.xs,
+                          vertical: TimeTraceSpace.xxs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(
+                            TimeTraceRadius.control,
+                          ),
+                        ),
+                        child: Text(
+                          '草稿',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onTertiaryContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: TimeTraceSpace.sm),
+                      Expanded(
+                        child: Text(
+                          '已自动保存，发布后才会出现在日记列表',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _discardDraft,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('放弃草稿'),
+                      ),
+                    ],
                   ),
                 ),
+              if (_staged.isNotEmpty) ...[
+                const SizedBox(height: TimeTraceSpace.sm),
+                Wrap(
+                  spacing: TimeTraceSpace.sm,
+                  runSpacing: TimeTraceSpace.sm,
+                  children: [
+                    for (final path in _staged)
+                      _StagedImage(
+                        path: path,
+                        onRemove: () => _removeStaged(path),
+                      ),
+                  ],
+                ),
+              ],
+              IconButton(
+                key: const ValueKey('diary-add-images'),
+                onPressed: _pickImages,
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                tooltip: '添加图片（可多选）',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                padding: EdgeInsets.zero,
               ),
-              TextButton(onPressed: _discardDraft, child: const Text('放弃草稿')),
             ],
-          ),
-        ],
-        if (_staged.isNotEmpty) ...[
-          const SizedBox(height: TimeTraceSpace.xs),
-          Wrap(
-            spacing: TimeTraceSpace.xs,
-            runSpacing: TimeTraceSpace.xs,
-            children: [
-              for (final path in _staged)
-                _StagedImage(path: path, onRemove: () => _removeStaged(path)),
-            ],
-          ),
-        ],
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _pickImages,
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-            label: const Text('添加图片'),
           ),
         ),
         const SizedBox(height: TimeTraceSpace.sm),
@@ -312,23 +516,45 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             ),
           )
         else
-          for (final group in _groupByDay(entries))
-            _DayTimelineGroup(
-              date: group.$1,
-              entries: group.$2,
-              imageLookup: (id) => data?.entryImages[id] ?? const [],
-              collapsed: _collapsedDays.contains(group.$1),
-              editingId: _editingId,
-              onToggle: () => setState(() {
-                if (!_collapsedDays.add(group.$1)) {
-                  _collapsedDays.remove(group.$1);
-                }
-              }),
-              onEdit: (id) =>
-                  setState(() => _editingId = _editingId == id ? null : id),
-              onDelete: _delete,
-              onContentChanged: widget.onContentChanged,
+          AnimatedSwitcher(
+            duration: TimeTraceMotion.normal,
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.05, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: FadeTransition(opacity: animation, child: child),
             ),
+            child: Column(
+              key: ValueKey(
+                'posts-${entries.map((entry) => entry.id).join(',')}',
+              ),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final group in _groupByDay(entries))
+                  _DayGroup(
+                    date: group.$1,
+                    entries: group.$2,
+                    imageLookup: (id) =>
+                        data?.entryImages[id] ?? const <String>[],
+                    collapsed: _collapsedDays.contains(group.$1),
+                    editingId: _editingId,
+                    onToggle: () => setState(() {
+                      if (!_collapsedDays.add(group.$1)) {
+                        _collapsedDays.remove(group.$1);
+                      }
+                    }),
+                    onEdit: (id) => setState(
+                      () => _editingId = _editingId == id ? null : id,
+                    ),
+                    onDelete: _delete,
+                    onContentChanged: widget.onContentChanged,
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -340,6 +566,47 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     }
     final dates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
     return [for (final date in dates) (date, grouped[date]!)];
+  }
+}
+
+class _AiDiaryInlineFeedback extends StatelessWidget {
+  const _AiDiaryInlineFeedback({
+    required this.message,
+    required this.canRetry,
+    required this.onRetry,
+  });
+
+  final String message;
+  final bool canRetry;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(Icons.info_outline_rounded, size: 14, color: scheme.error),
+        const SizedBox(width: TimeTraceSpace.xs),
+        Expanded(
+          child: Text(
+            message,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        if (canRetry)
+          TextButton(
+            key: const ValueKey('ai-diary-retry'),
+            onPressed: onRetry,
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            child: const Text('重试'),
+          ),
+      ],
+    );
   }
 }
 
@@ -380,8 +647,8 @@ class _StagedImage extends StatelessWidget {
   }
 }
 
-class _DayTimelineGroup extends StatelessWidget {
-  const _DayTimelineGroup({
+class _DayGroup extends StatelessWidget {
+  const _DayGroup({
     required this.date,
     required this.entries,
     required this.imageLookup,
@@ -408,109 +675,75 @@ class _DayTimelineGroup extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 74,
-            child: Padding(
-              padding: const EdgeInsets.only(top: TimeTraceSpace.xxs),
-              child: Text(
-                date.substring(5),
-                style: theme.textTheme.labelMedium?.copyWith(
+    return Column(
+      key: ValueKey('diary-day-$date'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: ValueKey('diary-day-toggle-$date'),
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: TimeTraceSpace.xs),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 14,
+                  color: scheme.primary,
+                ),
+                const SizedBox(width: TimeTraceSpace.xs),
+                Text(
+                  date,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: TimeTraceSpace.sm),
+                Text(
+                  '${entries.length} 条',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  collapsed
+                      ? Icons.keyboard_arrow_right_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
                   color: scheme.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 18,
-            child: Column(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  margin: const EdgeInsets.only(top: 6),
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: collapsed ? 18 : 70,
-                  margin: const EdgeInsets.only(top: TimeTraceSpace.xxs),
-                  color: scheme.outlineVariant,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: TimeTraceSpace.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InkWell(
-                  onTap: onToggle,
-                  borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: TimeTraceSpace.xs,
-                      vertical: TimeTraceSpace.xxs,
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${entries.length} 条记录',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          collapsed
-                              ? Icons.keyboard_arrow_right_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                          size: 16,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
+        ),
+        AnimatedSize(
+          duration: TimeTraceMotion.normal,
+          curve: Curves.easeOut,
+          child: collapsed
+              ? const SizedBox.shrink()
+              : Column(
+                  children: [
+                    for (final entry in entries)
+                      _PostCard(
+                        entry: entry,
+                        images: imageLookup(entry.id),
+                        editing: editingId == entry.id,
+                        onEdit: () => onEdit(entry.id),
+                        onDelete: () => onDelete(entry.id),
+                        onContentChanged: onContentChanged,
+                      ),
+                  ],
                 ),
-                AnimatedSize(
-                  duration: TimeTraceMotion.normal,
-                  curve: TimeTraceMotion.standard,
-                  child: collapsed
-                      ? const SizedBox.shrink()
-                      : Column(
-                          children: [
-                            for (final entry in entries)
-                              _DiaryDocumentBlock(
-                                entry: entry,
-                                images: imageLookup(entry.id),
-                                editing: editingId == entry.id,
-                                onEdit: () => onEdit(entry.id),
-                                onDelete: () => onDelete(entry.id),
-                                onContentChanged: onContentChanged,
-                              ),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _DiaryDocumentBlock extends ConsumerStatefulWidget {
-  const _DiaryDocumentBlock({
+class _PostCard extends ConsumerStatefulWidget {
+  const _PostCard({
     required this.entry,
     required this.images,
     required this.editing,
@@ -527,11 +760,12 @@ class _DiaryDocumentBlock extends ConsumerStatefulWidget {
   final VoidCallback? onContentChanged;
 
   @override
-  ConsumerState<_DiaryDocumentBlock> createState() =>
-      _DiaryDocumentBlockState();
+  ConsumerState<_PostCard> createState() => _PostCardState();
 }
 
-class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
+class _PostCardState extends ConsumerState<_PostCard> {
+  bool _textVisible = true;
+  bool _imagesVisible = true;
   late final TextEditingController _controller;
   List<String> _existingImages = [];
   final List<String> _newImages = [];
@@ -544,10 +778,12 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
   }
 
   @override
-  void didUpdateWidget(covariant _DiaryDocumentBlock oldWidget) {
+  void didUpdateWidget(covariant _PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.entry.id != widget.entry.id) {
+      _textVisible = true;
+      _imagesVisible = true;
       _controller.text = widget.entry.content;
       _existingImages = List.of(widget.images);
       _newImages.clear();
@@ -655,101 +891,267 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final firstLine = widget.entry.content
+        .split('\n')
+        .firstWhere((line) => line.trim().isNotEmpty, orElse: () => '');
     final visibleImages = widget.editing
         ? [..._existingImages, ..._newImages]
         : widget.images;
+    final provenance = _DiaryProvenance.fromEntry(widget.entry);
 
-    return AnimatedContainer(
-      duration: TimeTraceMotion.fast,
-      curve: TimeTraceMotion.standard,
-      margin: const EdgeInsets.only(top: TimeTraceSpace.xs),
-      padding: const EdgeInsets.fromLTRB(
-        TimeTraceSpace.sm,
-        TimeTraceSpace.sm,
-        TimeTraceSpace.sm,
-        TimeTraceSpace.xs,
-      ),
-      decoration: BoxDecoration(
-        color: widget.editing
-            ? scheme.primaryContainer.withValues(alpha: 0.28)
-            : Colors.transparent,
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.8)),
+    return Card(
+      key: ValueKey('diary-post-${widget.entry.id}'),
+      margin: const EdgeInsets.only(bottom: TimeTraceSpace.sm),
+      elevation: 0,
+      color: widget.editing
+          ? scheme.primaryContainer.withValues(alpha: 0.45)
+          : scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(TimeTraceRadius.card),
+        side: BorderSide(
+          color: widget.editing
+              ? scheme.primary.withValues(alpha: 0.55)
+              : scheme.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.editing)
-            TextField(
-              controller: _controller,
-              minLines: 3,
-              maxLines: 12,
-              decoration: const InputDecoration(hintText: '写点什么…'),
-            )
-          else if (widget.entry.content.trim().isEmpty)
-            Text('(无文字)', style: theme.textTheme.bodySmall)
-          else
-            MarkdownBody(
-              data: widget.entry.content,
-              selectable: true,
-              styleSheet: MarkdownStyleSheet(
-                p: theme.textTheme.bodyMedium?.copyWith(height: 1.65),
-                h1: theme.textTheme.titleLarge,
-                h2: theme.textTheme.titleMedium,
-                h3: theme.textTheme.titleSmall,
-                code: theme.textTheme.bodySmall?.copyWith(
-                  backgroundColor: scheme.surfaceContainerHighest.withValues(
-                    alpha: 0.55,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TimeTraceSpace.sm,
+          TimeTraceSpace.sm,
+          TimeTraceSpace.sm,
+          TimeTraceSpace.xs,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (provenance != null) ...[
+              _DiaryProvenanceBadge(provenance: provenance),
+              const SizedBox(height: TimeTraceSpace.xs),
+            ],
+            if (widget.editing)
+              TextField(
+                controller: _controller,
+                minLines: 2,
+                maxLines: 10,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.all(TimeTraceSpace.sm),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(
+                      TimeTraceRadius.control,
+                    ),
                   ),
+                  hintText: '写点什么…',
                 ),
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+              )
+            else
+              AnimatedSize(
+                duration: TimeTraceMotion.fast,
+                curve: Curves.easeOut,
+                child: _textVisible
+                    ? (widget.entry.content.trim().isEmpty
+                          ? Text('(无文字)', style: theme.textTheme.bodySmall)
+                          : MarkdownBody(
+                              data: widget.entry.content,
+                              selectable: true,
+                              styleSheet: MarkdownStyleSheet(
+                                p: theme.textTheme.bodyMedium?.copyWith(
+                                  height: 1.6,
+                                ),
+                                h1: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                h2: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                code: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.primary,
+                                ),
+                              ),
+                            ))
+                    : Text(
+                        firstLine.isEmpty ? '内容已隐藏' : '内容已隐藏 · $firstLine',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
               ),
-            ),
-          if (widget.editing) ...[
+            if (visibleImages.isNotEmpty || widget.editing) ...[
+              const SizedBox(height: TimeTraceSpace.xs),
+              if (widget.editing)
+                _EditableImageStrip(
+                  images: visibleImages,
+                  onRemove: _removeImage,
+                  onAdd: _addImages,
+                )
+              else
+                AnimatedSize(
+                  duration: TimeTraceMotion.normal,
+                  curve: Curves.easeOut,
+                  child: _imagesVisible
+                      ? ImageAlbum(
+                          images: visibleImages,
+                          title: '${visibleImages.length} 张图片',
+                        )
+                      : Text(
+                          '图片已隐藏',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                ),
+            ],
             const SizedBox(height: TimeTraceSpace.xs),
-            _EditableImageStrip(
-              images: visibleImages,
-              onRemove: _removeImage,
-              onAdd: _addImages,
+            Divider(
+              height: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.35),
             ),
-          ] else if (visibleImages.isNotEmpty) ...[
-            const SizedBox(height: TimeTraceSpace.xs),
-            ImageAlbum(
-              images: visibleImages,
-              title: '${visibleImages.length} 张图片',
+            Padding(
+              padding: const EdgeInsets.only(top: TimeTraceSpace.xxs),
+              child: widget.editing
+                  ? Row(
+                      children: [
+                        IconButton(
+                          key: ValueKey('diary-delete-${widget.entry.id}'),
+                          icon: const Icon(Icons.delete_outline, size: 15),
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onDelete,
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _cancelEditing,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('取消'),
+                        ),
+                        const SizedBox(width: TimeTraceSpace.xxs),
+                        FilledButton.tonal(
+                          onPressed: _save,
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: TimeTraceSpace.md,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        IconButton(
+                          key: ValueKey(
+                            'diary-text-visibility-${widget.entry.id}',
+                          ),
+                          icon: Icon(
+                            _textVisible
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 16,
+                          ),
+                          tooltip: _textVisible ? '隐藏文字' : '显示文字',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () =>
+                              setState(() => _textVisible = !_textVisible),
+                        ),
+                        if (widget.images.isNotEmpty)
+                          IconButton(
+                            key: ValueKey(
+                              'diary-image-visibility-${widget.entry.id}',
+                            ),
+                            icon: Icon(
+                              _imagesVisible
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 16,
+                            ),
+                            tooltip: _imagesVisible ? '隐藏图片' : '显示图片',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(
+                              () => _imagesVisible = !_imagesVisible,
+                            ),
+                          ),
+                        const Spacer(),
+                        IconButton(
+                          key: ValueKey('diary-edit-${widget.entry.id}'),
+                          icon: const Icon(Icons.edit_outlined, size: 15),
+                          tooltip: '编辑',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onEdit,
+                        ),
+                        IconButton(
+                          key: ValueKey('diary-delete-${widget.entry.id}'),
+                          icon: const Icon(Icons.delete_outline, size: 15),
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: widget.onDelete,
+                        ),
+                      ],
+                    ),
             ),
           ],
-          const SizedBox(height: TimeTraceSpace.xs),
-          Row(
-            children: [
-              if (widget.editing) ...[
-                TextButton(
-                  onPressed: widget.onDelete,
-                  style: TextButton.styleFrom(foregroundColor: scheme.error),
-                  child: const Text('删除日记'),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => _cancelEditing(),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: TimeTraceSpace.xxs),
-                FilledButton(onPressed: _save, child: const Text('保存')),
-              ] else ...[
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: widget.onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 14),
-                  label: const Text('编辑'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _DiaryProvenance {
+  const _DiaryProvenance({required this.label, this.model});
+
+  final String label;
+  final String? model;
+
+  static _DiaryProvenance? fromEntry(DiaryEntryDto entry) {
+    final label = switch (entry.source) {
+      'ai_generated' => 'AI 生成',
+      'ai_assisted' => 'AI 辅助',
+      _ => null,
+    };
+    if (label == null) return null;
+    final model = entry.sourceModel?.trim();
+    return _DiaryProvenance(
+      label: label,
+      model: model == null || model.isEmpty ? null : model,
+    );
+  }
+}
+
+class _DiaryProvenanceBadge extends StatelessWidget {
+  const _DiaryProvenanceBadge({required this.provenance});
+
+  final _DiaryProvenance provenance;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final text = provenance.model == null
+        ? provenance.label
+        : '${provenance.label} · ${provenance.model}';
+
+    return Chip(
+      avatar: Icon(Icons.auto_awesome_rounded, size: 13, color: scheme.primary),
+      label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      labelStyle: theme.textTheme.labelSmall?.copyWith(
+        color: scheme.primary,
+        fontWeight: FontWeight.w600,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xxs),
+      labelPadding: const EdgeInsets.only(right: TimeTraceSpace.xxs),
+      side: BorderSide(color: scheme.primary.withValues(alpha: 0.12)),
+      backgroundColor: scheme.primaryContainer.withValues(alpha: 0.55),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
     );
   }
 }

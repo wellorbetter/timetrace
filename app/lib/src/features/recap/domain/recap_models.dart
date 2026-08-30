@@ -116,40 +116,10 @@ class RecapSnapshot {
   }
 
   String toPrettyJson({bool includeDiaryEntries = true}) =>
-      const JsonEncoder.withIndent('  ')
-          .convert(toJson(includeDiaryEntries: includeDiaryEntries));
+      const JsonEncoder.withIndent(
+        '  ',
+      ).convert(toJson(includeDiaryEntries: includeDiaryEntries));
 
   static String _date(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
-}
-
-enum RecapOrigin { local, ai }
-
-class RecapResult {
-  const RecapResult({
-    required this.headline,
-    required this.summary,
-    required this.insights,
-    required this.snapshot,
-    required this.origin,
-    this.model,
-  });
-
-  final String headline;
-  final String summary;
-  final List<String> insights;
-  final RecapSnapshot snapshot;
-  final RecapOrigin origin;
-  final String? model;
-
-  bool get isAiEnhanced => origin == RecapOrigin.ai;
-}
-
-String formatRecapDuration(int seconds) {
-  final safe = seconds < 0 ? 0 : seconds;
-  final hours = safe ~/ 3600;
-  final minutes = (safe % 3600) ~/ 60;
-  if (hours == 0) return '${minutes}m';
-  if (minutes == 0) return '${hours}h';
-  return '${hours}h ${minutes}m';
 }

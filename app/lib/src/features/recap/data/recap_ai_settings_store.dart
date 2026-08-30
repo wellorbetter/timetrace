@@ -5,9 +5,11 @@ import 'package:timetrace_app/src/core/platform_paths.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 
 class RecapAiSettingsStore {
-  const RecapAiSettingsStore();
+  const RecapAiSettingsStore({this.pathOverride});
 
-  String get path => PlatformPaths.child('recap_ai.json');
+  final String? pathOverride;
+
+  String get path => pathOverride ?? PlatformPaths.child('recap_ai.json');
 
   Future<RecapAiSettings> load() async {
     try {
@@ -22,8 +24,8 @@ class RecapAiSettingsStore {
   }
 
   Future<void> save(RecapAiSettings settings) async {
-    PlatformPaths.ensureDirectory();
     final file = File(path);
+    await file.parent.create(recursive: true);
     final temp = File('$path.tmp');
     await temp.writeAsString(
       const JsonEncoder.withIndent('  ').convert(settings.toJson()),

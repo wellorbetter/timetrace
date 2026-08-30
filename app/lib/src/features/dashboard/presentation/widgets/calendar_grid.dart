@@ -4,12 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:timetrace_app/src/core/chinese_calendar.dart';
-import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/calendar/providers/calendar_data_provider.dart';
 
-/// Quiet desktop month calendar reused by the dashboard and journal views.
-/// Usage is shown as a restrained accent tint; selection relies on border and
-/// soft fill instead of large saturated circles.
+/// Month calendar grid — reused by the Overview workspace.
+/// Xiaomi-style cells: festivals red, lunar grey, today/selected circles,
+/// subtle usage heat tint.
 class CalendarGrid extends ConsumerStatefulWidget {
   const CalendarGrid({
     required this.selected,
@@ -30,16 +29,29 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
   DateTime _focused = DateTime.now();
 
   @override
+  void initState() {
+    super.initState();
+    _focused = widget.selected;
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!isSameDay(oldWidget.selected, widget.selected)) {
+      _focused = widget.selected;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final data = ref.watch(calendarDataProvider).value;
 
     return TableCalendar(
       firstDay: DateTime(_focused.year, 1, 1),
       lastDay: DateTime(_focused.year, 12, 31),
       focusedDay: _focused,
-      selectedDayPredicate: (d) => isSameDay(d, widget.selected),
+      selectedDayPredicate: (day) => isSameDay(day, widget.selected),
       onDaySelected: (selected, focused) {
         setState(() => _focused = focused);
         widget.onSelected(selected);
@@ -48,47 +60,34 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
       headerStyle: HeaderStyle(
         titleCentered: true,
         formatButtonVisible: false,
-        headerPadding: const EdgeInsets.only(bottom: TimeTraceSpace.xs),
-        leftChevronPadding: const EdgeInsets.all(TimeTraceSpace.xxs),
-        rightChevronPadding: const EdgeInsets.all(TimeTraceSpace.xxs),
-        titleTextStyle: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
-            ) ??
-            TextStyle(color: scheme.onSurface),
+        titleTextStyle: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+        ),
         leftChevronIcon: Icon(
-          Icons.chevron_left_rounded,
+          Icons.chevron_left,
           size: 20,
-          color: scheme.onSurfaceVariant,
+          color: scheme.primary,
         ),
         rightChevronIcon: Icon(
-          Icons.chevron_right_rounded,
+          Icons.chevron_right,
           size: 20,
-          color: scheme.onSurfaceVariant,
+          color: scheme.primary,
         ),
       ),
-      daysOfWeekHeight: 24,
+      daysOfWeekHeight: 22,
       rowHeight: widget.rowHeight,
       daysOfWeekStyle: DaysOfWeekStyle(
-        weekdayStyle: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ) ??
-            TextStyle(color: scheme.onSurfaceVariant),
-        weekendStyle: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ) ??
-            TextStyle(color: scheme.onSurfaceVariant),
+        weekdayStyle: TextStyle(fontSize: 11, color: scheme.outline),
+        weekendStyle: TextStyle(fontSize: 11, color: scheme.outline),
       ),
       calendarStyle: CalendarStyle(
         outsideDaysVisible: false,
-        cellMargin: EdgeInsets.zero,
-        defaultTextStyle: theme.textTheme.bodyMedium ?? const TextStyle(),
+        defaultTextStyle: TextStyle(fontSize: 13, color: scheme.onSurface),
       ),
       calendarBuilders: CalendarBuilders(
-        defaultBuilder: (context, day, focused) =>
-            _dayCell(day, scheme, data),
+        defaultBuilder: (context, day, focused) => _dayCell(day, scheme, data),
         selectedBuilder: (context, day, focused) =>
             _dayCell(day, scheme, data, selected: true),
         todayBuilder: (context, day, focused) =>
@@ -120,8 +119,8 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
 
     final isFestival = info.festival != null;
     final heat = usageSec > 0
-        ? scheme.primary.withValues(alpha: 0.035 + 0.10 * intensity)
-        : Colors.transparent;
+        ? scheme.primary.withValues(alpha: 0.05 + 0.15 * intensity)
+        : null;
 
     String? sub;
     if (info.hasMarker) {
@@ -130,41 +129,24 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
       sub = info.day;
     }
 
-    final foreground = selected
-        ? scheme.onPrimaryContainer
-        : isFestival
-            ? scheme.tertiary
-            : today
-                ? scheme.primary
-                : scheme.onSurface;
-    final secondaryForeground = selected
-        ? scheme.onPrimaryContainer.withValues(alpha: 0.72)
-        : isFestival
-            ? scheme.tertiary.withValues(alpha: 0.82)
-            : scheme.onSurfaceVariant;
+    var dayColor = scheme.onSurface;
+    if (isFestival) dayColor = Colors.red.shade600;
+    if (selected) {
+      dayColor = scheme.onPrimary;
+    } else if (today) {
+      dayColor = scheme.primary;
+    }
 
     return Center(
-      child: AnimatedContainer(
-        duration: TimeTraceMotion.fast,
-        curve: TimeTraceMotion.standard,
-        width: 42,
-        height: 40,
+      child: Container(
+        width: 40,
+        height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected
-              ? scheme.primaryContainer
-              : today
-                  ? scheme.primaryContainer.withValues(alpha: 0.42)
-                  : heat,
-          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-          border: Border.all(
-            color: selected
-                ? scheme.primary.withValues(alpha: 0.68)
-                : today
-                    ? scheme.primary.withValues(alpha: 0.35)
-                    : Colors.transparent,
-            width: selected ? 1.2 : 1,
-          ),
+              ? scheme.primary
+              : (heat ?? (today ? scheme.primaryContainer : null)),
+          shape: BoxShape.circle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -172,10 +154,12 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
             Text(
               '${day.day}',
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: selected || today ? FontWeight.w600 : FontWeight.w500,
-                color: foreground,
-                height: 1.05,
+                fontSize: 15,
+                fontWeight: today || selected
+                    ? FontWeight.bold
+                    : FontWeight.w500,
+                color: dayColor,
+                height: 1.1,
               ),
             ),
             SizedBox(
@@ -185,43 +169,47 @@ class _CalendarGridState extends ConsumerState<CalendarGrid> {
                       sub,
                       style: TextStyle(
                         fontSize: 8,
-                        color: secondaryForeground,
+                        color: selected || today
+                            ? dayColor.withValues(alpha: 0.85)
+                            : (isFestival
+                                  ? Colors.red.shade600
+                                  : scheme.outline),
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     )
                   : (imgs.isNotEmpty || hasDiary)
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (imgs.isNotEmpty)
-                              for (final p in imgs.take(2))
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 1),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: Image.file(
-                                      File(p),
-                                      width: 7,
-                                      height: 7,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const SizedBox.shrink(),
-                                    ),
-                                  ),
-                                ),
-                            if (hasDiary && imgs.isEmpty)
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: selected ? scheme.onPrimaryContainer : scheme.primary,
-                                  shape: BoxShape.circle,
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (imgs.isNotEmpty)
+                          for (final path in imgs.take(2))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 1),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: Image.file(
+                                  File(path),
+                                  width: 7,
+                                  height: 7,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      const SizedBox.shrink(),
                                 ),
                               ),
-                          ],
-                        )
-                      : const SizedBox(height: 9),
+                            ),
+                        if (hasDiary && imgs.isEmpty)
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    )
+                  : const SizedBox(height: 9),
             ),
           ],
         ),

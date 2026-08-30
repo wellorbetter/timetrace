@@ -16,38 +16,26 @@ const _previewApps = [
   AppUsageItem(appName: 'Figma', activeSeconds: 480, idleSeconds: 0),
 ];
 
-@Preview(name: '占比联动 · 桌面', size: Size(560, 420))
+@Preview(name: '占比 · 桌面', size: Size(560, 420))
 Widget pieChartCardDesktopPreview() => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: TimetraceTheme.dark(),
   home: const Scaffold(
-    body: Padding(padding: EdgeInsets.all(16), child: _InteractivePiePreview()),
+    body: Padding(
+      padding: EdgeInsets.all(16),
+      child: PieChartCard(apps: _previewApps),
+    ),
   ),
 );
 
-@Preview(name: '占比联动 · 窄窗', size: Size(390, 350))
+@Preview(name: '占比 · 窄窗', size: Size(390, 350))
 Widget pieChartCardCompactPreview() => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: TimetraceTheme.light(),
   home: const Scaffold(
-    body: Padding(padding: EdgeInsets.all(12), child: _InteractivePiePreview()),
+    body: Padding(
+      padding: EdgeInsets.all(12),
+      child: PieChartCard(apps: _previewApps),
+    ),
   ),
 );
-
-class _InteractivePiePreview extends StatefulWidget {
-  const _InteractivePiePreview();
-
-  @override
-  State<_InteractivePiePreview> createState() => _InteractivePiePreviewState();
-}
-
-class _InteractivePiePreviewState extends State<_InteractivePiePreview> {
-  int? _selected;
-
-  @override
-  Widget build(BuildContext context) => PieChartCard(
-    apps: _previewApps,
-    selectedIndex: _selected,
-    onSelectApp: (index) => setState(() => _selected = index),
-  );
-}

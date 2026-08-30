@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
-import 'package:timetrace_app/src/features/recap/presentation/recap_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
 /// Quiet desktop shell with a narrow, explicit sidebar rather than a mobile-
@@ -22,9 +21,16 @@ class AppShell extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final sidebarColor =
         theme.navigationRailTheme.backgroundColor ?? scheme.surface;
+    final sidebarMutedColor = Color.alphaBlend(
+      scheme.onSurface.withValues(
+        alpha: theme.brightness == Brightness.light ? 0.68 : 0.72,
+      ),
+      sidebarColor,
+    );
     final useMeta = Platform.isMacOS;
     final selectedIndex = _indexOf(context);
-    final shortcutPrefix = useMeta ? '⌘' : 'Ctrl+';
+    final overviewShortcut = useMeta ? '⌘1' : 'Ctrl+1';
+    final settingsShortcut = useMeta ? '⌘,' : 'Ctrl+,';
 
     return CallbackShortcuts(
       bindings: {
@@ -32,22 +38,14 @@ class AppShell extends ConsumerWidget {
           LogicalKeyboardKey.digit1,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/dashboard'),
-        SingleActivator(
-          LogicalKeyboardKey.digit2,
-          meta: useMeta,
-          control: !useMeta,
-        ): () => context.go('/recap'),
-        SingleActivator(
-          LogicalKeyboardKey.digit3,
-          meta: useMeta,
-          control: !useMeta,
-        ): () => context.go('/settings'),
+        ): () =>
+            context.go('/dashboard'),
         SingleActivator(
           LogicalKeyboardKey.comma,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/settings'),
+        ): () =>
+            context.go('/settings'),
       },
       child: Focus(
         autofocus: true,
@@ -57,6 +55,7 @@ class AppShell extends ConsumerWidget {
               SizedBox(
                 width: TimeTraceLayout.sidebarWidth,
                 child: ColoredBox(
+                  key: const ValueKey('app-sidebar'),
                   color: sidebarColor,
                   child: SafeArea(
                     right: false,
@@ -76,30 +75,26 @@ class AppShell extends ConsumerWidget {
                             icon: Icons.space_dashboard_outlined,
                             selectedIcon: Icons.space_dashboard_rounded,
                             label: '概览',
-                            shortcut: '${shortcutPrefix}1',
+                            shortcut: overviewShortcut,
                             selected: selectedIndex == 0,
+                            mutedColor: sidebarMutedColor,
                             onTap: () => context.go('/dashboard'),
-                          ),
-                          const SizedBox(height: TimeTraceSpace.xxs),
-                          _SidebarDestination(
-                            icon: Icons.auto_awesome_outlined,
-                            selectedIcon: Icons.auto_awesome_rounded,
-                            label: '回顾',
-                            shortcut: '${shortcutPrefix}2',
-                            selected: selectedIndex == 1,
-                            onTap: () => context.go('/recap'),
                           ),
                           const SizedBox(height: TimeTraceSpace.xxs),
                           _SidebarDestination(
                             icon: Icons.tune_outlined,
                             selectedIcon: Icons.tune_rounded,
                             label: '设置',
-                            shortcut: useMeta ? '⌘,' : 'Ctrl+,',
-                            selected: selectedIndex == 2,
+                            shortcut: settingsShortcut,
+                            selected: selectedIndex == 1,
+                            mutedColor: sidebarMutedColor,
                             onTap: () => context.go('/settings'),
                           ),
                           const Spacer(),
-                          _LocalStatus(scheme: scheme),
+                          _LocalStatus(
+                            scheme: scheme,
+                            mutedColor: sidebarMutedColor,
+                          ),
                         ],
                       ),
                     ),
@@ -138,11 +133,7 @@ class _Brand extends StatelessWidget {
             borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             border: Border.all(color: scheme.outlineVariant),
           ),
-          child: Icon(
-            Icons.timelapse_rounded,
-            size: 19,
-            color: scheme.primary,
-          ),
+          child: Icon(Icons.timelapse_rounded, size: 19, color: scheme.primary),
         ),
         const SizedBox(width: TimeTraceSpace.xs),
         Expanded(
@@ -168,6 +159,7 @@ class _SidebarDestination extends StatelessWidget {
     required this.label,
     required this.shortcut,
     required this.selected,
+    required this.mutedColor,
     required this.onTap,
   });
 
@@ -176,6 +168,7 @@ class _SidebarDestination extends StatelessWidget {
   final String label;
   final String shortcut;
   final bool selected;
+  final Color mutedColor;
   final VoidCallback onTap;
 
   @override
@@ -183,50 +176,62 @@ class _SidebarDestination extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Tooltip(
-      message: '$label · $shortcut',
-      waitDuration: const Duration(milliseconds: 500),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-          child: AnimatedContainer(
-            duration: TimeTraceMotion.fast,
-            curve: TimeTraceMotion.standard,
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xs),
-            decoration: BoxDecoration(
-              color: selected ? scheme.primaryContainer : Colors.transparent,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label，快捷键 $shortcut',
+      child: ExcludeSemantics(
+        child: Tooltip(
+          message: '$label · $shortcut',
+          waitDuration: const Duration(milliseconds: 500),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
               borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  selected ? selectedIcon : icon,
-                  size: 19,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              child: AnimatedContainer(
+                key: ValueKey('sidebar-destination-$label'),
+                duration: TimeTraceMotion.fast,
+                curve: TimeTraceMotion.standard,
+                height: 40,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TimeTraceSpace.xs,
                 ),
-                const SizedBox(width: TimeTraceSpace.xs),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: selected
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primaryContainer
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? selectedIcon : icon,
+                      size: 19,
+                      color: selected ? scheme.primary : mutedColor,
                     ),
-                  ),
+                    const SizedBox(width: TimeTraceSpace.xs),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: selected ? scheme.onSurface : mutedColor,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      shortcut,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        color: mutedColor,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  shortcut,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontSize: 9,
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.72),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -236,72 +241,74 @@ class _SidebarDestination extends StatelessWidget {
 }
 
 class _LocalStatus extends StatelessWidget {
-  const _LocalStatus({required this.scheme});
+  const _LocalStatus({required this.scheme, required this.mutedColor});
 
   final ColorScheme scheme;
+  final Color mutedColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final platform = Platform.isMacOS ? 'macOS' : 'Windows';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: TimeTraceSpace.xs,
-        vertical: TimeTraceSpace.xs,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.46),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.72),
+    return Semantics(
+      container: true,
+      label: '本地记录，数据仅保存在 $platform',
+      child: ExcludeSemantics(
+        child: Container(
+          key: const ValueKey('local-recording-status'),
+          padding: const EdgeInsets.symmetric(
+            horizontal: TimeTraceSpace.xs,
+            vertical: TimeTraceSpace.xs,
+          ),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: TimeTraceSpace.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '本地记录',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      platform,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        color: mutedColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.lock_outline_rounded, size: 13, color: mutedColor),
+            ],
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: TimeTraceSpace.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '本地记录',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  platform,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontSize: 9,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.lock_outline_rounded,
-            size: 13,
-            color: scheme.onSurfaceVariant,
-          ),
-        ],
       ),
     );
   }
 }
 
-const _paths = ['/dashboard', '/recap', '/settings'];
+const _paths = ['/dashboard', '/settings'];
 
 int _indexOf(BuildContext context) {
   final location = GoRouterState.of(context).uri.path;
@@ -316,8 +323,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
-          GoRoute(path: '/recap', builder: (_, _) => const RecapScreen()),
+          GoRoute(
+            path: '/dashboard',
+            builder: (_, _) => const DashboardScreen(),
+          ),
           GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),
