@@ -2,7 +2,7 @@ name: timetrace_app
 description: "TimeTrace desktop application."
 publish_to: 'none'
 
-version: 1.0.1+2
+version: 1.1.0+3
 
 environment:
   sdk: ^3.11.4

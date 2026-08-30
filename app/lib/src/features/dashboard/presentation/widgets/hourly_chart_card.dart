@@ -402,8 +402,9 @@ class _HourlyBarChart extends StatelessWidget {
               reservedSize: 18,
               getTitlesWidget: (value, meta) {
                 final h = value.toInt();
-                if (h < startHour || h > endHour)
+                if (h < startHour || h > endHour) {
                   return const SizedBox.shrink();
+                }
                 final span = endHour - startHour;
                 final step = span > 12 ? 6 : 3;
                 final show =

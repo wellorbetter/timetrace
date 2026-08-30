@@ -278,7 +278,7 @@ class _HistoryMessage extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
-          if (action != null) action!,
+          ?action,
         ],
       ),
     );

@@ -5,9 +5,9 @@
 <h1 align="center">TimeTrace</h1>
 
 <p align="center">
-  Local-first Windows time tracking &amp; journal app
+  A local-first desktop activity tracker and journal
   <br>
-  <b>Rust</b> core + <b>Flutter</b> UI · 100% local, no network, no telemetry
+  <b>Rust</b> core + <b>Flutter</b> UI · Offline by default · Optional AI
 </p>
 
 <p align="center">
@@ -18,79 +18,85 @@
   </a>
   ·
   <img src="https://github.com/wellorbetter/timetrace/actions/workflows/ci.yml/badge.svg" alt="CI">
+  ·
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/wellorbetter/timetrace" alt="MIT License"></a>
 </p>
 
----
+![TimeTrace v1.1 overview](docs/screenshots/v1.1-overview.png)
 
-## Features
-
-- **Usage stats** — tracks foreground app active time; auto-detects idle, lock screen and sleep, excluded from active time
-- **App icons** — resolves the foreground app and its icon in real time; lives in the system tray with a quick right-click menu
-- **Dashboard** — bar chart / donut chart / 24h hourly distribution / daily summary / app distribution carousel, synced with the calendar
-- **Journal** — social-feed style diary: Markdown editing, image albums, auto-saved drafts, grouped & collapsible by day
-- **Settings** — monitoring parameters, excluded apps, startup/minimize behavior, and persistent theme/font/background/dashboard preferences
-- **Background & app picker** — local background images with opacity control, running-process selection, and executable icons
-
-## Screenshots
-
-| | |
-| --- | --- |
-| ![Bar chart](docs/screenshots/dashboard-bar.png) | ![Donut chart](docs/screenshots/dashboard-pie.png) |
-| ![Daily summary](docs/screenshots/dashboard-summary.png) | ![App distribution](docs/screenshots/dashboard-apps.png) |
-| ![Hourly distribution](docs/screenshots/dashboard-hourly.png) | |
-
-TimeTrace supports a local background image, adjustable opacity, and the same background treatment across the dashboard and settings page:
-
-![Dashboard with background](docs/screenshots/background-dashboard.png)
-
-![Settings with background opacity](docs/screenshots/background-settings.png)
-
-## Tech Stack
-
-| Module | Description |
-| --- | --- |
-| `crates/core` | Rust core: Win32 event-hook monitoring, idle/sleep detection, SQLite storage |
-| `bridge` | flutter_rust_bridge bindings |
-| `app/` | Flutter UI: Riverpod 3 + Material 3, Windows desktop |
-
-## Build
-
-### Prerequisites
-
-- Windows 10/11
-- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows) (stable channel)
-- [Rust toolchain](https://rustup.rs/) (`cargo` must be on PATH; the Rust bridge is built automatically)
-- Visual Studio 2022 (Desktop development with C++ workload)
-
-### Commands
-
-```bash
-# 1) Rust workspace tests
-cargo test --workspace
-
-# 2) Flutter static analysis
-cd app && flutter analyze --no-fatal-infos
-
-# 3) Windows Release build (compiles & copies timetrace_bridge.dll automatically)
-cd app && flutter build windows --release
-# Output: app/build/windows/x64/runner/Release/
-
-# 4) Flutter tests
-cd app && flutter test
-```
+TimeTrace automatically records foreground applications and active time, then brings the calendar, charts, app details, and journal into one desktop workspace. Records stay on your computer by default; AI journaling is an explicit opt-in.
 
 ## Download
 
-- Latest release: <https://github.com/wellorbetter/timetrace/releases>
-- Grab `TimeTrace-vX.Y.Z-windows-x64.zip`, unzip and run `timetrace_app.exe` — no install needed.
+Get the latest build from [GitHub Releases](https://github.com/wellorbetter/timetrace/releases/latest).
 
-## How It Was Built
+| Platform | Status | How to run |
+| --- | --- | --- |
+| Windows 10/11 x64 | Stable | Download `TimeTrace-vX.Y.Z-windows-x64.zip`, extract the complete folder, and run `timetrace_app.exe` |
+| macOS | Self-use preview | Download `TimeTrace-vX.Y.Z-macos.zip`, extract it, and run `Install TimeTrace.command`; the app is not Apple-notarized yet |
 
-Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished with Codex for performance and UX.
+## Features
 
-## Privacy
+- **Automatic tracking** — records foreground apps, window titles, and active time while excluding idle, locked, and suspended periods
+- **Calendar and overview** — calendar-linked bar, donut, hourly, daily summary, app ranking, and history views
+- **Local journal** — Markdown editing, image albums, draft persistence, and date-based organization beside the day's activity facts
+- **AI journal (optional)** — works with DeepSeek and OpenAI-compatible Chat Completions endpoints, with configurable models, writing preferences, and a daily schedule
+- **Desktop experience** — system tray, startup/minimize behavior, excluded apps, light/dark themes, fonts, backgrounds, and overview layout controls
+- **Data control** — choose the database folder, export CSV, pause tracking, or delete all local data
 
-All data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`); nothing is uploaded.
+## AI journal and privacy boundary
+
+AI journaling is off by default. While it is off, TimeTrace does not contact a model service or send usage records or journal text.
+
+When you opt in and generate an entry, TimeTrace sends the configured endpoint only the selected day's necessary usage facts: aggregate active/idle time, session and context-switch counts, peak time, top applications, and a bounded usage history. Window titles, file paths, and raw events are excluded. Existing journal text is also excluded unless you separately enable “Allow existing journal entries.”
+
+The API key comes from a system environment variable that you name; TimeTrace stores the variable name, not the key. The connection test sends no TimeTrace data. Your configured model provider's privacy policy and pricing still apply.
+
+| AI journal | AI settings |
+| --- | --- |
+| ![AI-generated journal](docs/screenshots/v1.1-ai-diary.png) | ![AI journal settings](docs/screenshots/v1.1-ai-settings.png) |
+
+## Local data
+
+The SQLite database can contain application names, executable paths, window titles, usage sessions, and journal entries. Its default location is:
+
+- Windows: `%APPDATA%\TimeTrace\time.db`
+- macOS: `~/Library/Application Support/TimeTrace/time.db`
+
+Installing or starting TimeTrace does not automatically upload this local data. Treat the database and journal images as private data and back them up accordingly.
+
+## Build from source
+
+### Windows
+
+Requirements: Flutter stable, Rust stable, and Visual Studio 2022 with Desktop development with C++.
+
+```powershell
+cargo test --workspace
+cd app
+flutter pub get
+flutter analyze --no-fatal-infos
+flutter test
+flutter build windows --release
+```
+
+### macOS
+
+Requirements: Flutter stable, Rust stable, and Xcode Command Line Tools.
+
+```bash
+cargo test -p timetrace-core -p timetrace-bridge
+chmod +x scripts/build_macos.sh
+./scripts/build_macos.sh
+```
+
+## Architecture
+
+| Module | Description |
+| --- | --- |
+| `crates/core` | Cross-platform tracking, idle detection, session aggregation, and SQLite storage |
+| `bridge` | `flutter_rust_bridge` bindings |
+| `app/` | Flutter desktop UI (Riverpod + Material 3) |
 
 ## License
 

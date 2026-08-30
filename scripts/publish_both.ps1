@@ -1,7 +1,7 @@
 # 一次发布 GitHub + Gitee 两个平台
-# 用法: powershell -ExecutionPolicy Bypass -File scripts/publish_both.ps1 -Tag v1.0.1 -Notes "更新说明..."
+# 用法: powershell -ExecutionPolicy Bypass -File scripts/publish_both.ps1 -Tag v1.1.0 -Notes "更新说明..."
 # 环境: GITEE_TOKEN（Gitee 私人令牌）
-param([string]$Tag = 'v1.0.0', [string]$Notes = 'TimeTrace release', [string]$Zip = '')
+param([string]$Tag = 'v1.1.0', [string]$Notes = 'TimeTrace release', [string]$Zip = '')
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $Zip) { $Zip = "$root\dist\TimeTrace-$Tag-windows-x64.zip" }

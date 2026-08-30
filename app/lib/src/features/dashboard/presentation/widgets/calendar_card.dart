@@ -154,11 +154,12 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         api.removeDiaryImage(path: p);
       }
       api.deleteDiaryEntry(id: id);
-      if (_editingId == id)
+      if (_editingId == id) {
         setState(() {
           _editingId = null;
           _staged = [];
         });
+      }
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('delete diary entry failed: $e');
@@ -247,7 +248,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             ),
             const Spacer(),
             Text(
-              '${calFmt(widget.date)}',
+              calFmt(widget.date),
               style: TextStyle(fontSize: 11, color: scheme.outline),
             ),
             const SizedBox(width: 6),
@@ -353,7 +354,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                               child: Image.file(
                                 File(p),
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
+                                errorBuilder: (_, _, _) =>
                                     const SizedBox.shrink(),
                               ),
                             ),
@@ -915,7 +916,7 @@ class _EditImageGrid extends StatelessWidget {
                   child: Image.file(
                     File(p),
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       color: scheme.surfaceContainerHighest,
                       child: const Icon(
                         Icons.broken_image,
@@ -969,7 +970,7 @@ class _EditImageGrid extends StatelessWidget {
 }
 
 class DaySummaryPanel extends ConsumerWidget {
-  const DaySummaryPanel({required this.date});
+  const DaySummaryPanel({required this.date, super.key});
 
   final DateTime date;
 
@@ -1229,7 +1230,7 @@ class _HourlyHeatmap extends ConsumerWidget {
 
     return hourly.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (hours) {
         final max = hours.reduce((a, b) => a > b ? a : b).clamp(1, 1 << 62);
         return Column(
@@ -1257,7 +1258,7 @@ class _HourlyHeatmap extends ConsumerWidget {
                       child: Padding(
                         padding: const EdgeInsets.only(right: 1),
                         child: Tooltip(
-                          message: '${i}时 · ${formatDuration(hours[i])}',
+                          message: '$i时 · ${formatDuration(hours[i])}',
                           child: GestureDetector(
                             onTap: hours[i] > 0
                                 ? () => ref

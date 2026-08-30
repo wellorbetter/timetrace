@@ -336,7 +336,7 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'TimeTrace v1.0.1 · Rust + Flutter · MIT',
+                          '${l.aboutText} · v1.1.0 · Rust + Flutter · MIT',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
