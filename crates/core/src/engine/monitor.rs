@@ -124,6 +124,17 @@ where
                 break;
             }
             if let Ok(pause) = pause_rx.try_recv() {
+                if pause && !is_paused {
+                    // Pausing is a real observation boundary. Close the active
+                    // session immediately and forget the foreground identity so
+                    // resuming emits a fresh AppSwitched event even if the user
+                    // stayed in the same application.
+                    sink.accept(TrackedEvent::GapDetected {
+                        timestamp: chrono::Utc::now(),
+                    });
+                    current_app = None;
+                    is_idle = false;
+                }
                 is_paused = pause;
             }
 

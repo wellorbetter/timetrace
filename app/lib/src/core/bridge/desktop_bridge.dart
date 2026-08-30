@@ -12,7 +12,7 @@ class DesktopBridge {
 
   static Future<TimeTraceApi> initialize() async {
     await frb.RustLib.init(
-      externalLibrary: ExternalLibrary.open(_libraryPath()),
+      externalLibrary: ExternalLibrary.open(libraryPath()),
     );
 
     // Empty means "use the platform-native TimeTrace database path". The
@@ -20,7 +20,9 @@ class DesktopBridge {
     return TimeTraceApi.create(dbPath: '');
   }
 
-  static String _libraryPath() {
+  /// Resolved bridge path shared by generated FRB bindings and small native
+  /// read-only ports such as Nowline's live snapshot.
+  static String libraryPath() {
     if (Platform.isWindows) return 'timetrace_bridge.dll';
 
     if (Platform.isMacOS) {

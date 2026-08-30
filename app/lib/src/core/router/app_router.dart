@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:timetrace_app/src/features/nowline/presentation/nowline_screen.dart';
 import 'package:timetrace_app/src/features/recap/presentation/recap_screen.dart';
 import 'package:timetrace_app/src/features/settings/presentation/settings_screen.dart';
 
@@ -32,22 +33,32 @@ class AppShell extends ConsumerWidget {
           LogicalKeyboardKey.digit1,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/dashboard'),
+        ): () =>
+            context.go('/dashboard'),
         SingleActivator(
           LogicalKeyboardKey.digit2,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/recap'),
+        ): () =>
+            context.go('/recap'),
         SingleActivator(
           LogicalKeyboardKey.digit3,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/settings'),
+        ): () =>
+            context.go('/nowline'),
+        SingleActivator(
+          LogicalKeyboardKey.digit4,
+          meta: useMeta,
+          control: !useMeta,
+        ): () =>
+            context.go('/settings'),
         SingleActivator(
           LogicalKeyboardKey.comma,
           meta: useMeta,
           control: !useMeta,
-        ): () => context.go('/settings'),
+        ): () =>
+            context.go('/settings'),
       },
       child: Focus(
         autofocus: true,
@@ -82,6 +93,15 @@ class AppShell extends ConsumerWidget {
                           ),
                           const SizedBox(height: TimeTraceSpace.xxs),
                           _SidebarDestination(
+                            icon: Icons.graphic_eq_outlined,
+                            selectedIcon: Icons.graphic_eq_rounded,
+                            label: 'Nowline',
+                            shortcut: '${shortcutPrefix}3',
+                            selected: selectedIndex == 2,
+                            onTap: () => context.go('/nowline'),
+                          ),
+                          const SizedBox(height: TimeTraceSpace.xxs),
+                          _SidebarDestination(
                             icon: Icons.auto_awesome_outlined,
                             selectedIcon: Icons.auto_awesome_rounded,
                             label: '回顾',
@@ -95,7 +115,7 @@ class AppShell extends ConsumerWidget {
                             selectedIcon: Icons.tune_rounded,
                             label: '设置',
                             shortcut: useMeta ? '⌘,' : 'Ctrl+,',
-                            selected: selectedIndex == 2,
+                            selected: selectedIndex == 3,
                             onTap: () => context.go('/settings'),
                           ),
                           const Spacer(),
@@ -138,11 +158,7 @@ class _Brand extends StatelessWidget {
             borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             border: Border.all(color: scheme.outlineVariant),
           ),
-          child: Icon(
-            Icons.timelapse_rounded,
-            size: 19,
-            color: scheme.primary,
-          ),
+          child: Icon(Icons.timelapse_rounded, size: 19, color: scheme.primary),
         ),
         const SizedBox(width: TimeTraceSpace.xs),
         Expanded(
@@ -243,7 +259,11 @@ class _LocalStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final platform = Platform.isMacOS ? 'macOS' : 'Windows';
+    final platform = Platform.isMacOS
+        ? 'macOS'
+        : Platform.isLinux
+        ? 'Linux'
+        : 'Windows';
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -301,7 +321,7 @@ class _LocalStatus extends StatelessWidget {
   }
 }
 
-const _paths = ['/dashboard', '/recap', '/settings'];
+const _paths = ['/dashboard', '/recap', '/nowline', '/settings'];
 
 int _indexOf(BuildContext context) {
   final location = GoRouterState.of(context).uri.path;
@@ -316,8 +336,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+          GoRoute(
+            path: '/dashboard',
+            builder: (_, _) => const DashboardScreen(),
+          ),
           GoRoute(path: '/recap', builder: (_, _) => const RecapScreen()),
+          GoRoute(path: '/nowline', builder: (_, _) => const NowlineScreen()),
           GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),

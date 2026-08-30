@@ -9,6 +9,8 @@ import 'package:timetrace_app/src/core/theme/font_provider.dart';
 import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/core/tray/tray_service.dart';
+import 'package:timetrace_app/src/features/nowline/presentation/nowline_overlay.dart';
+import 'package:timetrace_app/src/features/nowline/providers/nowline_mode_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 class TimetraceApp extends ConsumerStatefulWidget {
@@ -65,6 +67,7 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
     final dark = ref.watch(themeModeProvider);
     final font = ref.watch(fontProvider);
     final background = ref.watch(backgroundProvider);
+    final nowlineMode = ref.watch(nowlineModeProvider);
 
     ref.listen(trayExitProvider, (prev, next) {
       if (next) exit(0);
@@ -78,6 +81,7 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: router,
       builder: (context, child) {
+        if (nowlineMode.active) return const NowlineOverlay();
         final scheme = Theme.of(context).colorScheme;
         final hasCustom = background.isImage || background.color != null;
         return Stack(
@@ -85,8 +89,7 @@ class _TimetraceAppState extends ConsumerState<TimetraceApp>
           children: [
             if (background.isImage && background.imagePath != null)
               Image.file(File(background.imagePath!), fit: BoxFit.cover),
-            if (background.color != null)
-              ColoredBox(color: background.color!),
+            if (background.color != null) ColoredBox(color: background.color!),
             ColoredBox(
               color: scheme.surface.withValues(
                 alpha: hasCustom ? 1 - background.opacity : 1,
