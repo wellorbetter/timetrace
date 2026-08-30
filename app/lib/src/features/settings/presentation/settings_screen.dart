@@ -469,7 +469,7 @@ class SettingsScreen extends ConsumerWidget {
     AppSettings settings,
   ) async {
     final current = File(_dbPath(settings));
-    final directory = await FilePicker.platform.getDirectoryPath(
+    final directory = await FilePicker.getDirectoryPath(
       dialogTitle: '选择 TimeTrace 数据存储文件夹',
       initialDirectory: current.parent.path,
       lockParentWindow: true,
