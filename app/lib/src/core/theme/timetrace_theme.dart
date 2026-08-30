@@ -13,7 +13,7 @@ class TimetraceTheme {
   static const _lightSurface = Color(0xFFF7F6F3);
   static const _lightCard = Color(0xFFFCFBF8);
   static const _lightText = Color(0xFF242421);
-  static const _lightMuted = Color(0xFF77766F);
+  static const _lightMuted = Color(0xFF72716A);
   static const _lightBorder = Color(0xFFE6E3DC);
   static const _accent = Color(0xFF5F7668);
   static const _accentSoft = Color(0xFFDDE7E0);
@@ -82,38 +82,78 @@ class TimetraceTheme {
       visualDensity: VisualDensity.compact,
     );
 
-    final textTheme = base.textTheme
-        .apply(
-          fontFamily: fontFamily,
-          fontFamilyFallback: const [
-            '.AppleSystemUIFont',
-            'SF Pro Text',
-            'PingFang SC',
-            'Segoe UI',
-            'Microsoft YaHei UI',
-            'sans-serif',
-          ],
-          bodyColor: scheme.onSurface,
-          displayColor: scheme.onSurface,
-        )
-        .copyWith(
-          headlineMedium: base.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.6,
-          ),
-          titleLarge: base.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.25,
-          ),
-          titleMedium: base.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-          bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.45),
-          bodySmall: base.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-            height: 1.45,
-          ),
-        );
+    // Build every semantic text style from the same already-applied family.
+    // Otherwise replaced heading styles silently lose the selected font.
+    final appliedTextTheme = base.textTheme.apply(
+      fontFamily: fontFamily,
+      fontFamilyFallback: const [
+        'Segoe UI Variable',
+        'Segoe UI',
+        'Microsoft YaHei UI',
+        'Microsoft YaHei',
+        '.AppleSystemUIFont',
+        'SF Pro Text',
+        'PingFang SC',
+        'sans-serif',
+      ],
+      bodyColor: scheme.onSurface,
+      displayColor: scheme.onSurface,
+    );
+    final textTheme = appliedTextTheme.copyWith(
+      displayLarge: appliedTextTheme.displayLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      displayMedium: appliedTextTheme.displayMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      displaySmall: appliedTextTheme.displaySmall?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      headlineLarge: appliedTextTheme.headlineLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.6,
+      ),
+      headlineMedium: appliedTextTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.6,
+      ),
+      headlineSmall: appliedTextTheme.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.4,
+      ),
+      titleLarge: appliedTextTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.25,
+      ),
+      titleMedium: appliedTextTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      titleSmall: appliedTextTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      bodyLarge: appliedTextTheme.bodyLarge?.copyWith(
+        fontWeight: FontWeight.w400,
+        height: 1.45,
+      ),
+      bodyMedium: appliedTextTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.w400,
+        height: 1.45,
+      ),
+      bodySmall: appliedTextTheme.bodySmall?.copyWith(
+        color: scheme.onSurfaceVariant,
+        fontWeight: FontWeight.w400,
+        height: 1.45,
+      ),
+      labelLarge: appliedTextTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.w500,
+      ),
+      labelMedium: appliedTextTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w500,
+      ),
+      labelSmall: appliedTextTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.w500,
+      ),
+    );
 
     final surfaceShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(TimeTraceRadius.surface),

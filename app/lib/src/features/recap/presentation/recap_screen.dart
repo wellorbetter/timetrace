@@ -143,7 +143,7 @@ class _RecapContent extends StatelessWidget {
                         : 'LOCAL FACTUAL RECAP',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.primary,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0.7,
                     ),
                   ),
@@ -199,43 +199,62 @@ class _RecapContent extends StatelessWidget {
         ),
         const SizedBox(height: TimeTraceSpace.md),
         _MetricGrid(snapshot: snapshot),
-        const SizedBox(height: TimeTraceSpace.lg),
-        _Section(
-          title: '洞察',
-          subtitle: '来自 TimeTrace 事实快照；AI 只能总结，不能修改这些事实。',
-          child: Column(
-            children: [
-              for (var i = 0; i < result.insights.length; i++) ...[
-                _InsightRow(index: i + 1, text: result.insights[i]),
-                if (i != result.insights.length - 1) const Divider(height: 24),
-              ],
-            ],
+        const SizedBox(height: TimeTraceSpace.md),
+        Container(
+          key: const ValueKey('recap-reading-surface'),
+          padding: const EdgeInsets.all(TimeTraceSpace.md),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLowest.withValues(alpha: 0.96),
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
           ),
-        ),
-        const SizedBox(height: TimeTraceSpace.lg),
-        _TopApps(snapshot: snapshot),
-        const SizedBox(height: TimeTraceSpace.lg),
-        _Section(
-          title: '事实快照',
-          subtitle: '展开查看实际提交给 AI 的结构化数据。',
-          child: ExpansionTile(
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(top: TimeTraceSpace.xs),
-            title: const Text('查看原始 Recap JSON'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(TimeTraceSpace.sm),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+              _Section(
+                title: '洞察',
+                subtitle: '来自 TimeTrace 事实快照；AI 只能总结，不能修改这些事实。',
+                child: Column(
+                  children: [
+                    for (var i = 0; i < result.insights.length; i++) ...[
+                      _InsightRow(index: i + 1, text: result.insights[i]),
+                      if (i != result.insights.length - 1)
+                        const Divider(height: 24),
+                    ],
+                  ],
                 ),
-                child: SelectableText(
-                  snapshot.toPrettyJson(),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    height: 1.45,
+              ),
+              const SizedBox(height: TimeTraceSpace.lg),
+              _TopApps(snapshot: snapshot),
+              const SizedBox(height: TimeTraceSpace.lg),
+              _Section(
+                title: '事实快照',
+                subtitle: '展开查看实际提交给 AI 的结构化数据。',
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(
+                    top: TimeTraceSpace.xs,
                   ),
+                  title: const Text('查看原始 Recap JSON'),
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(TimeTraceSpace.sm),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(
+                          TimeTraceRadius.control,
+                        ),
+                      ),
+                      child: SelectableText(
+                        snapshot.toPrettyJson(),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -420,7 +439,7 @@ class _InsightRow extends StatelessWidget {
             index.toString().padLeft(2, '0'),
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.primary,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

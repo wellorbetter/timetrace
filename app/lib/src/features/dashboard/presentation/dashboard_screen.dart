@@ -373,8 +373,13 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenSize = screenSizeOf(constraints);
+        final compactHeight = constraints.maxHeight < 860;
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
+        final horizontalPadding = constraints.maxWidth <
+                TimeTraceLayout.compactBreakpoint
+            ? TimeTraceSpace.sm
+            : TimeTraceSpace.lg;
 
         return Align(
           alignment: Alignment.topCenter,
@@ -383,7 +388,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               maxWidth: TimeTraceLayout.dashboardWidth,
             ),
             child: ListView(
-              padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                compactHeight ? TimeTraceSpace.sm : TimeTraceSpace.md,
+                horizontalPadding,
+                compactHeight ? TimeTraceSpace.md : TimeTraceSpace.xl,
+              ),
               children: [
                 Wrap(
                   spacing: TimeTraceSpace.xs,
@@ -404,9 +414,21 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: TimeTraceSpace.sm),
-                DashboardSummaryStrip(state: state, apps: apps),
-                const SizedBox(height: TimeTraceSpace.md),
+                SizedBox(
+                  height: compactHeight
+                      ? TimeTraceSpace.xs
+                      : TimeTraceSpace.sm,
+                ),
+                DashboardSummaryStrip(
+                  state: state,
+                  apps: apps,
+                  compact: compactHeight,
+                ),
+                SizedBox(
+                  height: compactHeight
+                      ? TimeTraceSpace.sm
+                      : TimeTraceSpace.md,
+                ),
                 if (apps.isEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: TimeTraceSpace.md),
@@ -443,7 +465,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     final order = ref.watch(dashboardOrderProvider);
                     final pageCount = order.length;
                     final carouselHeight = narrow
-                        ? 330.0
+                        ? (compactHeight ? 300.0 : 330.0)
+                        : compactHeight
+                        ? 350.0
                         : (screenSize.twoColumn ? 400.0 : 360.0);
 
                     final carousel = Column(
@@ -506,7 +530,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     final calendar = Card(
                       key: _calendarKey,
                       child: Padding(
-                        padding: const EdgeInsets.all(TimeTraceSpace.sm),
+                        padding: EdgeInsets.all(
+                          compactHeight
+                              ? TimeTraceSpace.xs
+                              : TimeTraceSpace.sm,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -539,13 +567,19 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: TimeTraceSpace.xs),
+                            SizedBox(
+                              height: compactHeight
+                                  ? TimeTraceSpace.xxs
+                                  : TimeTraceSpace.xs,
+                            ),
                             CalendarGrid(
                               selected: calendarDay,
                               onSelected: (day) => ref
                                   .read(dashboardRangeProvider.notifier)
                                   .selectDay(day),
-                              rowHeight: narrow ? 48 : 52,
+                              rowHeight: narrow
+                                  ? (compactHeight ? 42 : 48)
+                                  : (compactHeight ? 42 : 52),
                             ),
                           ],
                         ),

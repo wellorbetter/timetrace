@@ -15,11 +15,13 @@ class DashboardSummaryStrip extends StatelessWidget {
   const DashboardSummaryStrip({
     required this.state,
     required this.apps,
+    this.compact = false,
     super.key,
   });
 
   final DashboardState state;
   final List<AppUsageItem> apps;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -80,13 +82,15 @@ class DashboardSummaryStrip extends StatelessWidget {
                 for (final item in items)
                   SizedBox(
                     width: width,
-                    height: 108,
-                    child: _SummaryCard(metric: item),
+                    height: compact ? 88 : 108,
+                    child: _SummaryCard(metric: item, compact: compact),
                   ),
               ],
             ),
-            const SizedBox(height: TimeTraceSpace.sm),
-            const RecapPreviewCard(),
+            SizedBox(
+              height: compact ? TimeTraceSpace.xs : TimeTraceSpace.sm,
+            ),
+            RecapPreviewCard(compact: compact),
           ],
         );
       },
@@ -111,9 +115,10 @@ class _SummaryMetric {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.metric});
+  const _SummaryCard({required this.metric, required this.compact});
 
   final _SummaryMetric metric;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +128,9 @@ class _SummaryCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           TimeTraceSpace.sm,
-          TimeTraceSpace.sm,
+          compact ? TimeTraceSpace.xs : TimeTraceSpace.sm,
           TimeTraceSpace.sm,
           TimeTraceSpace.xs,
         ),
@@ -151,8 +156,7 @@ class _SummaryCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleLarge?.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+                fontSize: compact ? 18 : 20,
                 letterSpacing: -0.45,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
