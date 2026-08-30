@@ -48,21 +48,26 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: TimetraceTheme.light(),
-        home: Scaffold(
-          body: NowlineTimelineView(
-            timeline: _timeline,
-            preferences: NowlinePreferences(),
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: TimetraceTheme.light(),
+          home: Scaffold(
+            body: NowlineTimelineView(
+              timeline: _timeline,
+              preferences: NowlinePreferences(),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.bySemanticsLabel(RegExp('当前活动.*10:08.*当前活动')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('当前活动.*10:08.*当前活动')),
+        findsOneWidget,
+      );
+    } finally {
+      semantics.dispose();
+    }
   });
 }
 
