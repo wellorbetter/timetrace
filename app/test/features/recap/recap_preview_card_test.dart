@@ -16,6 +16,7 @@ void main() {
             alignment: Alignment.topLeft,
             child: SizedBox(
               width: 980,
+              height: 60,
               child: RecapPreviewBody(
                 key: const ValueKey('compact-recap-body'),
                 eyebrow: 'AI RECAP · deepseek-v4-flash',
@@ -37,7 +38,7 @@ void main() {
     expect(find.text('完整回顾'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('compact-recap-body'))).height,
-      lessThanOrEqualTo(60),
+      equals(60),
     );
 
     await tester.tap(find.text('完整回顾'));
