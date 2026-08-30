@@ -6,8 +6,17 @@ import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
+import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 
 void main() {
+  test('optional charts are hidden from the default carousel', () {
+    expect(dashboardVisibleOrder(kDefaultOrder, kDefaultHiddenViews), [
+      'summary',
+      'apps',
+      'hourly',
+    ]);
+  });
+
   testWidgets('summary rail keeps the long top application readable', (
     tester,
   ) async {
@@ -37,7 +46,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('application bars cap dense data without shrinking labels', (
+  testWidgets('optional previous bar view remains available when enabled', (
     tester,
   ) async {
     int? selected;
@@ -59,9 +68,8 @@ void main() {
       ),
     );
 
-    expect(find.text('前 6 / 10 个 · 点击查看会话'), findsOneWidget);
-    expect(find.byType(FittedBox), findsNothing);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(6));
+    expect(find.text('10 个应用 · 点击查看会话'), findsOneWidget);
+    expect(find.byType(FittedBox), findsNWidgets(6));
 
     await tester.tap(find.text('应用 01'));
     await tester.pumpAndSettle();

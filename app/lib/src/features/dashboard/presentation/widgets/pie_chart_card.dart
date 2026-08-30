@@ -5,12 +5,8 @@ import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Donut chart with a side legend on desktop.
-///
-/// Only four applications are drawn individually; every remaining application
-/// is grouped as "其他". This keeps the chart to five readable categories and
-/// leaves enough room for direct labels instead of squeezing the donut above a
-/// tall legend.
+/// Donut chart — top five apps plus an aggregated remainder. The chart stays
+/// deliberately quiet so the labels and proportions remain the focus.
 class PieChartCard extends StatelessWidget {
   const PieChartCard({
     required this.apps,
@@ -28,12 +24,11 @@ class PieChartCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final total = apps
-        .fold<int>(0, (sum, app) => sum + app.activeSeconds)
+        .fold<int>(0, (s, a) => s + a.activeSeconds)
         .clamp(1, 1 << 62);
-    final top = apps.take(4).toList(growable: false);
-    final remainderSeconds = apps
-        .skip(4)
-        .fold<int>(0, (sum, app) => sum + app.activeSeconds);
+    final top = apps.take(5).toList();
+    final rest = apps.skip(5).toList();
+    final restSec = rest.fold<int>(0, (s, a) => s + a.activeSeconds);
     final selectedTop =
         selectedIndex != null &&
             selectedIndex! >= 0 &&
@@ -42,75 +37,131 @@ class PieChartCard extends StatelessWidget {
         : null;
 
     return Card(
-      key: const ValueKey('dashboard-app-share'),
       child: Padding(
         padding: const EdgeInsets.all(TimeTraceSpace.sm),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final sideBySide = constraints.maxWidth >= 520;
-            final legend = _Legend(
-              apps: top,
-              total: total,
-              remainderSeconds: remainderSeconds,
-              selectedIndex: selectedTop,
-              onSelectApp: onSelectApp,
-            );
+            final legendRows = top.length + (restSec > 0 ? 1 : 0);
+            final legendH = legendRows * 28.0;
+            final reserved = 24.0 + 20.0 + 8.0 + legendH + 8.0;
+            final diameter = (constraints.maxHeight - reserved)
+                .clamp(90.0, 160.0)
+                .toDouble();
+            final centerSpaceRadius = diameter * 0.31;
+            final radius = diameter / 2 - centerSpaceRadius;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text('应用占比', style: theme.textTheme.titleSmall),
-                    const Spacer(),
-                    Text(
-                      apps.length > 4 ? '前 4 项 + 其他' : '${apps.length} 项',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '占比',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: TimeTraceSpace.xs),
                 Expanded(
-                  child: sideBySide
-                      ? Row(
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: _Donut(
-                                apps: top,
-                                total: total,
-                                remainderSeconds: remainderSeconds,
-                                selectedIndex: selectedTop,
-                                onSelectApp: onSelectApp,
+                  child: Center(
+                    child: SizedBox(
+                      width: diameter,
+                      height: diameter,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
+                            PieChartData(
+                              sectionsSpace: 1,
+                              centerSpaceRadius: centerSpaceRadius,
+                              startDegreeOffset: -90,
+                              pieTouchData: PieTouchData(
+                                enabled: onSelectApp != null,
+                                touchCallback: (event, response) {
+                                  if (event is! FlTapUpEvent) return;
+                                  final index = response
+                                      ?.touchedSection
+                                      ?.touchedSectionIndex;
+                                  if (index == null ||
+                                      index < 0 ||
+                                      index >= top.length) {
+                                    return;
+                                  }
+                                  onSelectApp?.call(index);
+                                },
                               ),
+                              sections: [
+                                for (var index = 0; index < top.length; index++)
+                                  PieChartSectionData(
+                                    value: top[index].activeSeconds.toDouble(),
+                                    color: appColor(top[index].appName)
+                                        .withValues(
+                                          alpha:
+                                              selectedTop == null ||
+                                                  selectedTop == index
+                                              ? 1
+                                              : 0.38,
+                                        ),
+                                    radius: selectedTop == index
+                                        ? radius + 4
+                                        : radius,
+                                    title: '',
+                                    showTitle: false,
+                                  ),
+                                if (restSec > 0)
+                                  PieChartSectionData(
+                                    value: restSec.toDouble(),
+                                    color: scheme.surfaceContainerHighest,
+                                    radius: radius,
+                                    title: '',
+                                    showTitle: false,
+                                  ),
+                              ],
                             ),
-                            VerticalDivider(
-                              width: TimeTraceSpace.lg,
-                              thickness: 1,
-                              color: scheme.outlineVariant,
-                            ),
-                            Expanded(flex: 7, child: legend),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: _Donut(
-                                apps: top,
-                                total: total,
-                                remainderSeconds: remainderSeconds,
-                                selectedIndex: selectedTop,
-                                onSelectApp: onSelectApp,
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                formatDuration(total),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurface,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: TimeTraceSpace.xs),
-                            Expanded(flex: 6, child: legend),
-                          ],
-                        ),
+                              Text(
+                                '活跃',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
+                const Divider(height: TimeTraceSpace.xs),
+                for (var index = 0; index < top.length; index++)
+                  _LegendRow(
+                    key: ValueKey('pie-legend-$index'),
+                    color: appColor(top[index].appName),
+                    label: top[index].appName,
+                    percent: (top[index].activeSeconds / total * 100).round(),
+                    selected: selectedTop == index,
+                    onTap: onSelectApp == null
+                        ? null
+                        : () => onSelectApp!(index),
+                  ),
+                if (restSec > 0)
+                  _LegendRow(
+                    color: scheme.surfaceContainerHighest,
+                    label: '其他',
+                    percent: (restSec / total * 100).round(),
+                    selected: false,
+                  ),
               ],
             );
           },
@@ -120,191 +171,11 @@ class PieChartCard extends StatelessWidget {
   }
 }
 
-class _Donut extends StatelessWidget {
-  const _Donut({
-    required this.apps,
-    required this.total,
-    required this.remainderSeconds,
-    required this.selectedIndex,
-    required this.onSelectApp,
-  });
-
-  final List<AppUsageItem> apps;
-  final int total;
-  final int remainderSeconds;
-  final int? selectedIndex;
-  final ValueChanged<int>? onSelectApp;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final diameter = constraints.biggest.shortestSide
-            .clamp(112.0, 190.0)
-            .toDouble();
-        final centerRadius = diameter * 0.29;
-        final ringRadius = diameter / 2 - centerRadius - 3;
-
-        return Center(
-          child: SizedBox.square(
-            dimension: diameter,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Semantics(
-                  label: '应用占比图，总活跃时长 ${formatDuration(total)}',
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: centerRadius,
-                      startDegreeOffset: -90,
-                      pieTouchData: PieTouchData(
-                        enabled: onSelectApp != null,
-                        touchCallback: (event, response) {
-                          if (event is! FlTapUpEvent) return;
-                          final index =
-                              response?.touchedSection?.touchedSectionIndex;
-                          if (index == null ||
-                              index < 0 ||
-                              index >= apps.length) {
-                            return;
-                          }
-                          onSelectApp?.call(index);
-                        },
-                      ),
-                      sections: [
-                        for (var index = 0; index < apps.length; index++)
-                          PieChartSectionData(
-                            value: apps[index].activeSeconds.toDouble(),
-                            color: appColor(apps[index].appName).withValues(
-                              alpha:
-                                  selectedIndex == null ||
-                                      selectedIndex == index
-                                  ? 0.92
-                                  : 0.35,
-                            ),
-                            radius: selectedIndex == index
-                                ? ringRadius + 3
-                                : ringRadius,
-                            title: '',
-                            showTitle: false,
-                          ),
-                        if (remainderSeconds > 0)
-                          PieChartSectionData(
-                            value: remainderSeconds.toDouble(),
-                            color: scheme.outline.withValues(alpha: 0.62),
-                            radius: ringRadius,
-                            title: '',
-                            showTitle: false,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatDuration(total),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    Text(
-                      '总活跃',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend({
-    required this.apps,
-    required this.total,
-    required this.remainderSeconds,
-    required this.selectedIndex,
-    required this.onSelectApp,
-  });
-
-  final List<AppUsageItem> apps;
-  final int total;
-  final int remainderSeconds;
-  final int? selectedIndex;
-  final ValueChanged<int>? onSelectApp;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final rows = <Widget>[
-      for (var index = 0; index < apps.length; index++)
-        _LegendRow(
-          key: ValueKey('pie-legend-$index'),
-          color: appColor(apps[index].appName),
-          label: apps[index].appName,
-          duration: apps[index].activeLabel,
-          percent: (apps[index].activeSeconds / total * 100).round(),
-          selected: selectedIndex == index,
-          onTap: onSelectApp == null ? null : () => onSelectApp!(index),
-        ),
-      if (remainderSeconds > 0)
-        _LegendRow(
-          color: scheme.outline.withValues(alpha: 0.62),
-          label: '其他',
-          duration: formatDuration(remainderSeconds),
-          percent: (remainderSeconds / total * 100).round(),
-          selected: false,
-        ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const rowHeight = 42.0;
-        final desiredHeight =
-            rows.length * rowHeight + (rows.length - 1).clamp(0, 99);
-        final height = desiredHeight
-            .clamp(0.0, constraints.maxHeight)
-            .toDouble();
-        return Center(
-          child: SizedBox(
-            height: height,
-            child: ListView.separated(
-              primary: false,
-              padding: EdgeInsets.zero,
-              physics: desiredHeight <= constraints.maxHeight
-                  ? const NeverScrollableScrollPhysics()
-                  : null,
-              itemCount: rows.length,
-              itemBuilder: (context, index) =>
-                  SizedBox(height: rowHeight, child: rows[index]),
-              separatorBuilder: (context, index) =>
-                  Divider(height: 1, color: scheme.outlineVariant),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _LegendRow extends StatelessWidget {
   const _LegendRow({
     super.key,
     required this.color,
     required this.label,
-    required this.duration,
     required this.percent,
     required this.selected,
     this.onTap,
@@ -312,7 +183,6 @@ class _LegendRow extends StatelessWidget {
 
   final Color color;
   final String label;
-  final String duration;
   final int percent;
   final bool selected;
   final VoidCallback? onTap;
@@ -321,23 +191,23 @@ class _LegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-
     return Semantics(
       button: onTap != null,
       selected: selected,
-      label: '$label，占比 $percent%，活跃 $duration',
+      label: '$label，占比 $percent%',
       child: Material(
         color: Colors.transparent,
+        borderRadius: BorderRadius.circular(TimeTraceRadius.small),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: TimeTraceSpace.xs),
+          borderRadius: BorderRadius.circular(TimeTraceRadius.small),
+          child: SizedBox(
+            height: 28,
             child: Row(
               children: [
                 Container(
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
@@ -345,43 +215,24 @@ class _LegendRow extends StatelessWidget {
                 ),
                 const SizedBox(width: TimeTraceSpace.xs),
                 Expanded(
-                  child: Tooltip(
-                    message: label,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurface,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                      ),
+                  child: Text(
+                    label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: TimeTraceSpace.sm),
                 if (selected) ...[
-                  Icon(Icons.link_rounded, size: 14, color: scheme.primary),
-                  const SizedBox(width: TimeTraceSpace.xs),
+                  Icon(Icons.link_rounded, size: 13, color: scheme.primary),
+                  const SizedBox(width: TimeTraceSpace.xxs),
                 ],
                 Text(
-                  duration,
+                  '$percent%',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
                     fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: TimeTraceSpace.sm),
-                SizedBox(
-                  width: 34,
-                  child: Text(
-                    '$percent%',
-                    textAlign: TextAlign.right,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: selected ? scheme.primary : scheme.onSurface,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
                   ),
                 ),
               ],

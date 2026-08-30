@@ -81,7 +81,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   final List<GlobalKey> _rowKeys = [];
   List<AppUsageItem> _visibleApps = const [];
 
-  static const int _kCarouselBase = 200000;
+  // Keep enough headroom for circular-feeling navigation without pushing the
+  // PageView into floating-point precision errors on fractional desktop widths.
+  static const int _kCarouselBase = 3000;
   late final int _carouselInit;
   late final PageController _carouselCtrl;
   int _carouselAbs = 0;
@@ -96,7 +98,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   @override
   void initState() {
     super.initState();
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
     final pageCount = order.isEmpty ? 1 : order.length;
     _carouselInit = (_kCarouselBase ~/ pageCount) * pageCount;
     _carouselCtrl = PageController(initialPage: _carouselInit);
@@ -104,9 +106,18 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
     ref.listenManual(hourlyFocusProvider, (prev, next) {
       if (next == null) return;
-      final orderNow = ref.read(dashboardOrderProvider);
+      final orderNow = _activeOrder();
       final idx = orderNow.indexOf('hourly');
       if (idx >= 0) _goToReal(idx, animate: false);
+    });
+    ref.listenManual(dashboardHiddenViewsProvider, (previous, next) {
+      final orderNow = _activeOrder();
+      final summaryIndex = orderNow.indexOf('summary');
+      if (summaryIndex < 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _goToReal(summaryIndex, animate: false);
+      });
     });
   }
 
@@ -119,7 +130,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   }
 
   void _goToReal(int realIdx, {bool animate = false}) {
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
     final pageCount = order.length;
     if (pageCount <= 0 || realIdx < 0 || realIdx >= pageCount) return;
 
@@ -143,6 +154,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       _carouselCtrl.jumpToPage(target);
     }
   }
+
+  List<String> _activeOrder() => dashboardVisibleOrder(
+    ref.read(dashboardOrderProvider),
+    ref.read(dashboardHiddenViewsProvider),
+  );
 
   void _selectApp(int i, {bool fromAppsPage = false}) {
     if (i < 0 || i >= _visibleApps.length) return;
@@ -185,7 +201,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     if (idx < 0) return;
     if (_selected != idx) _selectApp(idx);
 
-    final order = ref.read(dashboardOrderProvider);
+    final order = _activeOrder();
     final appsIdx = order.indexOf('apps');
     if (appsIdx >= 0) {
       _goToReal(appsIdx);
@@ -258,6 +274,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget _buildPage(
     String key, {
     required DateTime day,
+    required diary.DiaryRange diaryRange,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
@@ -307,14 +324,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   if (_selected != null) _selectApp(_selected!);
                 },
               ),
-      'summary' => Padding(
-        padding: EdgeInsets.zero,
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(TimeTraceSpace.sm),
-            child: DaySummaryPanel(date: day),
-          ),
+      'summary' => Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(TimeTraceSpace.sm),
+          child: _SummaryAndDiaryPage(date: day, diaryRange: diaryRange),
         ),
       ),
       'apps' =>
@@ -486,13 +500,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     final narrow =
                         innerConstraints.maxWidth <
                         TimeTraceLayout.compactBreakpoint;
-                    final order = ref.watch(dashboardOrderProvider);
+                    final allViews = ref.watch(dashboardOrderProvider);
+                    final hiddenViews = ref.watch(dashboardHiddenViewsProvider);
+                    final order = dashboardVisibleOrder(allViews, hiddenViews);
                     final pageCount = order.length;
                     final carouselHeight = narrow
-                        ? (compactHeight ? 300.0 : 330.0)
+                        ? (compactHeight ? 460.0 : 500.0)
                         : compactHeight
-                        ? 350.0
-                        : (screenSize.twoColumn ? 400.0 : 360.0);
+                        ? 460.0
+                        : (screenSize.twoColumn ? 500.0 : 480.0);
 
                     final carouselViewport = Row(
                       children: [
@@ -513,12 +529,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                               _carouselIndex = i % pageCount;
                               _carouselDot.value = _carouselIndex;
                             },
-                            itemCount: _carouselInit * 2,
                             itemBuilder: (context, i) => _KeepAlivePage(
                               child: RepaintBoundary(
                                 child: _buildPage(
                                   order[i % pageCount],
                                   day: calendarDay,
+                                  diaryRange: _diaryRangeFor(selection),
                                   order: order,
                                   apps: apps,
                                 ),
@@ -602,8 +618,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   .read(dashboardRangeProvider.notifier)
                                   .selectDay(day),
                               rowHeight: narrow
-                                  ? (compactHeight ? 42 : 48)
-                                  : (compactHeight ? 42 : 52),
+                                  ? (compactHeight ? 50 : 56)
+                                  : (compactHeight ? 60 : 64),
                             ),
                           ],
                         ),
@@ -635,19 +651,39 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     );
                   },
                 ),
-                const SizedBox(height: TimeTraceSpace.md),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: TimeTraceSpace.md),
-                  child: diary.DiarySection(
-                    date: calendarDay,
-                    range: _diaryRangeFor(selection),
-                  ),
-                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _SummaryAndDiaryPage extends StatelessWidget {
+  const _SummaryAndDiaryPage({required this.date, required this.diaryRange});
+
+  final DateTime date;
+  final diary.DiaryRange diaryRange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 6, child: DaySummaryPanel(date: date)),
+        const Divider(height: TimeTraceSpace.md),
+        Expanded(
+          flex: 5,
+          child: ClipRect(
+            child: SingleChildScrollView(
+              primary: false,
+              padding: EdgeInsets.zero,
+              child: diary.DiarySection(date: date, range: diaryRange),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

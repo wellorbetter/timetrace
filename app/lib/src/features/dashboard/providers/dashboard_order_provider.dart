@@ -9,7 +9,19 @@ const kViews = <String, String>{
   'summary': '汇总',
   'apps': '应用列表',
 };
-const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
+const kDefaultOrder = ['summary', 'apps', 'bar', 'pie', 'hourly'];
+const kOptionalViews = {'bar', 'pie'};
+const kDefaultHiddenViews = {'bar', 'pie'};
+
+List<String> dashboardVisibleOrder(
+  List<String> order,
+  Set<String> hiddenViews,
+) {
+  final visible = order
+      .where((view) => kViews.containsKey(view) && !hiddenViews.contains(view))
+      .toList(growable: false);
+  return visible.isEmpty ? const ['summary'] : visible;
+}
 
 /// Persisted dashboard carousel order (local JSON, UI-only — no Rust change).
 class DashboardOrderNotifier extends Notifier<List<String>> {
@@ -65,4 +77,39 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
 final dashboardOrderProvider =
     NotifierProvider<DashboardOrderNotifier, List<String>>(
       DashboardOrderNotifier.new,
+    );
+
+/// Optional visualizations are kept available, but the overview starts with
+/// the compact factual pages. This avoids making charts the default content.
+class DashboardHiddenViewsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => _load();
+
+  Set<String> _load() {
+    try {
+      final raw = UiPreferencesStore.read();
+      final stored = raw['hidden_views'];
+      if (stored is! List) return Set.of(kDefaultHiddenViews);
+      return stored.whereType<String>().where(kOptionalViews.contains).toSet();
+    } catch (_) {
+      return Set.of(kDefaultHiddenViews);
+    }
+  }
+
+  void setHidden(String view, {required bool hidden}) {
+    if (!kOptionalViews.contains(view)) return;
+    final next = Set<String>.of(state);
+    hidden ? next.add(view) : next.remove(view);
+    state = next;
+    try {
+      UiPreferencesStore.update({'hidden_views': next.toList()..sort()});
+    } catch (_) {
+      // Non-fatal: visibility just won't persist.
+    }
+  }
+}
+
+final dashboardHiddenViewsProvider =
+    NotifierProvider<DashboardHiddenViewsNotifier, Set<String>>(
+      DashboardHiddenViewsNotifier.new,
     );

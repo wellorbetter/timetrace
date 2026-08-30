@@ -28,7 +28,7 @@ void main() {
     expect(result.summary, isNot(contains('项目')));
   });
 
-  test('uses factual top app, comparison, and peak hour', () {
+  test('summarizes used apps and local diary without extra metric blocks', () {
     final snapshot = RecapSnapshot(
       label: '今天',
       start: DateTime(2026, 8, 27),
@@ -54,10 +54,10 @@ void main() {
 
     final result = engine.generate(snapshot);
     expect(result.headline, contains('Android Studio'));
-    expect(result.summary, contains('100%'));
-    expect(result.insights.join(' '), contains('14:00'));
-    expect(result.insights.join(' '), contains('50%'));
-    expect(result.insights.join(' '), isNot(contains('生产力评分 80')));
+    expect(result.summary, contains('Android Studio'));
+    expect(result.summary, contains('Terminal'));
+    expect(result.summary, contains('修复了界面布局'));
+    expect(result.insights, isEmpty);
   });
 
   test('AI serialization can exclude diary text while preserving count', () {
@@ -86,40 +86,43 @@ void main() {
     expect(aiJson.toString(), isNot(contains('这段文字默认不应发送给外部模型')));
   });
 
-  test('AI serialization sends only the latest bounded timeline sample', () {
-    final snapshot = RecapSnapshot(
-      label: '今天',
-      start: DateTime(2026, 8, 27),
-      end: DateTime(2026, 8, 27),
-      activeSeconds: 3600,
-      idleSeconds: 0,
-      previousActiveSeconds: 0,
-      topApps: const [],
-      sessionCount: 30,
-      contextSwitches: 29,
-      longestActiveStreakSeconds: 3600,
-      peakHour: 10,
-      peakHourActiveSeconds: 3600,
-      diaryEntries: const [],
-      activityFacts: List.generate(
-        30,
-        (index) => RecapActivityFact(
-          date: DateTime(2026, 8, 27),
-          startedAt:
-              '2026-08-27T${(index % 24).toString().padLeft(2, '0')}:00:00Z',
-          appName: '应用 $index',
-          durationSeconds: 120,
+  test(
+    'AI serialization sends only the latest bounded usage history sample',
+    () {
+      final snapshot = RecapSnapshot(
+        label: '今天',
+        start: DateTime(2026, 8, 27),
+        end: DateTime(2026, 8, 27),
+        activeSeconds: 3600,
+        idleSeconds: 0,
+        previousActiveSeconds: 0,
+        topApps: const [],
+        sessionCount: 30,
+        contextSwitches: 29,
+        longestActiveStreakSeconds: 3600,
+        peakHour: 10,
+        peakHourActiveSeconds: 3600,
+        diaryEntries: const [],
+        activityFacts: List.generate(
+          30,
+          (index) => RecapActivityFact(
+            date: DateTime(2026, 8, 27),
+            startedAt:
+                '2026-08-27T${(index % 24).toString().padLeft(2, '0')}:00:00Z',
+            appName: '应用 $index',
+            durationSeconds: 120,
+          ),
         ),
-      ),
-    );
+      );
 
-    final json = snapshot.toJson(includeDiaryEntries: false);
-    final timeline = json['activity_timeline']! as List<Object?>;
+      final json = snapshot.toJson(includeDiaryEntries: false);
+      final history = json['usage_history']! as List<Object?>;
 
-    expect(json['activity_fact_count'], 30);
-    expect(json['activity_timeline_truncated'], isTrue);
-    expect(timeline, hasLength(24));
-    expect(timeline.first.toString(), contains('应用 6'));
-    expect(timeline.last.toString(), contains('应用 29'));
-  });
+      expect(json['usage_history_count'], 30);
+      expect(json['usage_history_truncated'], isTrue);
+      expect(history, hasLength(24));
+      expect(history.first.toString(), contains('应用 6'));
+      expect(history.last.toString(), contains('应用 29'));
+    },
+  );
 }

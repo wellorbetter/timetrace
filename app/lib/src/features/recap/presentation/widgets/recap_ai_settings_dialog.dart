@@ -6,9 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 
-typedef RecapAiConnectionTest = Future<String?> Function(
-  RecapAiSettings settings,
-);
+typedef RecapAiConnectionTest =
+    Future<String?> Function(RecapAiSettings settings);
 
 /// Contextual AI Recap setup kept out of the app-wide Settings route.
 ///
@@ -144,9 +143,10 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '默认在本机生成事实回顾；只有你主动开启后才会使用模型服务。',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: colors.onSurfaceVariant),
+                '默认在本机生成使用总结；只有你主动开启后才会使用模型服务。',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
               ),
               const SizedBox(height: TimeTraceSpace.md),
               _AiEnhancementToggle(
@@ -255,14 +255,16 @@ class _SectionLabel extends StatelessWidget {
     children: [
       Text(
         title,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: TimeTraceSpace.xxs),
       Text(
         subtitle,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     ],
   );
@@ -586,14 +588,16 @@ class _GuideStep extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: TimeTraceSpace.xxs),
                 Text(
                   description,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: colors.onSurfaceVariant),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
                 if (child != null) child!,
               ],
@@ -674,7 +678,7 @@ class _DataScopeTile extends StatelessWidget {
       key: const ValueKey('recap-ai-diary-toggle'),
       secondary: const Icon(Icons.shield_outlined),
       title: const Text('允许使用日记文字'),
-      subtitle: const Text('默认关闭。开启后，已发布日记会随回顾事实一起发送给模型。'),
+      subtitle: const Text('默认关闭。开启后，已发布日记会用于补充 AI 总结。'),
       value: includeDiaryEntries,
       onChanged: onChanged,
     ),
@@ -742,7 +746,7 @@ class _LocalModeNotice extends StatelessWidget {
         const SizedBox(width: TimeTraceSpace.xs),
         Expanded(
           child: Text(
-            '当前使用本地事实回顾，不需要 API Key，也不会发送任何数据。',
+            '当前使用本地总结，不需要 API Key，也不会发送任何数据。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),

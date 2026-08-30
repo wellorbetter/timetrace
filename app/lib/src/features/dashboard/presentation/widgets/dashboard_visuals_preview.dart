@@ -8,14 +8,14 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 
-@Preview(name: '概览数据 · 桌面交互', size: Size(1120, 650))
+@Preview(name: '概览可选视图 · 桌面交互', size: Size(1120, 650))
 Widget dashboardVisualsDesktopPreview() => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: TimetraceTheme.light(),
   home: const Scaffold(body: _DashboardVisualPreview()),
 );
 
-@Preview(name: '概览数据 · 窄窗交互', size: Size(430, 760))
+@Preview(name: '概览可选视图 · 窄窗交互', size: Size(430, 760))
 Widget dashboardVisualsCompactPreview() => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: TimetraceTheme.dark(),
@@ -31,7 +31,7 @@ class _DashboardVisualPreview extends StatefulWidget {
 }
 
 class _DashboardVisualPreviewState extends State<_DashboardVisualPreview> {
-  String _view = 'bar';
+  String _view = 'apps';
   int? _selected;
   late final List<GlobalKey> _rowKeys = List.generate(
     _previewApps.length,
@@ -52,9 +52,9 @@ class _DashboardVisualPreviewState extends State<_DashboardVisualPreview> {
           const SizedBox(height: 12),
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'bar', label: Text('排行')),
-              ButtonSegment(value: 'pie', label: Text('占比')),
               ButtonSegment(value: 'apps', label: Text('应用详情')),
+              ButtonSegment(value: 'bar', label: Text('可选柱状图')),
+              ButtonSegment(value: 'pie', label: Text('可选饼图')),
             ],
             selected: {_view},
             onSelectionChanged: (value) => setState(() => _view = value.first),
