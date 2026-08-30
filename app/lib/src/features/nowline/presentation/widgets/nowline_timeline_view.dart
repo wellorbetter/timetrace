@@ -67,91 +67,125 @@ class _NowlineRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final opacity = !fadeHistory || line.isCurrent
-        ? 1.0
-        : (0.72 - distanceFromCurrent * 0.12).clamp(0.28, 0.72);
     final foreground = line.isCurrent
         ? scheme.onSurface
         : scheme.onSurfaceVariant;
     final time = _time(line.startedAt);
+    final dotOpacity = !fadeHistory || line.isCurrent
+        ? 1.0
+        : (0.78 - distanceFromCurrent * 0.08).clamp(0.42, 0.78).toDouble();
+    final semanticLabel = [
+      if (line.isCurrent) '当前活动',
+      if (showTimestamp) time,
+      line.text,
+      if (line.detail != null) line.detail!,
+    ].join('，');
 
-    return AnimatedOpacity(
-      duration: TimeTraceMotion.normal,
-      opacity: opacity,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 3 : 7),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showTimestamp) ...[
-              SizedBox(
-                width: 42,
-                child: Text(
-                  time,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: foreground,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              const SizedBox(width: TimeTraceSpace.xs),
-            ],
-            Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: AnimatedContainer(
-                duration: TimeTraceMotion.fast,
-                width: line.isCurrent ? 7 : 5,
-                height: line.isCurrent ? 7 : 5,
-                decoration: BoxDecoration(
-                  color: line.isCurrent
-                      ? scheme.primary
-                      : scheme.outline.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                  boxShadow: line.isCurrent
-                      ? [
-                          BoxShadow(
-                            color: scheme.primary.withValues(alpha: 0.38),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
-                ),
+    return Semantics(
+      label: semanticLabel,
+      liveRegion: line.isCurrent,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: compact ? 2 : 3),
+          child: AnimatedContainer(
+            duration: TimeTraceMotion.fast,
+            curve: TimeTraceMotion.standard,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? TimeTraceSpace.xs : TimeTraceSpace.sm,
+              vertical: compact ? 5 : TimeTraceSpace.xs,
+            ),
+            decoration: BoxDecoration(
+              color: line.isCurrent
+                  ? scheme.primaryContainer.withValues(alpha: 0.36)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(TimeTraceRadius.control),
+              border: Border.all(
+                color: line.isCurrent
+                    ? scheme.primary.withValues(alpha: 0.34)
+                    : Colors.transparent,
               ),
             ),
-            const SizedBox(width: TimeTraceSpace.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    line.text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        (compact
-                                ? theme.textTheme.bodyMedium
-                                : theme.textTheme.titleSmall)
-                            ?.copyWith(
-                              color: foreground,
-                              fontWeight: line.isCurrent
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                  ),
-                  if (line.detail case final detail?)
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showTimestamp) ...[
+                  SizedBox(
+                    width: 42,
+                    child: Text(
+                      time,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: foreground.withValues(alpha: 0.78),
+                        color: foreground,
+                        fontWeight: line.isCurrent
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
+                  ),
+                  const SizedBox(width: TimeTraceSpace.xs),
                 ],
-              ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: AnimatedScale(
+                    duration: TimeTraceMotion.fast,
+                    curve: TimeTraceMotion.standard,
+                    scale: line.isCurrent ? 1 : 0.72,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: line.isCurrent
+                            ? scheme.primary
+                            : scheme.outline.withValues(alpha: dotOpacity),
+                        shape: BoxShape.circle,
+                        boxShadow: line.isCurrent
+                            ? [
+                                BoxShadow(
+                                  color: scheme.primary.withValues(alpha: 0.32),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: TimeTraceSpace.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        line.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            (compact
+                                    ? theme.textTheme.bodyMedium
+                                    : theme.textTheme.titleSmall)
+                                ?.copyWith(
+                                  color: foreground,
+                                  fontWeight: line.isCurrent
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                ),
+                      ),
+                      if (line.detail case final detail?)
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: foreground.withValues(alpha: 0.86),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

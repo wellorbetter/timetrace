@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/nowline/domain/nowline_preferences.dart';
+import 'package:timetrace_app/src/features/nowline/presentation/widgets/nowline_glass_surface.dart';
 import 'package:timetrace_app/src/features/nowline/presentation/widgets/nowline_timeline_view.dart';
 import 'package:timetrace_app/src/features/nowline/providers/nowline_mode_provider.dart';
 import 'package:timetrace_app/src/features/nowline/providers/nowline_provider.dart';
@@ -23,7 +24,7 @@ class NowlineScreen extends ConsumerWidget {
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(
-                maxWidth: TimeTraceLayout.readingWidth,
+                maxWidth: TimeTraceLayout.dashboardWidth,
               ),
               child: ListView(
                 padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
@@ -41,18 +42,58 @@ class NowlineScreen extends ConsumerWidget {
                       }
                     },
                   ),
-                  const SizedBox(height: TimeTraceSpace.lg),
-                  const _TodayLedgerCard(),
-                  const SizedBox(height: TimeTraceSpace.lg),
-                  _PreferencesCard(preferences: preferences),
-                  const SizedBox(height: TimeTraceSpace.lg),
-                  const _PrivacyCard(),
+                  const SizedBox(height: TimeTraceSpace.md),
+                  _NowlineDashboard(preferences: preferences),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _NowlineDashboard extends StatelessWidget {
+  const _NowlineDashboard({required this.preferences});
+
+  final NowlinePreferences preferences;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 980) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _TodayLedgerCard(),
+              const SizedBox(height: TimeTraceSpace.md),
+              _PreferencesCard(preferences: preferences),
+              const SizedBox(height: TimeTraceSpace.md),
+              const _PrivacyCard(),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(flex: 6, child: _TodayLedgerCard()),
+            const SizedBox(width: TimeTraceSpace.md),
+            Expanded(
+              flex: 5,
+              child: Column(
+                children: [
+                  _PreferencesCard(preferences: preferences),
+                  const SizedBox(height: TimeTraceSpace.md),
+                  const _PrivacyCard(),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -68,13 +109,9 @@ class _TodayLedgerCard extends ConsumerWidget {
         ref.watch(nowlinePreferencesProvider).value ??
         const NowlinePreferences();
     final timeline = ref.watch(todayNowlineProvider);
-    return Container(
-      padding: const EdgeInsets.all(TimeTraceSpace.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-      ),
+    return NowlineGlassSurface(
+      role: NowlineGlassRole.content,
+      padding: const EdgeInsets.all(TimeTraceSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -84,6 +121,15 @@ class _TodayLedgerCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'TODAY · LOCAL',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Text('今日流水', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 2),
                     Text(
@@ -134,42 +180,62 @@ class _IntroCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final timeline = ref.watch(nowlineTimelineProvider);
-    return Container(
+    return NowlineGlassSurface(
+      role: NowlineGlassRole.functional,
+      blurSigma: 20,
+      shadow: true,
       padding: const EdgeInsets.all(TimeTraceSpace.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-                ),
-                child: Icon(Icons.graphic_eq_rounded, color: scheme.primary),
-              ),
-              const SizedBox(width: TimeTraceSpace.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('电脑活动，像歌词一样经过', style: theme.textTheme.titleLarge),
-                    const SizedBox(height: 2),
-                    Text(
-                      '把前台活动合并成语义片段，安静地挂在桌面边缘。',
-                      style: theme.textTheme.bodySmall,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compactHeader = constraints.maxWidth < 680;
+              final identity = Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: scheme.primaryContainer.withValues(alpha: 0.74),
+                      borderRadius: BorderRadius.circular(
+                        TimeTraceRadius.control,
+                      ),
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: 0.3),
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              FilledButton.icon(
+                    child: Icon(
+                      Icons.graphic_eq_rounded,
+                      color: scheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: TimeTraceSpace.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'NOWLINE · LOCAL',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.7,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text('电脑活动，像歌词一样经过', style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 2),
+                        Text(
+                          '把前台活动合并成语义片段，安静地挂在桌面边缘。',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+              final launchButton = FilledButton.icon(
                 onPressed: mode.busy ? null : onLaunch,
                 icon: mode.busy
                     ? const SizedBox(
@@ -179,37 +245,56 @@ class _IntroCard extends ConsumerWidget {
                       )
                     : const Icon(Icons.open_in_new_rounded, size: 18),
                 label: const Text('打开悬浮字幕'),
-              ),
-            ],
-          ),
-          const SizedBox(height: TimeTraceSpace.lg),
-          Container(
-            constraints: const BoxConstraints(minHeight: 180),
-            padding: const EdgeInsets.all(TimeTraceSpace.md),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-              border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.8),
-              ),
-            ),
-            child: timeline.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+              );
+
+              if (compactHeader) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('实时预览暂时不可用'),
-                    TextButton(
-                      onPressed: () => ref.invalidate(nowlineTimelineProvider),
-                      child: const Text('重试'),
+                    identity,
+                    const SizedBox(height: TimeTraceSpace.sm),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: launchButton,
                     ),
                   ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: identity),
+                  const SizedBox(width: TimeTraceSpace.md),
+                  launchButton,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: TimeTraceSpace.md),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 180),
+            child: NowlineGlassSurface(
+              role: NowlineGlassRole.content,
+              padding: const EdgeInsets.all(TimeTraceSpace.md),
+              child: timeline.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('实时预览暂时不可用'),
+                      TextButton(
+                        onPressed: () =>
+                            ref.invalidate(nowlineTimelineProvider),
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              data: (value) => NowlineTimelineView(
-                timeline: value,
-                preferences: preferences,
+                data: (value) => NowlineTimelineView(
+                  timeline: value,
+                  preferences: preferences,
+                ),
               ),
             ),
           ),
@@ -229,16 +314,21 @@ class _PreferencesCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final notifier = ref.read(nowlinePreferencesProvider.notifier);
-    return Container(
-      padding: const EdgeInsets.all(TimeTraceSpace.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-      ),
+    return NowlineGlassSurface(
+      role: NowlineGlassRole.content,
+      padding: const EdgeInsets.all(TimeTraceSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'DISPLAY',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const SizedBox(height: 2),
           Text('显示方式', style: theme.textTheme.titleMedium),
           const SizedBox(height: TimeTraceSpace.md),
           _SettingRow(
@@ -329,13 +419,9 @@ class _PrivacyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Container(
+    return NowlineGlassSurface(
+      role: NowlineGlassRole.accent,
       padding: const EdgeInsets.all(TimeTraceSpace.md),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -373,20 +459,35 @@ class _SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final label = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
-        const SizedBox(width: TimeTraceSpace.md),
-        control,
+        Text(title),
+        Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              label,
+              const SizedBox(height: TimeTraceSpace.sm),
+              Align(alignment: Alignment.centerLeft, child: control),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: label),
+            const SizedBox(width: TimeTraceSpace.md),
+            control,
+          ],
+        );
+      },
     );
   }
 }
@@ -414,22 +515,39 @@ class _SliderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: Text(title)),
-        Text(valueLabel, style: Theme.of(context).textTheme.labelMedium),
-        SizedBox(
-          width: 240,
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
-          ),
-        ),
-      ],
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slider = Slider(
+          value: value,
+          min: min,
+          max: max,
+          divisions: divisions,
+          onChanged: onChanged,
+          onChangeEnd: onChangeEnd,
+        );
+        if (constraints.maxWidth < 440) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text(title)),
+                  Text(valueLabel, style: theme.textTheme.labelMedium),
+                ],
+              ),
+              slider,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: Text(title)),
+            Text(valueLabel, style: theme.textTheme.labelMedium),
+            SizedBox(width: 220, child: slider),
+          ],
+        );
+      },
     );
   }
 }

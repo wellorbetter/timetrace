@@ -52,6 +52,26 @@ The surface uses `window_manager`, so the Flutter implementation is shared by
 Windows and macOS. Platform-specific foreground resolution remains inside the
 existing Rust core.
 
+## Visual contract
+
+Nowline keeps TimeTrace's compact, data-dense desktop language. Glass is a
+functional layer rather than a decoration applied to every card:
+
+- the launch hero and floating overlay use a clipped backdrop blur;
+- ledger and settings surfaces remain translucent but do not stack blur
+  filters;
+- every surface has an outer separator and a one-pixel inner highlight so the
+  boundary remains legible over light, dark, and textured backgrounds;
+- high-contrast mode removes blur, raises surface opacity, and strengthens the
+  outer border;
+- historical text keeps semantic foreground contrast; only the decorative
+  timeline marker fades with age;
+- the settings dashboard becomes two columns on wide desktop windows and a
+  full-width compact stack in narrow windows.
+
+The reusable `NowlineGlassSurface` encodes these roles so the page, preview,
+and overlay cannot drift into separate visual systems.
+
 ## Deliberate non-goals for this PR
 
 - friend accounts, presence rooms, or a cloud backend

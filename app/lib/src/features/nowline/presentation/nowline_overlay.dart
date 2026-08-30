@@ -1,9 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/nowline/domain/nowline_preferences.dart';
+import 'package:timetrace_app/src/features/nowline/presentation/widgets/nowline_glass_surface.dart';
 import 'package:timetrace_app/src/features/nowline/presentation/widgets/nowline_timeline_view.dart';
 import 'package:timetrace_app/src/features/nowline/providers/nowline_mode_provider.dart';
 import 'package:timetrace_app/src/features/nowline/providers/nowline_provider.dart';
@@ -19,64 +18,53 @@ class NowlineOverlay extends ConsumerWidget {
         ref.watch(nowlinePreferencesProvider).value ??
         const NowlinePreferences();
     final timeline = ref.watch(nowlineTimelineProvider);
-    final scheme = Theme.of(context).colorScheme;
 
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         minimum: const EdgeInsets.all(TimeTraceSpace.sm),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surface.withValues(
-                  alpha: preferences.panelOpacity,
+        child: Semantics(
+          label: 'Nowline 本地实时活动悬浮层',
+          container: true,
+          explicitChildNodes: true,
+          child: NowlineGlassSurface(
+            role: NowlineGlassRole.functional,
+            opacity: preferences.panelOpacity,
+            blurSigma: 22,
+            shadow: true,
+            padding: const EdgeInsets.fromLTRB(
+              TimeTraceSpace.md,
+              TimeTraceSpace.xs,
+              TimeTraceSpace.sm,
+              TimeTraceSpace.sm,
+            ),
+            child: Column(
+              children: [
+                _OverlayHeader(mode: mode),
+                Divider(
+                  height: TimeTraceSpace.xs,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: 0.78),
                 ),
-                border: Border.all(
-                  color: scheme.outlineVariant.withValues(alpha: 0.88),
-                ),
-                borderRadius: BorderRadius.circular(TimeTraceRadius.surface),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 28,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  TimeTraceSpace.md,
-                  TimeTraceSpace.xs,
-                  TimeTraceSpace.sm,
-                  TimeTraceSpace.sm,
-                ),
-                child: Column(
-                  children: [
-                    _OverlayHeader(mode: mode),
-                    const SizedBox(height: TimeTraceSpace.xxs),
-                    Expanded(
-                      child: timeline.when(
-                        loading: () => const Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (error, _) => _OverlayError(error: error),
-                        data: (value) => NowlineTimelineView(
-                          timeline: value,
-                          preferences: preferences,
-                          compact: true,
-                        ),
+                Expanded(
+                  child: timeline.when(
+                    loading: () => const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  ],
+                    error: (error, _) => _OverlayError(error: error),
+                    data: (value) => NowlineTimelineView(
+                      timeline: value,
+                      preferences: preferences,
+                      compact: true,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
