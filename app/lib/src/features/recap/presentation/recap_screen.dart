@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_models.dart';
+import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_ai_settings_dialog.dart';
 import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
 
 class RecapScreen extends ConsumerWidget {
@@ -205,8 +207,7 @@ class _RecapContent extends StatelessWidget {
             children: [
               for (var i = 0; i < result.insights.length; i++) ...[
                 _InsightRow(index: i + 1, text: result.insights[i]),
-                if (i != result.insights.length - 1)
-                  const Divider(height: 24),
+                if (i != result.insights.length - 1) const Divider(height: 24),
               ],
             ],
           ),
@@ -260,9 +261,7 @@ class _MetricGrid extends StatelessWidget {
         snapshot.longestActiveStreakSeconds > 0
             ? formatRecapDuration(snapshot.longestActiveStreakSeconds)
             : '—',
-        snapshot.longestActiveStreakSeconds > 0
-            ? '连续非 Idle'
-            : '月视图暂不计算',
+        snapshot.longestActiveStreakSeconds > 0 ? '连续非 Idle' : '月视图暂不计算',
       ),
       (
         '应用切换',
@@ -494,11 +493,7 @@ class _AppRow extends StatelessWidget {
           ),
           SizedBox(
             width: 150,
-            child: Text(
-              app.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(app.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: TimeTraceSpace.sm),
           Expanded(
@@ -551,84 +546,11 @@ String _generatedLabel(DateTime time) =>
 Future<void> _showAiSettings(BuildContext context, WidgetRef ref) async {
   final current =
       ref.read(recapAiSettingsProvider).value ?? const RecapAiSettings();
-  final endpoint = TextEditingController(text: current.endpoint);
-  final model = TextEditingController(text: current.model);
-  final keyEnv = TextEditingController(text: current.apiKeyEnv);
-  var enabled = current.enabled;
-
-  final saved = await showDialog<RecapAiSettings>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('AI Recap 设置'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('启用模型增强'),
-                  subtitle: const Text('关闭时仍会使用本地规则生成事实回顾。'),
-                  value: enabled,
-                  onChanged: (value) => setState(() => enabled = value),
-                ),
-                const SizedBox(height: TimeTraceSpace.xs),
-                TextField(
-                  controller: endpoint,
-                  decoration: const InputDecoration(
-                    labelText: 'Chat Completions Endpoint',
-                    hintText: 'https://api.openai.com/v1/chat/completions',
-                  ),
-                ),
-                const SizedBox(height: TimeTraceSpace.sm),
-                TextField(
-                  controller: model,
-                  decoration: const InputDecoration(
-                    labelText: 'Model',
-                    hintText: '例如 gpt-5-mini 或兼容模型名',
-                  ),
-                ),
-                const SizedBox(height: TimeTraceSpace.sm),
-                TextField(
-                  controller: keyEnv,
-                  decoration: const InputDecoration(
-                    labelText: 'API Key 环境变量',
-                    hintText: 'OPENAI_API_KEY',
-                    helperText: 'TimeTrace 不保存 API Key，只读取这里指定的环境变量。',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              RecapAiSettings(
-                enabled: enabled,
-                endpoint: endpoint.text.trim(),
-                model: model.text.trim(),
-                apiKeyEnv: keyEnv.text.trim(),
-              ),
-            ),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    ),
+  final saved = await RecapAiSettingsDialog.show(
+    context,
+    initial: current,
+    onTestConnection: const RecapAiClient().testConnection,
   );
-
-  endpoint.dispose();
-  model.dispose();
-  keyEnv.dispose();
   if (saved != null) {
     await ref.read(recapAiSettingsProvider.notifier).save(saved);
   }
