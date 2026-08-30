@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/i18n/l10n.dart';
+import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/responsive.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
+import 'package:timetrace_app/src/features/dashboard/presentation/focus_dashboard_controller_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_chart_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_list_section.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart'
@@ -419,6 +422,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 ),
               ),
       'history' => const UsageHistoryCard(),
+      'focus' => const FocusDashboardControllerCard(),
       _ => const SizedBox.shrink(),
     };
 
@@ -454,6 +458,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(localeProvider);
+    final l = L10n(locale);
+    final reminderStrings = ReminderL10n(locale);
     final state = widget.state;
     final apps = state.apps
         .where((app) => app.totalSeconds > 0)
@@ -555,7 +562,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             size: 22,
                             color: scheme.primary,
                           ),
-                          tooltip: '上一个视图',
+                          tooltip: l.previousView,
                           onPressed: () => _carouselCtrl.previousPage(
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOut,
@@ -590,7 +597,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             size: 22,
                             color: scheme.primary,
                           ),
-                          tooltip: '下一个视图',
+                          tooltip: l.nextView,
                           onPressed: () => _carouselCtrl.nextPage(
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOut,
@@ -613,6 +620,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           builder: (context, dot, _) => _CarouselIndicator(
                             order: order,
                             selectedIndex: dot,
+                            strings: reminderStrings,
                             onSelected: (i) => _goToReal(i, animate: true),
                           ),
                         ),
@@ -718,23 +726,29 @@ class _CarouselIndicator extends StatelessWidget {
     required this.order,
     required this.selectedIndex,
     required this.onSelected,
+    required this.strings,
   });
 
   final List<String> order;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final ReminderL10n strings;
 
   @override
   Widget build(BuildContext context) {
     if (order.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     final safeIndex = selectedIndex.clamp(0, order.length - 1).toInt();
-    final currentLabel = kViews[order[safeIndex]] ?? '数据视图';
+    final currentLabel = dashboardViewLabel(order[safeIndex], strings);
 
     return Semantics(
       key: const ValueKey('dashboard-carousel-indicator'),
       liveRegion: true,
-      label: '当前轮播视图：$currentLabel，${safeIndex + 1}/${order.length}',
+      label: strings.currentCarouselView(
+        currentLabel,
+        safeIndex + 1,
+        order.length,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -742,9 +756,11 @@ class _CarouselIndicator extends StatelessWidget {
             Semantics(
               button: true,
               selected: safeIndex == i,
-              label: '切换到${kViews[order[i]] ?? '数据视图'}',
+              label: strings.switchToView(
+                dashboardViewLabel(order[i], strings),
+              ),
               child: Tooltip(
-                message: kViews[order[i]] ?? '数据视图',
+                message: dashboardViewLabel(order[i], strings),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () => onSelected(i),

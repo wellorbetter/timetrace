@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
+import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/platform_paths.dart';
 import 'package:timetrace_app/src/core/theme/background_provider.dart';
@@ -14,8 +15,10 @@ import 'package:timetrace_app/src/core/theme/theme_provider.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
+import 'package:timetrace_app/src/features/app_limits/presentation/app_timeout_rules_controller_section.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/focus/presentation/focus_settings_controller_section.dart';
 import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
@@ -127,6 +130,12 @@ class SettingsScreen extends ConsumerWidget {
                     title: '概览布局',
                     subtitle: '选择轮播内容并调整顺序；原版图表默认全部开启。',
                     children: [_dashboardOrderPicker(ref)],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  FocusSettingsControllerSection(settings: settings),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  AppTimeoutRulesControllerSection(
+                    settings: settings.appTimeout,
                   ),
                   const SizedBox(height: TimeTraceSpace.lg),
                   _SettingsGroup(
@@ -1021,6 +1030,9 @@ class _PauseRecordTileState extends ConsumerState<_PauseRecordTile> {
 }
 
 Widget _dashboardOrderPicker(WidgetRef ref) {
+  final locale = ref.watch(localeProvider);
+  final l = L10n(locale);
+  final reminderStrings = ReminderL10n(locale);
   final order = ref.watch(dashboardOrderProvider);
   final notifier = ref.read(dashboardOrderProvider.notifier);
   final hidden = ref.watch(dashboardHiddenViewsProvider);
@@ -1034,13 +1046,14 @@ Widget _dashboardOrderPicker(WidgetRef ref) {
             'pie' => Icons.donut_large_rounded,
             'hourly' => Icons.schedule_rounded,
             'summary' => Icons.summarize_outlined,
+            'focus' => Icons.timer_outlined,
             'apps' => Icons.apps_rounded,
             'history' => Icons.history_rounded,
             _ => Icons.dashboard_outlined,
           }),
-          title: Text(kViews[order[i]] ?? order[i]),
+          title: Text(dashboardViewLabel(order[i], reminderStrings)),
           subtitle: kOptionalViews.contains(order[i])
-              ? Text(hidden.contains(order[i]) ? '已隐藏' : '已显示')
+              ? Text(hidden.contains(order[i]) ? l.hidden : l.shown)
               : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1055,12 +1068,12 @@ Widget _dashboardOrderPicker(WidgetRef ref) {
               ],
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_up_rounded),
-                tooltip: '上移',
+                tooltip: l.moveUp,
                 onPressed: i > 0 ? () => notifier.move(i, i - 1) : null,
               ),
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                tooltip: '下移',
+                tooltip: l.moveDown,
                 onPressed: i < order.length - 1
                     ? () => notifier.move(i, i + 1)
                     : null,

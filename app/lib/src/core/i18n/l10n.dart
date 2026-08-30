@@ -59,8 +59,8 @@ class L10n {
   String get exportData => locale == AppLocale.zh ? '导出数据' : 'Export data';
   String get about => locale == AppLocale.zh ? '关于' : 'About';
   String get aboutText => locale == AppLocale.zh
-      ? 'TimeTrace — 本地优先的使用追踪与日记'
-      : 'TimeTrace — local-first activity tracker and journal';
+      ? 'TimeTrace — 本地优先的使用追踪、专注提醒与日记'
+      : 'TimeTrace — local-first activity tracking, focus reminders, and journal';
   String get recordingSince =>
       locale == AppLocale.zh ? '数据记录自' : 'Recording since';
   String get active => locale == AppLocale.zh ? '活跃' : 'Active';
@@ -73,4 +73,10 @@ class L10n {
       : 'No data yet. Switch apps and return.';
   String get pages => locale == AppLocale.zh ? '页面' : 'pages';
   String get noPageData => locale == AppLocale.zh ? '暂无页面数据' : 'No page data';
+  String get shown => locale == AppLocale.zh ? '已显示' : 'Shown';
+  String get hidden => locale == AppLocale.zh ? '已隐藏' : 'Hidden';
+  String get moveUp => locale == AppLocale.zh ? '上移' : 'Move up';
+  String get moveDown => locale == AppLocale.zh ? '下移' : 'Move down';
+  String get previousView => locale == AppLocale.zh ? '上一个视图' : 'Previous view';
+  String get nextView => locale == AppLocale.zh ? '下一个视图' : 'Next view';
 }

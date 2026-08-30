@@ -14,6 +14,7 @@ void main() {
       'bar',
       'pie',
       'summary',
+      'focus',
       'apps',
       'hourly',
       'history',
@@ -26,6 +27,7 @@ void main() {
     expect(dashboardVisibleOrder(kDefaultOrder, const {'pie', 'apps'}), [
       'bar',
       'summary',
+      'focus',
       'hourly',
       'history',
     ]);

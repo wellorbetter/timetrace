@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// Carousel view keys — user-reorderable.
@@ -7,18 +8,40 @@ const kViews = <String, String>{
   'pie': '饼图',
   'hourly': '时段',
   'summary': '汇总',
+  'focus': '专注提醒',
   'apps': '应用列表',
   'history': '使用历史',
 };
-const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly', 'history'];
+const kDefaultOrder = [
+  'bar',
+  'pie',
+  'summary',
+  'focus',
+  'apps',
+  'hourly',
+  'history',
+];
 
 /// Every carousel page can be enabled or disabled from Overview settings.
 ///
-/// The original five pages and the new history page are all enabled by
-/// default. [dashboardVisibleOrder] keeps a safe fallback if a stale settings
-/// file happens to hide every page.
-const kOptionalViews = {'bar', 'pie', 'summary', 'apps', 'hourly', 'history'};
+/// The original pages plus history and focus reminders are enabled by default.
+/// [dashboardVisibleOrder] keeps a safe fallback if a stale settings file
+/// happens to hide every page.
+const kOptionalViews = {
+  'bar',
+  'pie',
+  'summary',
+  'focus',
+  'apps',
+  'hourly',
+  'history',
+};
 const kDefaultHiddenViews = <String>{};
+
+String dashboardViewLabel(String view, ReminderL10n strings) {
+  if (view == 'focus') return strings.focusCarouselLabel;
+  return kViews[view] ?? strings.dataView;
+}
 
 List<String> dashboardVisibleOrder(
   List<String> order,
