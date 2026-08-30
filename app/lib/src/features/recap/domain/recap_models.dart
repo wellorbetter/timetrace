@@ -107,18 +107,17 @@ class RecapSnapshot {
       'peak_hour': peakHour,
       'peak_hour_active_seconds': peakHourActiveSeconds,
       'top_apps': topApps.map((e) => e.toJson()).toList(),
-      'usage_history_count': activityFacts.length,
-      'usage_history': timelineSample.map((e) => e.toJson()).toList(),
-      'usage_history_truncated': activityFacts.length > maxTimelineFacts,
+      'activity_fact_count': activityFacts.length,
+      'activity_timeline': timelineSample.map((e) => e.toJson()).toList(),
+      'activity_timeline_truncated': activityFacts.length > maxTimelineFacts,
       'diary_entry_count': diaryEntries.length,
       if (includeDiaryEntries) 'diary_entries': diaryEntries,
     };
   }
 
   String toPrettyJson({bool includeDiaryEntries = true}) =>
-      const JsonEncoder.withIndent(
-        '  ',
-      ).convert(toJson(includeDiaryEntries: includeDiaryEntries));
+      const JsonEncoder.withIndent('  ')
+          .convert(toJson(includeDiaryEntries: includeDiaryEntries));
 
   static String _date(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';

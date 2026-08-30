@@ -34,7 +34,7 @@ abstract final class TimeTraceLayout {
 
   /// Main dashboard canvas. Large enough for desktop data visualizations,
   /// while still keeping related information visually grouped.
-  static const double dashboardWidth = 1260;
+  static const double dashboardWidth = 1180;
 
   /// Narrow desktop sidebar: enough room for readable labels and shortcuts,
   /// without turning TimeTrace into a wide enterprise admin shell.
@@ -42,11 +42,11 @@ abstract final class TimeTraceLayout {
   static const double compactBreakpoint = 760;
 
   static EdgeInsets pagePadding(double availableWidth) => EdgeInsets.fromLTRB(
-    availableWidth < compactBreakpoint ? TimeTraceSpace.sm : TimeTraceSpace.lg,
-    TimeTraceSpace.md,
-    availableWidth < compactBreakpoint ? TimeTraceSpace.sm : TimeTraceSpace.lg,
-    TimeTraceSpace.xl,
-  );
+        availableWidth < compactBreakpoint ? TimeTraceSpace.sm : TimeTraceSpace.lg,
+        TimeTraceSpace.md,
+        availableWidth < compactBreakpoint ? TimeTraceSpace.sm : TimeTraceSpace.lg,
+        TimeTraceSpace.xl,
+      );
 }
 
 abstract final class TimeTraceMotion {

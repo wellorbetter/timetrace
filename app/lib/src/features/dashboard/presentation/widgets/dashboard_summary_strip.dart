@@ -70,7 +70,7 @@ class DashboardSummaryStrip extends StatelessWidget {
         builder: (context, constraints) {
           final scheme = Theme.of(context).colorScheme;
           final columns = constraints.maxWidth >= 860 ? 4 : 2;
-          final cellHeight = compact ? 104.0 : 108.0;
+          final cellHeight = compact ? 88.0 : 92.0;
 
           if (columns == 4) {
             return SizedBox(
@@ -161,14 +161,14 @@ class _SummaryCell extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 30,
+            height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.11),
               borderRadius: BorderRadius.circular(TimeTraceRadius.control),
             ),
-            child: Icon(metric.icon, size: 18, color: accent),
+            child: Icon(metric.icon, size: 16, color: accent),
           ),
           const SizedBox(width: TimeTraceSpace.xs),
           Expanded(

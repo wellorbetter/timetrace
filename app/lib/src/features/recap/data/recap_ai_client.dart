@@ -129,7 +129,7 @@ class RecapAiClient {
         result: RecapResult(
           headline: parsed.$1,
           summary: parsed.$2,
-          insights: parsed.$3,
+          insights: const [],
           snapshot: local.snapshot,
           origin: RecapOrigin.ai,
           model: settings.model.trim(),
@@ -167,22 +167,14 @@ class RecapAiClient {
       if (json is! Map<String, dynamic>) return null;
       final headline = json['headline'];
       final summary = json['summary'];
-      final insights = json['insights'];
-      if (headline is! String || summary is! String) {
-        return null;
-      }
-      return (
-        headline.trim(),
-        summary.trim(),
-        insights is List
-            ? insights
-                  .whereType<String>()
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .take(3)
-                  .toList()
-            : const <String>[],
-      );
+      if (headline is! String || summary is! String) return null;
+      final normalizedHeadline = headline.trim();
+      final normalizedSummary = summary.trim();
+      if (normalizedHeadline.isEmpty || normalizedSummary.isEmpty) return null;
+
+      // Older compatible providers may still return an `insights` field.
+      // Recap is now one narrative surface, so that optional field is ignored.
+      return (normalizedHeadline, normalizedSummary, const <String>[]);
     } catch (_) {
       return null;
     }
@@ -190,31 +182,58 @@ class RecapAiClient {
 
   String _userPrompt(RecapResult local, RecapAiSettings settings) =>
       '''
-下面是 TimeTrace 从本机记录整理出的使用快照，以及本地生成的基线总结。
+下面是 TimeTrace 为叙事回顾准备的本机上下文。
+应用使用记录只能说明用户在什么时候使用了哪些应用，不能单独证明用户完成了哪项具体任务。
 
-本机使用快照：
-${local.snapshot.toPrettyJson(includeDiaryEntries: settings.includeDiaryEntries)}
-
-本地基线：
-headline: ${local.headline}
-summary: ${local.summary}
-insights: ${local.insights.join(' | ')}
+回顾上下文：
+${const JsonEncoder.withIndent('  ').convert(_narrativeContext(local.snapshot, settings.includeDiaryEntries))}
 
 请返回 JSON，不要 Markdown：
 {"headline":"...","summary":"..."}
 ''';
+
+  Map<String, Object?> _narrativeContext(
+    RecapSnapshot snapshot,
+    bool includeDiaryEntries,
+  ) {
+    const maxHistoryFacts = 24;
+    final historyStart = snapshot.activityFacts.length > maxHistoryFacts
+        ? snapshot.activityFacts.length - maxHistoryFacts
+        : 0;
+    final history = snapshot.activityFacts.skip(historyStart);
+
+    return {
+      'range': {
+        'label': snapshot.label,
+        'start': _date(snapshot.start),
+        'end': _date(snapshot.end),
+      },
+      'observed_apps': snapshot.topApps
+          .map((app) => app.name.trim())
+          .where((name) => name.isNotEmpty)
+          .take(5)
+          .toList(growable: false),
+      'usage_history': history.map((fact) => fact.toJson()).toList(),
+      'usage_history_truncated':
+          snapshot.activityFacts.length > maxHistoryFacts,
+      'diary_entry_count': snapshot.diaryEntries.length,
+      if (includeDiaryEntries) 'diary_entries': snapshot.diaryEntries,
+    };
+  }
+
+  String _date(DateTime value) =>
+      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 }
 
 const _systemPrompt = '''
-你是 TimeTrace 的 AI Recap，总结用户已经发生的电脑使用活动。
+你是 TimeTrace 的 AI Recap。把用户已经发生的电脑使用和已发布日记整理成一段简洁的叙事回顾，回答“这段时间主要做了什么”。
 必须遵守：
-1. 只使用输入记录，不推断未提供的项目、任务、情绪、意图或工作成果。
-2. 所有数字必须与本机使用快照一致；不要重新计算后改写数字含义。
-3. “active/focus ratio”只是活动占比，不得称为生产力、效率、努力程度或健康评分。
-4. 只有输入明确包含 diary_entries 时，才可以使用日记文字补充上下文；否则不得推断日记内容。
-5. 语气简洁、自然、客观，默认中文。
-6. headline 一句话；summary 2–4 句，回答“这段时间主要做了什么”。先按应用与 usage_history 还原使用脉络；存在 diary_entries 时，把日记作为用户主动记录的上下文自然融入总结。
-7. 不要逐项复述仪表盘指标，不要输出排行榜、事实依据或评分；不要把应用名称扩写成未记录的项目或任务。
-8. 如果日记明确写了任务，可以引用日记中的任务；否则只能描述使用了哪些应用和时间脉络。
-9. 如果数据不足，明确说数据不足，不要补全故事。
+1. 只使用输入上下文，不推断未提供的项目、任务、情绪、意图或工作成果。
+2. 输入包含 diary_entries 时，优先把日记里写的事和应用使用自然地结合起来；不包含时，不得推断日记内容。
+3. usage_history 只可用于说明使用顺序或时间，应用名称不能被扩写成未记录的具体任务。
+4. 没有日记时，应坦率说明只能知道使用了哪些应用，无法确定具体做了什么。
+5. 不要输出指标块、排名、时间分配、百分比、评分、事实清单或“洞察”列表。
+6. 语气简洁、自然、客观，默认中文。headline 一句话；summary 用 1–3 句连贯叙述。
+7. 如果上下文不足，明确说不足，不要补全故事。
+8. 只返回包含 headline 和 summary 的 JSON 对象，不要 Markdown 或其他字段。
 ''';

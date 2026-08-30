@@ -62,7 +62,8 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   void _apply(String prefix, String suffix, {String? placeholder}) {
     final sel = _ctrl.selection;
     final text = _ctrl.text;
-    final ok = sel.isValid &&
+    final ok =
+        sel.isValid &&
         sel.start >= 0 &&
         sel.start <= text.length &&
         sel.end >= 0 &&
@@ -85,10 +86,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       _dirty = true;
       _saved = false;
     });
-    _saveTimer = Timer(
-      const Duration(milliseconds: 900),
-      () => _autosave(),
-    );
+    _saveTimer = Timer(const Duration(milliseconds: 900), () => _autosave());
   }
 
   Future<void> _autosave() async {
@@ -112,8 +110,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       await widget.onPublish(_ctrl.text);
       if (mounted) {
         setState(() {
+          _ctrl.clear();
           _dirty = false;
-          _saved = true;
+          _saved = false;
+          _mode = _EditMode.edit;
         });
       }
     } catch (e) {
@@ -145,9 +145,12 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
       onPressed: () => setState(() => _mode = mode),
       style: IconButton.styleFrom(
-        backgroundColor: selected ? scheme.primaryContainer : Colors.transparent,
-        foregroundColor:
-            selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+        backgroundColor: selected
+            ? scheme.primaryContainer
+            : Colors.transparent,
+        foregroundColor: selected
+            ? scheme.onPrimaryContainer
+            : scheme.onSurfaceVariant,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TimeTraceRadius.small),
         ),
@@ -304,15 +307,15 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
             _EditMode.edit => _editor(scheme),
             _EditMode.preview => _previewPane(scheme),
             _EditMode.split => IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _editor(scheme)),
-                    Container(width: 1, color: scheme.outlineVariant),
-                    Expanded(child: _previewPane(scheme)),
-                  ],
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _editor(scheme)),
+                  Container(width: 1, color: scheme.outlineVariant),
+                  Expanded(child: _previewPane(scheme)),
+                ],
               ),
+            ),
           },
         ],
       ),
@@ -351,7 +354,11 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
               data: _ctrl.text,
               selectable: true,
               styleSheet: MarkdownStyleSheet(
-                p: TextStyle(fontSize: 13, height: 1.6, color: scheme.onSurface),
+                p: TextStyle(
+                  fontSize: 13,
+                  height: 1.6,
+                  color: scheme.onSurface,
+                ),
                 h1: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -371,8 +378,9 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                 code: TextStyle(
                   fontSize: 11,
                   color: scheme.onSurface,
-                  backgroundColor:
-                      scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                  backgroundColor: scheme.surfaceContainerHighest.withValues(
+                    alpha: 0.55,
+                  ),
                 ),
                 blockquoteDecoration: BoxDecoration(
                   color: scheme.surfaceContainerHighest.withValues(alpha: 0.36),

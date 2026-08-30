@@ -15,6 +15,10 @@ import 'package:timetrace_app/src/core/widgets/app_icon.dart';
 import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
+import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
+import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_ai_settings_dialog.dart';
+import 'package:timetrace_app/src/features/recap/providers/recap_provider.dart';
 import 'package:timetrace_app/src/features/settings/domain/settings.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
 
@@ -27,6 +31,8 @@ class SettingsScreen extends ConsumerWidget {
     final dark = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final asyncSettings = ref.watch(settingsProvider);
+    final recapAiSettings =
+        ref.watch(recapAiSettingsProvider).value ?? const RecapAiSettings();
     final backgroundArea = Platform.isMacOS ? '菜单栏' : '系统托盘';
 
     return Scaffold(
@@ -120,6 +126,32 @@ class SettingsScreen extends ConsumerWidget {
                     title: '概览布局',
                     subtitle: '选择轮播内容并调整顺序；柱状图和饼图默认关闭。',
                     children: [_dashboardOrderPicker(ref)],
+                  ),
+                  const SizedBox(height: TimeTraceSpace.lg),
+                  _SettingsGroup(
+                    icon: Icons.auto_awesome_outlined,
+                    title: 'AI 回顾',
+                    subtitle: '默认在本机生成总结；只有主动开启后才会调用模型服务。',
+                    children: [
+                      ListTile(
+                        key: const ValueKey('recap-ai-settings-tile'),
+                        leading: Icon(
+                          recapAiSettings.enabled
+                              ? Icons.auto_awesome_rounded
+                              : Icons.lock_outline_rounded,
+                        ),
+                        title: Text(
+                          recapAiSettings.enabled ? 'AI 增强已开启' : '本地总结',
+                        ),
+                        subtitle: Text(_recapAiStatus(recapAiSettings)),
+                        trailing: OutlinedButton.icon(
+                          onPressed: () =>
+                              _configureRecapAi(context, ref, recapAiSettings),
+                          icon: const Icon(Icons.tune_rounded, size: 17),
+                          label: const Text('配置'),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: TimeTraceSpace.lg),
                   _SettingsGroup(
@@ -305,6 +337,27 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _recapAiStatus(RecapAiSettings settings) {
+    if (!settings.enabled) return '不需要 API Key，也不会发送使用记录或日记。';
+    final diary = settings.includeDiaryEntries ? ' · 已允许发送已发布日记' : ' · 日记不发送';
+    return '${settings.model.trim().isEmpty ? '尚未选择模型' : settings.model}$diary';
+  }
+
+  Future<void> _configureRecapAi(
+    BuildContext context,
+    WidgetRef ref,
+    RecapAiSettings current,
+  ) async {
+    final saved = await RecapAiSettingsDialog.show(
+      context,
+      initial: current,
+      onTestConnection: const RecapAiClient().testConnection,
+    );
+    if (saved != null) {
+      await ref.read(recapAiSettingsProvider.notifier).save(saved);
+    }
   }
 
   Future<void> _editExcludedApps(
@@ -983,7 +1036,7 @@ Widget _dashboardOrderPicker(WidgetRef ref) {
           }),
           title: Text(kViews[order[i]] ?? order[i]),
           subtitle: kOptionalViews.contains(order[i])
-              ? Text(hidden.contains(order[i]) ? '已关闭，需要时可开启' : '已加入概览轮播')
+              ? Text(hidden.contains(order[i]) ? '默认关闭' : '已显示')
               : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

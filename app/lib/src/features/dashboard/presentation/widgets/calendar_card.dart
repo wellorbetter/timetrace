@@ -83,10 +83,8 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
 
   Future<void> _uploadImage() async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-      );
+      final result =
+          await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
       PlatformPaths.ensureDiaryImagesDirectory();
       final dateStr = calFmt(widget.date);
@@ -133,13 +131,11 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         content: const Text('日记及其图片将被删除。', style: TextStyle(fontSize: 13)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('删除')),
         ],
       ),
     );
@@ -154,11 +150,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         api.removeDiaryImage(path: p);
       }
       api.deleteDiaryEntry(id: id);
-      if (_editingId == id)
-        setState(() {
-          _editingId = null;
-          _staged = [];
-        });
+      if (_editingId == id) setState(() {
+        _editingId = null;
+        _staged = [];
+      });
       ref.invalidate(calendarDataProvider);
     } catch (e) {
       AppLogger.log('delete diary entry failed: $e');
@@ -223,12 +218,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     final inRange = bounds == null
         ? all
         : all
-              .where(
-                (e) =>
-                    e.date.compareTo(bounds.$1) >= 0 &&
-                    e.date.compareTo(bounds.$2) <= 0,
-              )
-              .toList();
+            .where((e) =>
+                e.date.compareTo(bounds.$1) >= 0 && e.date.compareTo(bounds.$2) <= 0)
+            .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,19 +229,14 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           children: [
             Icon(Icons.edit_note, size: 16, color: scheme.primary),
             const SizedBox(width: 6),
-            Text(
-              '日记',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: scheme.primary,
-              ),
-            ),
+            Text('日记',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: scheme.primary)),
             const Spacer(),
-            Text(
-              '${calFmt(widget.date)}',
-              style: TextStyle(fontSize: 11, color: scheme.outline),
-            ),
+            Text('${calFmt(widget.date)}',
+                style: TextStyle(fontSize: 11, color: scheme.outline)),
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -264,9 +251,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   DiaryRange.month => '本月',
                 },
                 style: TextStyle(
-                  fontSize: 10,
-                  color: scheme.onSecondaryContainer,
-                ),
+                    fontSize: 10, color: scheme.onSecondaryContainer),
               ),
             ),
           ],
@@ -304,33 +289,25 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: scheme.tertiaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          '草稿',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: scheme.onTertiaryContainer,
-                          ),
-                        ),
+                        child: Text('草稿',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: scheme.onTertiaryContainer)),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        '已自动保存，发布后才会出现在日记列表',
-                        style: TextStyle(fontSize: 10, color: scheme.outline),
-                      ),
+                      Text('已自动保存，发布后才会出现在日记列表',
+                          style: TextStyle(
+                              fontSize: 10, color: scheme.outline)),
                       const Spacer(),
                       TextButton(
                         onPressed: _discardDraft,
-                        child: const Text(
-                          '放弃草稿',
-                          style: TextStyle(fontSize: 10),
-                        ),
+                        child: const Text('放弃草稿',
+                            style: TextStyle(fontSize: 10)),
                       ),
                     ],
                   ),
@@ -350,12 +327,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(p),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const SizedBox.shrink(),
-                              ),
+                              child: Image.file(File(p), fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox.shrink()),
                             ),
                             Positioned(
                               top: 2,
@@ -368,11 +342,8 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                                     color: Colors.black54,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 10,
-                                    color: Colors.white,
-                                  ),
+                                  child: const Icon(Icons.close,
+                                      size: 10, color: Colors.white),
                                 ),
                               ),
                             ),
@@ -386,16 +357,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                 padding: const EdgeInsets.only(top: 2),
                 child: IconButton(
                   onPressed: _uploadImage,
-                  icon: const Icon(
-                    Icons.add_photo_alternate_outlined,
-                    size: 16,
-                  ),
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
                   tooltip: '添加图片（可多选）',
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 30,
-                    minHeight: 30,
-                  ),
+                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
                   padding: EdgeInsets.zero,
                 ),
               ),
@@ -407,10 +372,8 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
-              child: Text(
-                '该范围内暂无日记',
-                style: TextStyle(fontSize: 12, color: scheme.outline),
-              ),
+              child: Text('该范围内暂无日记',
+                  style: TextStyle(fontSize: 12, color: scheme.outline)),
             ),
           )
         else
@@ -419,10 +382,8 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
             switchInCurve: Curves.easeOut,
             switchOutCurve: Curves.easeIn,
             transitionBuilder: (child, anim) => SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.05, 0),
-                end: Offset.zero,
-              ).animate(anim),
+              position: Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
+                  .animate(anim),
               child: FadeTransition(opacity: anim, child: child),
             ),
             child: Column(
@@ -499,33 +460,24 @@ class _DayGroup extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 14,
-                  color: scheme.primary,
-                ),
+                Icon(Icons.calendar_today_outlined,
+                    size: 14, color: scheme.primary),
                 const SizedBox(width: 6),
-                Text(
-                  dateStr,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurface,
-                  ),
-                ),
+                Text(dateStr,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface)),
                 const SizedBox(width: 8),
-                Text(
-                  '${posts.length} 条',
-                  style: TextStyle(fontSize: 11, color: scheme.outline),
-                ),
+                Text('${posts.length} 条',
+                    style: TextStyle(fontSize: 11, color: scheme.outline)),
                 const Spacer(),
                 Icon(
-                  collapsed
-                      ? Icons.keyboard_arrow_right
-                      : Icons.keyboard_arrow_down,
-                  size: 18,
-                  color: scheme.outline,
-                ),
+                    collapsed
+                        ? Icons.keyboard_arrow_right
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: scheme.outline),
               ],
             ),
           ),
@@ -630,10 +582,8 @@ class _PostCardState extends ConsumerState<_PostCard> {
 
   Future<void> _addImages() async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-      );
+      final result =
+          await FilePicker.pickFiles(type: FileType.image, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
       PlatformPaths.ensureDiaryImagesDirectory();
       final api = ref.read(apiProvider);
@@ -710,9 +660,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
                   ),
                   hintText: '写点什么…',
                   hintStyle: TextStyle(
-                    fontSize: 12,
-                    color: widget.scheme.outline,
-                  ),
+                      fontSize: 12, color: widget.scheme.outline),
                 ),
                 style: const TextStyle(fontSize: 13, height: 1.5),
               )
@@ -722,44 +670,35 @@ class _PostCardState extends ConsumerState<_PostCard> {
                 curve: Curves.easeOut,
                 child: _textVisible
                     ? (widget.content.trim().isEmpty
-                          ? Text(
-                              '(无文字)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: widget.scheme.outline,
-                              ),
-                            )
-                          : MarkdownBody(
-                              data: widget.content,
-                              selectable: true,
-                              styleSheet: MarkdownStyleSheet(
-                                p: const TextStyle(fontSize: 13, height: 1.6),
-                                h1: TextStyle(
+                        ? Text('(无文字)',
+                            style: TextStyle(
+                                fontSize: 12, color: widget.scheme.outline))
+                        : MarkdownBody(
+                            data: widget.content,
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(fontSize: 13, height: 1.6),
+                              h1: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
-                                  color: widget.scheme.onSurface,
-                                ),
-                                h2: TextStyle(
+                                  color: widget.scheme.onSurface),
+                              h2: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: widget.scheme.onSurface,
-                                ),
-                                code: TextStyle(
+                                  color: widget.scheme.onSurface),
+                              code: TextStyle(
                                   fontSize: 11,
-                                  color: widget.scheme.primary,
-                                ),
-                              ),
-                            ))
+                                  color: widget.scheme.primary),
+                            ),
+                          ))
                     : Text(
                         firstLine.isEmpty ? '内容已隐藏' : '内容已隐藏 · $firstLine',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                          color: widget.scheme.outline,
-                        ),
-                      ),
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: widget.scheme.outline)),
               ),
             if (widget.images.isNotEmpty || editing) ...[
               const SizedBox(height: 6),
@@ -779,21 +718,17 @@ class _PostCardState extends ConsumerState<_PostCard> {
                           images: widget.images,
                           title: '${widget.images.length} 张图片',
                         )
-                      : Text(
-                          '图片已隐藏',
+                      : Text('图片已隐藏',
                           style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: widget.scheme.outline,
-                          ),
-                        ),
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: widget.scheme.outline)),
                 ),
             ],
             const SizedBox(height: 4),
             Divider(
-              height: 1,
-              color: widget.scheme.outlineVariant.withValues(alpha: 0.35),
-            ),
+                height: 1,
+                color: widget.scheme.outlineVariant.withValues(alpha: 0.35)),
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: editing
@@ -812,10 +747,8 @@ class _PostCardState extends ConsumerState<_PostCard> {
                             visualDensity: VisualDensity.compact,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text(
-                            '取消',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          child: const Text('取消',
+                              style: TextStyle(fontSize: 12)),
                         ),
                         const SizedBox(width: 4),
                         FilledButton.tonal(
@@ -825,10 +758,8 @@ class _PostCardState extends ConsumerState<_PostCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text(
-                            '保存',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          child: const Text('保存',
+                              style: TextStyle(fontSize: 12)),
                         ),
                       ],
                     )
@@ -836,29 +767,26 @@ class _PostCardState extends ConsumerState<_PostCard> {
                       children: [
                         IconButton(
                           icon: Icon(
-                            _textVisible
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            size: 16,
-                          ),
+                              _textVisible
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 16),
                           tooltip: _textVisible ? '隐藏文字' : '显示文字',
                           visualDensity: VisualDensity.compact,
-                          onPressed: () =>
-                              setState(() => _textVisible = !_textVisible),
+                          onPressed: () => setState(
+                              () => _textVisible = !_textVisible),
                         ),
                         if (widget.images.isNotEmpty)
                           IconButton(
                             icon: Icon(
-                              _imagesVisible
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              size: 16,
-                            ),
+                                _imagesVisible
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 16),
                             tooltip: _imagesVisible ? '隐藏图片' : '显示图片',
                             visualDensity: VisualDensity.compact,
                             onPressed: () => setState(
-                              () => _imagesVisible = !_imagesVisible,
-                            ),
+                                () => _imagesVisible = !_imagesVisible),
                           ),
                         const Spacer(),
                         IconButton(
@@ -912,18 +840,12 @@ class _EditImageGrid extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(p),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: scheme.surfaceContainerHighest,
-                      child: const Icon(
-                        Icons.broken_image,
-                        size: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
+                  child: Image.file(File(p), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                            color: scheme.surfaceContainerHighest,
+                            child: const Icon(Icons.broken_image,
+                                size: 16, color: Colors.grey),
+                          )),
                 ),
                 Positioned(
                   top: 2,
@@ -936,11 +858,8 @@ class _EditImageGrid extends StatelessWidget {
                         color: Colors.black54,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 11,
-                        color: Colors.white,
-                      ),
+                      child:
+                          const Icon(Icons.close, size: 11, color: Colors.white),
                     ),
                   ),
                 ),
@@ -956,9 +875,8 @@ class _EditImageGrid extends StatelessWidget {
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.5),
-              ),
+              border:
+                  Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             child: Icon(Icons.add, size: 22, color: scheme.primary),
           ),
@@ -983,10 +901,11 @@ class DaySummaryPanel extends ConsumerWidget {
           children: [
             Text(
               '${date.month}月${date.day}日 · 周${'一二三四五六日'[date.weekday - 1]}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
-            Text('当日汇总', style: TextStyle(fontSize: 12, color: scheme.outline)),
+            Text('当日汇总',
+                style: TextStyle(fontSize: 11, color: scheme.outline)),
           ],
         ),
         const SizedBox(height: 8),
@@ -1022,14 +941,11 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
     final rows = <String, _AggRow>{};
     for (final s in sessions) {
       if (s.isIdle) continue;
-      final agg =
-          rows[s.appName] ??
-          _AggRow(
-            appName: s.appName,
-            firstStart: s.startedAt,
-            seconds: 0,
-            sessions: 0,
-          );
+      final agg = rows[s.appName] ?? _AggRow(
+          appName: s.appName,
+          firstStart: s.startedAt,
+          seconds: 0,
+          sessions: 0);
       if (s.startedAt.compareTo(agg.firstStart) < 0) {
         agg.firstStart = s.startedAt;
       }
@@ -1051,14 +967,13 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
       loading: () => const Padding(
         padding: EdgeInsets.all(8),
         child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
+            child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))),
       ),
-      error: (e, _) => Text('加载失败: $e', style: const TextStyle(fontSize: 12)),
+      error: (e, _) =>
+          Text('加载失败: $e', style: const TextStyle(fontSize: 12)),
       data: (day) {
         final h = day.activeSeconds ~/ 3600;
         final m = (day.activeSeconds % 3600) ~/ 60;
@@ -1079,32 +994,30 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text(
-                  '使用记录',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
+                const Text('使用记录',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(width: 4),
                 HelpIcon(
-                  message:
-                      '当天打开过的应用汇总。左侧 xx:xx 为该应用当日第一次使用时间，右侧为累计活跃时长（不含锁屏/空闲时间）。',
+                  message: '当天打开过的应用汇总。左侧 xx:xx 为该应用当日第一次使用时间，右侧为累计活跃时长（不含锁屏/空闲时间）。',
                 ),
               ],
             ),
             const SizedBox(height: 4),
             if (agg.isEmpty)
-              Text(
-                '当天暂无记录',
-                style: TextStyle(fontSize: 12, color: scheme.outline),
-              )
+              Text('当天暂无记录',
+                  style: TextStyle(fontSize: 12, color: scheme.outline))
             else
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    const rowH = 30.0;
+                    const rowH = 24.0;
                     final maxH = constraints.maxHeight.isFinite
                         ? constraints.maxHeight
                         : 0.0;
-                    final fit = (maxH / rowH).floor().clamp(1, agg.length);
+                    final fit = (maxH / rowH)
+                        .floor()
+                        .clamp(1, agg.length);
                     final collapsed = agg.length > fit;
                     final hideSome = !_showAll && collapsed;
                     final shown = hideSome ? agg.take(fit).toList() : agg;
@@ -1124,9 +1037,9 @@ class _DaySummaryState extends ConsumerState<_DaySummary> {
                             child: TextButton(
                               onPressed: () =>
                                   setState(() => _showAll = !_showAll),
-                              child: Text(
-                                _showAll ? '收起' : '全部 ${agg.length} 应用',
-                              ),
+                              child: Text(_showAll
+                                  ? '收起'
+                                  : '全部 ${agg.length} 应用'),
                             ),
                           ),
                       ],
@@ -1179,32 +1092,23 @@ class _AggRowTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: appColor(row.appName),
-              shape: BoxShape.circle,
-            ),
-          ),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                  color: appColor(row.appName), shape: BoxShape.circle)),
           const SizedBox(width: 8),
           SizedBox(
-            width: 42,
-            child: Text(
-              time,
-              style: TextStyle(fontSize: 11, color: scheme.outline),
-            ),
-          ),
+              width: 42,
+              child: Text(time,
+                  style: TextStyle(fontSize: 10, color: scheme.outline))),
           Expanded(
-            child: Text(
-              row.appName,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13),
-            ),
+            child: Text(row.appName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12)),
           ),
-          Text(
-            dur,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          ),
+          Text(dur,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -1233,10 +1137,9 @@ class _HourlyHeatmap extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Text(
-                  '当日活跃时段',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
+                const Text('当日活跃时段',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(width: 4),
                 HelpIcon(
                   message: '一天 24 小时的活跃分布，颜色越深表示该小时活跃时间越长；点击某个小时可跳转到时段分布页。',
@@ -1265,8 +1168,7 @@ class _HourlyHeatmap extends ConsumerWidget {
                                 color: hours[i] == 0
                                     ? scheme.surfaceContainerHighest
                                     : scheme.primary.withValues(
-                                        alpha: 0.2 + 0.8 * (hours[i] / max),
-                                      ),
+                                        alpha: 0.2 + 0.8 * (hours[i] / max)),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),

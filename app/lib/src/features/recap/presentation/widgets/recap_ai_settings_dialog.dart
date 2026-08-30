@@ -9,7 +9,7 @@ import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
 typedef RecapAiConnectionTest =
     Future<String?> Function(RecapAiSettings settings);
 
-/// Contextual AI Recap setup kept out of the app-wide Settings route.
+/// Reusable AI Recap setup surface opened from the app-wide Settings route.
 ///
 /// The dialog reuses the strongest parts of the earlier AI service guide:
 /// explicit generation mode, model choice, credential status, a step-by-step
@@ -143,7 +143,7 @@ class _RecapAiSettingsDialogState extends State<RecapAiSettingsDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '默认在本机生成使用总结；只有你主动开启后才会使用模型服务。',
+                '默认在本机生成事实回顾；只有你主动开启后才会使用模型服务。',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
@@ -599,7 +599,7 @@ class _GuideStep extends StatelessWidget {
                     color: colors.onSurfaceVariant,
                   ),
                 ),
-                if (child != null) child!,
+                ?child,
               ],
             ),
           ),
@@ -678,7 +678,7 @@ class _DataScopeTile extends StatelessWidget {
       key: const ValueKey('recap-ai-diary-toggle'),
       secondary: const Icon(Icons.shield_outlined),
       title: const Text('允许使用日记文字'),
-      subtitle: const Text('默认关闭。开启后，已发布日记会用于补充 AI 总结。'),
+      subtitle: const Text('默认关闭。开启后，已发布日记会随回顾事实一起发送给模型。'),
       value: includeDiaryEntries,
       onChanged: onChanged,
     ),
@@ -746,7 +746,7 @@ class _LocalModeNotice extends StatelessWidget {
         const SizedBox(width: TimeTraceSpace.xs),
         Expanded(
           child: Text(
-            '当前使用本地总结，不需要 API Key，也不会发送任何数据。',
+            '当前使用本地事实回顾，不需要 API Key，也不会发送任何数据。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),

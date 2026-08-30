@@ -23,11 +23,13 @@ class DiarySection extends ConsumerStatefulWidget {
   const DiarySection({
     required this.date,
     this.range = DiaryRange.day,
+    this.onContentChanged,
     super.key,
   });
 
   final DateTime date;
   final DiaryRange range;
+  final VoidCallback? onContentChanged;
 
   @override
   ConsumerState<DiarySection> createState() => _DiarySectionState();
@@ -103,7 +105,9 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
         File(path).deleteSync();
       } catch (_) {}
       if (mounted) {
-        setState(() => _staged = _staged.where((item) => item != path).toList());
+        setState(
+          () => _staged = _staged.where((item) => item != path).toList(),
+        );
       }
       ref.invalidate(calendarDataProvider);
     } catch (error) {
@@ -128,6 +132,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
     if (mounted) setState(() => _staged = []);
     ref.invalidate(calendarDataProvider);
     ref.invalidate(diaryDraftProvider(date));
+    widget.onContentChanged?.call();
   }
 
   Future<void> _autosave(String text) async {
@@ -192,6 +197,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
       api.deleteDiaryEntry(id: id);
       if (_editingId == id && mounted) setState(() => _editingId = null);
       ref.invalidate(calendarDataProvider);
+      widget.onContentChanged?.call();
     } catch (error) {
       AppLogger.log('delete diary entry failed: $error');
     }
@@ -274,10 +280,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: _discardDraft,
-                child: const Text('放弃草稿'),
-              ),
+              TextButton(onPressed: _discardDraft, child: const Text('放弃草稿')),
             ],
           ),
         ],
@@ -305,10 +308,7 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: TimeTraceSpace.lg),
             child: Center(
-              child: Text(
-                '该范围内暂无日记',
-                style: theme.textTheme.bodySmall,
-              ),
+              child: Text('该范围内暂无日记', style: theme.textTheme.bodySmall),
             ),
           )
         else
@@ -324,10 +324,10 @@ class _DiarySectionState extends ConsumerState<DiarySection> {
                   _collapsedDays.remove(group.$1);
                 }
               }),
-              onEdit: (id) => setState(
-                () => _editingId = _editingId == id ? null : id,
-              ),
+              onEdit: (id) =>
+                  setState(() => _editingId = _editingId == id ? null : id),
               onDelete: _delete,
+              onContentChanged: widget.onContentChanged,
             ),
       ],
     );
@@ -390,6 +390,7 @@ class _DayTimelineGroup extends StatelessWidget {
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
+    this.onContentChanged,
   });
 
   final String date;
@@ -400,6 +401,7 @@ class _DayTimelineGroup extends StatelessWidget {
   final VoidCallback onToggle;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onDelete;
+  final VoidCallback? onContentChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -493,6 +495,7 @@ class _DayTimelineGroup extends StatelessWidget {
                                 editing: editingId == entry.id,
                                 onEdit: () => onEdit(entry.id),
                                 onDelete: () => onDelete(entry.id),
+                                onContentChanged: onContentChanged,
                               ),
                           ],
                         ),
@@ -513,6 +516,7 @@ class _DiaryDocumentBlock extends ConsumerStatefulWidget {
     required this.editing,
     required this.onEdit,
     required this.onDelete,
+    this.onContentChanged,
   });
 
   final DiaryEntryDto entry;
@@ -520,9 +524,11 @@ class _DiaryDocumentBlock extends ConsumerStatefulWidget {
   final bool editing;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onContentChanged;
 
   @override
-  ConsumerState<_DiaryDocumentBlock> createState() => _DiaryDocumentBlockState();
+  ConsumerState<_DiaryDocumentBlock> createState() =>
+      _DiaryDocumentBlockState();
 }
 
 class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
@@ -642,6 +648,7 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
     _newImages.clear();
     ref.invalidate(calendarDataProvider);
     if (mounted) widget.onEdit();
+    widget.onContentChanged?.call();
   }
 
   @override
@@ -692,8 +699,9 @@ class _DiaryDocumentBlockState extends ConsumerState<_DiaryDocumentBlock> {
                 h2: theme.textTheme.titleMedium,
                 h3: theme.textTheme.titleSmall,
                 code: theme.textTheme.bodySmall?.copyWith(
-                  backgroundColor:
-                      scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                  backgroundColor: scheme.surfaceContainerHighest.withValues(
+                    alpha: 0.55,
+                  ),
                 ),
               ),
             ),

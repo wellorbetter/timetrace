@@ -4,59 +4,67 @@ class LocalRecapEngine {
   const LocalRecapEngine();
 
   RecapResult generate(RecapSnapshot snapshot) {
-    if (snapshot.activeSeconds <= 0) {
-      final diarySummary = _diarySentence(snapshot.diaryEntries);
+    final diaryEntries = snapshot.diaryEntries
+        .map(_normalize)
+        .where((entry) => entry.isNotEmpty)
+        .take(2)
+        .toList(growable: false);
+    final appNames = _uniqueAppNames(snapshot.topApps);
+
+    if (diaryEntries.isNotEmpty) {
+      final diarySummary = diaryEntries
+          .map((entry) => '“${_truncate(entry, 72)}”')
+          .join('、');
+      final appContext = appNames.isEmpty
+          ? '没有检测到足够的应用使用记录。'
+          : '使用记录主要涉及 ${appNames.join('、')}。';
       return RecapResult(
-        headline: diarySummary == null
-            ? '${snapshot.label}还没有足够的使用记录'
-            : '${snapshot.label}留下了日记记录',
-        summary:
-            diarySummary ?? 'TimeTrace 暂时没有检测到可用于回顾的应用使用记录。继续使用电脑后，这里会自动形成回顾。',
+        headline: '${snapshot.label}记录了：${_truncate(diaryEntries.first, 36)}',
+        summary: '日记中写到 $diarySummary。$appContext',
         insights: const [],
         snapshot: snapshot,
         origin: RecapOrigin.local,
       );
     }
 
-    final top = snapshot.topApps.isEmpty ? null : snapshot.topApps.first;
-    final headline = top == null
-        ? '${snapshot.label}共记录 ${formatRecapDuration(snapshot.activeSeconds)} 活跃时间'
-        : '${snapshot.label}主要时间花在 ${top.name}';
-
-    final usedApps = snapshot.topApps
-        .take(3)
-        .map((app) => '${app.name}（${formatRecapDuration(app.activeSeconds)}）')
-        .join('、');
-    final diarySummary = _diarySentence(snapshot.diaryEntries);
-    final summary = [
-      usedApps.isEmpty
-          ? '${snapshot.label}记录到 ${formatRecapDuration(snapshot.activeSeconds)} 的应用使用。'
-          : '${snapshot.label}主要使用了 $usedApps。',
-      if (diarySummary != null) diarySummary,
-    ].join('');
+    if (appNames.isNotEmpty) {
+      return RecapResult(
+        headline: '${snapshot.label}主要使用了 ${appNames.first}',
+        summary:
+            '使用记录主要涉及 ${appNames.join('、')}。仅凭应用名称无法判断具体完成了什么；发布一条日记后，回顾可以补充任务上下文。',
+        insights: const [],
+        snapshot: snapshot,
+        origin: RecapOrigin.local,
+      );
+    }
 
     return RecapResult(
-      headline: headline,
-      summary: summary,
+      headline: '${snapshot.label}还没有可回顾的记录',
+      summary: 'TimeTrace 暂时没有检测到可回顾的应用使用记录，也没有已发布日记。',
       insights: const [],
       snapshot: snapshot,
       origin: RecapOrigin.local,
     );
   }
-}
 
-String? _diarySentence(List<String> entries) {
-  if (entries.isEmpty) return null;
-  final excerpts = entries
-      .take(2)
-      .map((entry) {
-        final normalized = entry.replaceAll(RegExp(r'\s+'), ' ').trim();
-        return normalized.length <= 72
-            ? normalized
-            : '${normalized.substring(0, 72)}…';
-      })
-      .where((entry) => entry.isNotEmpty)
-      .toList(growable: false);
-  if (excerpts.isEmpty) return null;
-  return '日记中记录了：${excerpts.join('；')}。';
+  List<String> _uniqueAppNames(List<RecapAppFact> apps) {
+    final seen = <String>{};
+    final names = <String>[];
+    for (final app in apps) {
+      final name = _normalize(app.name);
+      if (name.isEmpty || !seen.add(name)) continue;
+      names.add(name);
+      if (names.length == 3) break;
+    }
+    return names;
+  }
+
+  String _normalize(String value) =>
+      value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  String _truncate(String value, int maxCharacters) {
+    final normalized = _normalize(value);
+    if (normalized.length <= maxCharacters) return normalized;
+    return '${normalized.substring(0, maxCharacters).trimRight()}…';
+  }
 }

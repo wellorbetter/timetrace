@@ -9,7 +9,7 @@ const kViews = <String, String>{
   'summary': '汇总',
   'apps': '应用列表',
 };
-const kDefaultOrder = ['summary', 'apps', 'bar', 'pie', 'hourly'];
+const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly'];
 const kOptionalViews = {'bar', 'pie'};
 const kDefaultHiddenViews = {'bar', 'pie'};
 
@@ -79,16 +79,11 @@ final dashboardOrderProvider =
       DashboardOrderNotifier.new,
     );
 
-/// Optional visualizations are kept available, but the overview starts with
-/// the compact factual pages. This avoids making charts the default content.
 class DashboardHiddenViewsNotifier extends Notifier<Set<String>> {
   @override
-  Set<String> build() => _load();
-
-  Set<String> _load() {
+  Set<String> build() {
     try {
-      final raw = UiPreferencesStore.read();
-      final stored = raw['hidden_views'];
+      final stored = UiPreferencesStore.read()['hidden_views'];
       if (stored is! List) return Set.of(kDefaultHiddenViews);
       return stored.whereType<String>().where(kOptionalViews.contains).toSet();
     } catch (_) {
@@ -104,7 +99,7 @@ class DashboardHiddenViewsNotifier extends Notifier<Set<String>> {
     try {
       UiPreferencesStore.update({'hidden_views': next.toList()..sort()});
     } catch (_) {
-      // Non-fatal: visibility just won't persist.
+      // UI preference persistence is best-effort.
     }
   }
 }

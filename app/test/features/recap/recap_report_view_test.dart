@@ -5,67 +5,80 @@ import 'package:timetrace_app/src/features/recap/domain/recap_models.dart';
 import 'package:timetrace_app/src/features/recap/presentation/widgets/recap_report_view.dart';
 
 void main() {
-  testWidgets(
-    'recap keeps narrative and history without dashboard duplication',
-    (tester) async {
-      tester.view.physicalSize = const Size(1000, 760);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await _pumpReport(tester);
-
-      expect(find.text('本地总结'), findsOneWidget);
-      expect(find.text('使用历史'), findsOneWidget);
-      expect(find.textContaining('本地总结已参考 1 篇日记'), findsOneWidget);
-      expect(find.text('事实依据'), findsNothing);
-      expect(find.text('时间分配'), findsNothing);
-      expect(find.text('活动时间线'), findsNothing);
-      expect(find.text('事实快照'), findsNothing);
-      expect(find.text('活跃时长'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('report reflows without overflow in a narrow window', (
+  testWidgets('Recap keeps only narrative, diary and one history surface', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 820);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    await _setView(tester, const Size(1000, 760));
+    await _pumpReport(
+      tester,
+      result: _result(snapshot: _snapshot()),
+      journal: const Text('日记内容区域', key: ValueKey('journal-slot')),
+    );
 
-    await _pumpReport(tester);
-
+    expect(find.byKey(const ValueKey('recap-journal-surface')), findsOneWidget);
     expect(find.byKey(const ValueKey('recap-summary-surface')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recap-usage-history')), findsOneWidget);
+    expect(find.byKey(const ValueKey('journal-slot')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recap-history')), findsOneWidget);
+    expect(find.text('历史记录'), findsOneWidget);
+
+    final summaryTop = tester
+        .getTopLeft(find.byKey(const ValueKey('recap-summary-surface')))
+        .dy;
+    final journalTop = tester
+        .getTopLeft(find.byKey(const ValueKey('journal-slot')))
+        .dy;
+    final historyTop = tester
+        .getTopLeft(find.byKey(const ValueKey('recap-history')))
+        .dy;
+    expect(summaryTop, lessThan(journalTop));
+    expect(journalTop, lessThan(historyTop));
+
+    for (final removedLabel in const [
+      '事实依据',
+      '时间分配',
+      '活动时间线',
+      '事实快照',
+      '活跃时长',
+      '最长连续段',
+      '应用切换',
+      '最常用',
+    ]) {
+      expect(find.text(removedLabel), findsNothing);
+    }
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('usage history stays bounded and scrolls internally', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1000, 760);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('history stays bounded and scrolls internally', (tester) async {
+    await _setView(tester, const Size(1000, 760));
+    final facts = List.generate(
+      12,
+      (index) => RecapActivityFact(
+        date: _date,
+        startedAt: '2026-08-30T${index.toString().padLeft(2, '0')}:00:00',
+        appName: '应用 ${index.toString().padLeft(2, '0')}',
+        durationSeconds: 900,
+      ),
+    );
+    await _pumpReport(
+      tester,
+      result: _result(snapshot: _snapshot(activityFacts: facts)),
+    );
 
-    await _pumpReport(tester);
-
-    final history = find.byKey(const ValueKey('recap-usage-history-list'));
-    await tester.ensureVisible(history);
+    final historyList = find.byKey(const ValueKey('recap-history-list'));
+    await tester.ensureVisible(historyList);
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(history).height, lessThanOrEqualTo(360));
+    expect(tester.getSize(historyList).height, lessThanOrEqualTo(280));
     expect(find.text('应用 00'), findsOneWidget);
 
     final scrollable = find.descendant(
-      of: history,
+      of: historyList,
       matching: find.byType(Scrollable),
     );
+    expect(scrollable, findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('应用 10'),
-      140,
+      120,
       scrollable: scrollable,
     );
 
@@ -73,110 +86,184 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('AI diary opt-in remains explicit', (tester) async {
-    var opened = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: TimetraceTheme.light(),
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: RecapReportView(
-              result: RecapResult(
-                headline: _result.headline,
-                summary: _result.summary,
-                insights: const [],
-                snapshot: _snapshot,
-                origin: RecapOrigin.ai,
-                model: 'deepseek-v4-flash',
-              ),
-              generatedAt: DateTime(2026, 8, 30, 12, 42),
-              aiEnabled: true,
-              onOpenSettings: () => opened = true,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.textContaining('当前未发送给 AI'), findsOneWidget);
-    await tester.tap(find.text('允许结合'));
-    expect(opened, isTrue);
-  });
-
-  test('adjacent history fragments from the same app are merged', () {
-    final segments = compactUsageHistory([
+  testWidgets('history sorts, merges nearby fragments and preserves seconds', (
+    tester,
+  ) async {
+    await _setView(tester, const Size(900, 700));
+    final facts = [
       RecapActivityFact(
-        date: DateTime(2026, 8, 30),
-        startedAt: '2026-08-30T10:00:00Z',
+        date: _date,
+        startedAt: '09:10:00',
         appName: 'Edge',
+        durationSeconds: 12,
+      ),
+      RecapActivityFact(
+        date: _date,
+        startedAt: '09:01:00',
+        appName: 'TimeTrace',
         durationSeconds: 20,
       ),
       RecapActivityFact(
-        date: DateTime(2026, 8, 30),
-        startedAt: '2026-08-30T10:00:30Z',
-        appName: 'Edge',
-        durationSeconds: 40,
+        date: _date,
+        startedAt: '09:00:00',
+        appName: 'TimeTrace',
+        durationSeconds: 30,
       ),
-    ]);
+      RecapActivityFact(
+        date: _date,
+        startedAt: '09:03:00',
+        appName: 'TimeTrace',
+        durationSeconds: 8,
+      ),
+    ];
+    await _pumpReport(
+      tester,
+      result: _result(snapshot: _snapshot(activityFacts: facts)),
+    );
 
-    expect(segments, hasLength(1));
-    expect(segments.single.sourceCount, 2);
-    expect(segments.single.activeSeconds, 60);
+    expect(find.text('2 段'), findsOneWidget);
+    expect(find.text('50s'), findsOneWidget);
+    expect(find.text('12s'), findsOneWidget);
+    expect(find.text('0m'), findsNothing);
+    expect(find.text('TimeTrace'), findsNWidgets(2));
+
+    final compacted = compactUsageHistory(facts);
+    expect(compacted.map((item) => item.appName), [
+      'TimeTrace',
+      'TimeTrace',
+      'Edge',
+    ]);
+    expect(compacted.first.sourceCount, 2);
+    expect(compacted.first.activeSeconds, 50);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long AI and app names do not overflow a narrow window', (
+    tester,
+  ) async {
+    await _setView(tester, const Size(320, 760));
+    final snapshot = _snapshot(
+      diaryEntries: const ['完成了界面整理'],
+      activityFacts: [
+        RecapActivityFact(
+          date: _date,
+          startedAt: '09:00:00',
+          appName:
+              'TFTTencentClient-Win64-Shipping-Extremely-Long-Application-Name',
+          durationSeconds: 42,
+        ),
+      ],
+    );
+    await _pumpReport(
+      tester,
+      result: RecapResult(
+        headline: '今天完成了一个名称很长、需要在窄窗口中自然换行的工作主题',
+        summary: '根据日记和使用历史，主要时间用于界面整理与交互检查。',
+        insights: const [],
+        snapshot: snapshot,
+        origin: RecapOrigin.ai,
+        model: 'a-provider-model-with-an-extremely-long-version-name',
+      ),
+      aiEnabled: true,
+      diaryIncludedInAi: true,
+    );
+
+    expect(find.text('已结合已发布日记'), findsOneWidget);
+    expect(find.byType(Tooltip), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('month empty state does not falsely claim there was no use', (
+    tester,
+  ) async {
+    await _setView(tester, const Size(800, 600));
+    final month = _snapshot(
+      start: DateTime(2026, 8, 1),
+      activeSeconds: 7200,
+      activityFacts: const [],
+    );
+    await _pumpReport(tester, result: _result(snapshot: month));
+
+    expect(find.text('当前范围暂不提供逐条使用历史'), findsOneWidget);
+    expect(find.text('当前范围暂无使用历史'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 
-Future<void> _pumpReport(WidgetTester tester) => tester.pumpWidget(
+Future<void> _setView(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+Future<void> _pumpReport(
+  WidgetTester tester, {
+  required RecapResult result,
+  Widget? journal,
+  bool aiEnabled = false,
+  bool diaryIncludedInAi = false,
+}) => tester.pumpWidget(
   MaterialApp(
     theme: TimetraceTheme.light(),
     home: Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: RecapReportView(
-          result: _result,
+          result: result,
           generatedAt: DateTime(2026, 8, 30, 12, 42),
-          aiEnabled: false,
+          aiEnabled: aiEnabled,
+          diaryIncludedInAi: diaryIncludedInAi,
+          journal: journal,
         ),
       ),
     ),
   ),
 );
 
-final _snapshot = RecapSnapshot(
+RecapSnapshot _snapshot({
+  DateTime? start,
+  int activeSeconds = 7200,
+  List<String> diaryEntries = const [],
+  List<RecapActivityFact>? activityFacts,
+}) => RecapSnapshot(
   label: '今天',
-  start: DateTime(2026, 8, 30),
-  end: DateTime(2026, 8, 30),
-  activeSeconds: 7200,
+  start: start ?? _date,
+  end: _date,
+  activeSeconds: activeSeconds,
   idleSeconds: 300,
   previousActiveSeconds: 6000,
-  topApps: [
+  topApps: const [
     RecapAppFact(
       name: 'TFTTencentClient-Win64-Shipping',
       activeSeconds: 5400,
       idleSeconds: 0,
     ),
-    RecapAppFact(name: 'Edge', activeSeconds: 1800, idleSeconds: 0),
   ],
   sessionCount: 36,
   contextSwitches: 28,
   longestActiveStreakSeconds: 2700,
   peakHour: 10,
   peakHourActiveSeconds: 1800,
-  diaryEntries: ['整理了 TimeTrace 的回顾页面。'],
-  activityFacts: List.generate(
-    12,
-    (index) => RecapActivityFact(
-      date: DateTime(2026, 8, 30),
-      startedAt: '2026-08-30T${index.toString().padLeft(2, '0')}:00:00Z',
-      appName: '应用 ${index.toString().padLeft(2, '0')}',
-      durationSeconds: index == 0 ? 12 : 900,
-    ),
-  ),
+  diaryEntries: diaryEntries,
+  activityFacts:
+      activityFacts ??
+      [
+        RecapActivityFact(
+          date: _date,
+          startedAt: '09:00:00',
+          appName: 'TimeTrace',
+          durationSeconds: 120,
+        ),
+      ],
 );
 
-final _result = RecapResult(
-  headline: '今天主要整理了 TimeTrace',
-  summary: '主要使用了 TimeTrace 和 Edge，并在日记里记录了回顾页面的调整。',
+RecapResult _result({required RecapSnapshot snapshot}) => RecapResult(
+  headline: '今天完成了界面整理',
+  summary: '从日记与使用历史看，今天主要处理了回顾页面的结构和交互。',
   insights: const [],
-  snapshot: _snapshot,
+  snapshot: snapshot,
   origin: RecapOrigin.local,
 );
+
+final _date = DateTime(2026, 8, 30);

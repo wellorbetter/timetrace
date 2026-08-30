@@ -10,8 +10,6 @@ import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_li
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/calendar_grid.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/dashboard_summary_strip.dart';
-import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart'
-    as diary;
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/hourly_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/pie_chart_card.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
@@ -81,9 +79,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   final List<GlobalKey> _rowKeys = [];
   List<AppUsageItem> _visibleApps = const [];
 
-  // Keep enough headroom for circular-feeling navigation without pushing the
-  // PageView into floating-point precision errors on fractional desktop widths.
-  static const int _kCarouselBase = 3000;
+  static const int _kCarouselBase = 200000;
   late final int _carouselInit;
   late final PageController _carouselCtrl;
   int _carouselAbs = 0;
@@ -111,12 +107,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       if (idx >= 0) _goToReal(idx, animate: false);
     });
     ref.listenManual(dashboardHiddenViewsProvider, (previous, next) {
-      final orderNow = _activeOrder();
-      final summaryIndex = orderNow.indexOf('summary');
+      final summaryIndex = _activeOrder().indexOf('summary');
       if (summaryIndex < 0) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _goToReal(summaryIndex, animate: false);
+        if (mounted) _goToReal(summaryIndex, animate: false);
       });
     });
   }
@@ -258,23 +252,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     });
   }
 
-  diary.DiaryRange _diaryRangeFor(DateRangeSelection selection) {
-    switch (selection.range) {
-      case DateRange.today:
-      case DateRange.yesterday:
-      case DateRange.custom:
-        return diary.DiaryRange.day;
-      case DateRange.week:
-        return diary.DiaryRange.week;
-      case DateRange.month:
-        return diary.DiaryRange.month;
-    }
-  }
-
   Widget _buildPage(
     String key, {
     required DateTime day,
-    required diary.DiaryRange diaryRange,
     required List<String> order,
     required List<AppUsageItem> apps,
   }) {
@@ -324,11 +304,14 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   if (_selected != null) _selectApp(_selected!);
                 },
               ),
-      'summary' => Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(TimeTraceSpace.sm),
-          child: _SummaryAndDiaryPage(date: day, diaryRange: diaryRange),
+      'summary' => Padding(
+        padding: EdgeInsets.zero,
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(TimeTraceSpace.sm),
+            child: DaySummaryPanel(date: day),
+          ),
         ),
       ),
       'apps' =>
@@ -505,10 +488,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     final order = dashboardVisibleOrder(allViews, hiddenViews);
                     final pageCount = order.length;
                     final carouselHeight = narrow
-                        ? (compactHeight ? 460.0 : 500.0)
+                        ? (compactHeight ? 300.0 : 330.0)
                         : compactHeight
-                        ? 460.0
-                        : (screenSize.twoColumn ? 500.0 : 480.0);
+                        ? 350.0
+                        : (screenSize.twoColumn ? 400.0 : 360.0);
 
                     final carouselViewport = Row(
                       children: [
@@ -529,12 +512,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                               _carouselIndex = i % pageCount;
                               _carouselDot.value = _carouselIndex;
                             },
+                            itemCount: _carouselInit * 2,
                             itemBuilder: (context, i) => _KeepAlivePage(
                               child: RepaintBoundary(
                                 child: _buildPage(
                                   order[i % pageCount],
                                   day: calendarDay,
-                                  diaryRange: _diaryRangeFor(selection),
                                   order: order,
                                   apps: apps,
                                 ),
@@ -618,8 +601,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                   .read(dashboardRangeProvider.notifier)
                                   .selectDay(day),
                               rowHeight: narrow
-                                  ? (compactHeight ? 50 : 56)
-                                  : (compactHeight ? 60 : 64),
+                                  ? (compactHeight ? 42 : 48)
+                                  : (compactHeight ? 42 : 52),
                             ),
                           ],
                         ),
@@ -656,34 +639,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ),
         );
       },
-    );
-  }
-}
-
-class _SummaryAndDiaryPage extends StatelessWidget {
-  const _SummaryAndDiaryPage({required this.date, required this.diaryRange});
-
-  final DateTime date;
-  final diary.DiaryRange diaryRange;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(flex: 6, child: DaySummaryPanel(date: date)),
-        const Divider(height: TimeTraceSpace.md),
-        Expanded(
-          flex: 5,
-          child: ClipRect(
-            child: SingleChildScrollView(
-              primary: false,
-              padding: EdgeInsets.zero,
-              child: diary.DiarySection(date: date, range: diaryRange),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
