@@ -12,16 +12,19 @@ void main() {
       MaterialApp(
         theme: TimetraceTheme.light(fontFamily: 'Microsoft YaHei UI'),
         home: Scaffold(
-          body: SizedBox(
-            width: 980,
-            child: RecapPreviewBody(
-              key: const ValueKey('compact-recap-body'),
-              eyebrow: 'AI RECAP · deepseek-v4-flash',
-              title: '今天主要时间花在 Visual Studio Code',
-              summary: '活跃时长 2h 20m，记录到 36 次应用切换。',
-              aiEnhanced: true,
-              compact: true,
-              onOpen: () => opened = true,
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 980,
+              child: RecapPreviewBody(
+                key: const ValueKey('compact-recap-body'),
+                eyebrow: 'AI RECAP · deepseek-v4-flash',
+                title: '今天主要时间花在 Visual Studio Code',
+                summary: '活跃时长 2h 20m，记录到 36 次应用切换。',
+                aiEnhanced: true,
+                compact: true,
+                onOpen: () => opened = true,
+              ),
             ),
           ),
         ),

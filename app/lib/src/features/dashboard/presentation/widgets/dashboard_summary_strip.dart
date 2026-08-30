@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
