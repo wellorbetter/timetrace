@@ -54,9 +54,9 @@ Get the latest build from [GitHub Releases](https://github.com/wellorbetter/time
 
 ## Interface tour
 
-### One calendar, seven synchronized views
+### One calendar, six synchronized views
 
-Select a date and the right-hand carousel stays in sync across application bars, usage share, daily summary, focus and reminders, application details, 24-hour distribution, and usage history. Every view can be hidden or reordered in Settings.
+Select a date and the right-hand carousel stays in sync across application bars, usage share, daily summary, application details, 24-hour distribution, and usage history. Every view can be hidden or reordered in Settings.
 
 | Usage share | Daily summary |
 | --- | --- |
@@ -64,11 +64,11 @@ Select a date and the right-hand carousel stays in sync across application bars,
 | Application details | 24-hour distribution |
 | ![Application list and durations](docs/screenshots/v1.1-app-list.png) | ![Hourly usage](docs/screenshots/v1.1-hourly.png) |
 
-### Focus timing and continuous-use reminders share one card
+### Focus timing stays within reach while continuous-use reminders work quietly
 
-The Pomodoro timer supports focus, short break, long break, pause, resume, skip, and stop. Application reminders count only a strict uninterrupted foreground segment for the same executable. Switching apps, becoming idle, locking, sleeping, or pausing tracking ends that segment, and resumed activity never catches up missed time.
+The top app bar continuously shows the current Pomodoro phase and remaining time. Activate it to open lightweight controls for start, pause, resume, skip, stop, or reset without leaving the current page. Application reminders quietly count only a strict uninterrupted foreground segment for the same executable. Switching apps, becoming idle, locking, sleeping, or pausing tracking ends that segment, and resumed activity never catches up missed time.
 
-![Pomodoro and continuous application-use reminders](docs/screenshots/focus-reminders.png)
+![Pomodoro status and quick controls in the top app bar](docs/screenshots/focus-quick-panel-en.png)
 
 The default rhythm is **25 minutes of focus / 5 minutes of short break / 15 minutes of long break**, with a long break after every 4 completed focus rounds; the next phase does not start automatically. A new application rule defaults to a 60-minute threshold and a 30-minute repeat cooldown. Every value can be changed independently.
 
@@ -76,7 +76,7 @@ To get started:
 
 1. Open **Settings → Focus & usage reminders → Pomodoro**, enable the timer, and adjust phase lengths, automatic start, notifications, and sound as needed.
 2. For application reminders, enable **Application continuous-use reminders** in the same area, then choose **Application reminder rules → Add**, select a currently running application, and set its threshold, cooldown, and repeat policy.
-3. Return to Overview and use the **Focus reminders** carousel view and its “Focus & reminders” card to start, pause, resume, skip, stop, or reset the timer. After hiding the main window, the system tray still shows the countdown and common controls.
+3. Use the Pomodoro status entry at the top right of the window to open quick controls. After hiding the main window, the system tray still shows the countdown and common controls.
 
 The two capabilities can be enabled independently. TimeTrace requests system notification permission only when you explicitly enable notifications for a reminder or choose “Test notification.” A denial or delivery failure is shown in Settings without repeatedly prompting you.
 
@@ -118,7 +118,7 @@ The API key comes from a system environment variable that you name; TimeTrace st
 
 Pomodoro and application continuous-use reminders are independent and remain off after an upgrade. TimeTrace does not request notification permission or show a test notification at startup. The desktop notification adapter initializes only after you enable a reminder or explicitly select “Test notification,” and it respects the operating system's Do Not Disturb mode.
 
-Application rules stay in local SQLite and use a normalized executable path only as a stable matching identity. The reminder card, rule list, and desktop notifications never render that path or a window title: a timeout notification contains only the application display name and rounded continuous-use minutes. The one-second runtime loop performs no database writes, and both transient timers safely restart in the idle state.
+Application rules stay in local SQLite and use a normalized executable path only as a stable matching identity. The top-bar Pomodoro entry, tray, rule list, and desktop notifications never render that path or a window title: a timeout notification contains only the application display name and rounded continuous-use minutes. The one-second runtime loop performs no database writes, and both transient timers safely restart in the idle state.
 
 ## Local data
 
