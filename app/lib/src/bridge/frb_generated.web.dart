@@ -49,10 +49,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  ActivitySnapshotDto dco_decode_activity_snapshot_dto(dynamic raw);
+
+  @protected
+  AppTimeoutConfigDto dco_decode_app_timeout_config_dto(dynamic raw);
+
+  @protected
+  AppTimeoutRuleDraftDto dco_decode_app_timeout_rule_draft_dto(dynamic raw);
+
+  @protected
+  AppTimeoutRuleDto dco_decode_app_timeout_rule_dto(dynamic raw);
+
+  @protected
   AppUsageDto dco_decode_app_usage_dto(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AppTimeoutRuleDraftDto dco_decode_box_autoadd_app_timeout_rule_draft_dto(
+    dynamic raw,
+  );
 
   @protected
   ConfigDto dco_decode_box_autoadd_config_dto(dynamic raw);
@@ -88,6 +105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<AppTimeoutRuleDto> dco_decode_list_app_timeout_rule_dto(dynamic raw);
+
+  @protected
   List<AppUsageDto> dco_decode_list_app_usage_dto(dynamic raw);
 
   @protected
@@ -113,6 +133,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
+  List<RunningAppDto> dco_decode_list_running_app_dto(dynamic raw);
+
+  @protected
   List<StartupDto> dco_decode_list_startup_dto(dynamic raw);
 
   @protected
@@ -128,6 +151,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageDto dco_decode_page_dto(dynamic raw);
 
   @protected
+  PomodoroConfigDto dco_decode_pomodoro_config_dto(dynamic raw);
+
+  @protected
   (PlatformInt64, PlatformInt64) dco_decode_record_i_64_i_64(dynamic raw);
 
   @protected
@@ -136,6 +162,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
+  RunningAppDto dco_decode_running_app_dto(dynamic raw);
 
   @protected
   StartupDto dco_decode_startup_dto(dynamic raw);
@@ -183,10 +212,35 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  ActivitySnapshotDto sse_decode_activity_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppTimeoutConfigDto sse_decode_app_timeout_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppTimeoutRuleDraftDto sse_decode_app_timeout_rule_draft_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppTimeoutRuleDto sse_decode_app_timeout_rule_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AppUsageDto sse_decode_app_usage_dto(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AppTimeoutRuleDraftDto sse_decode_box_autoadd_app_timeout_rule_draft_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ConfigDto sse_decode_box_autoadd_config_dto(SseDeserializer deserializer);
@@ -222,6 +276,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<AppTimeoutRuleDto> sse_decode_list_app_timeout_rule_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<AppUsageDto> sse_decode_list_app_usage_dto(SseDeserializer deserializer);
 
   @protected
@@ -255,6 +314,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RunningAppDto> sse_decode_list_running_app_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<StartupDto> sse_decode_list_startup_dto(SseDeserializer deserializer);
 
   @protected
@@ -268,6 +332,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageDto sse_decode_page_dto(SseDeserializer deserializer);
+
+  @protected
+  PomodoroConfigDto sse_decode_pomodoro_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   (PlatformInt64, PlatformInt64) sse_decode_record_i_64_i_64(
@@ -284,6 +353,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, String) sse_decode_record_string_string(
     SseDeserializer deserializer,
   );
+
+  @protected
+  RunningAppDto sse_decode_running_app_dto(SseDeserializer deserializer);
 
   @protected
   StartupDto sse_decode_startup_dto(SseDeserializer deserializer);
@@ -340,10 +412,40 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_activity_snapshot_dto(
+    ActivitySnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_timeout_config_dto(
+    AppTimeoutConfigDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_timeout_rule_draft_dto(
+    AppTimeoutRuleDraftDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_timeout_rule_dto(
+    AppTimeoutRuleDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_app_usage_dto(AppUsageDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_app_timeout_rule_draft_dto(
+    AppTimeoutRuleDraftDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_config_dto(
@@ -386,6 +488,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_timeout_rule_dto(
+    List<AppTimeoutRuleDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_app_usage_dto(
@@ -433,6 +541,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_running_app_dto(
+    List<RunningAppDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_startup_dto(
     List<StartupDto> self,
     SseSerializer serializer,
@@ -457,6 +571,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_page_dto(PageDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_pomodoro_config_dto(
+    PomodoroConfigDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_i_64_i_64(
     (PlatformInt64, PlatformInt64) self,
     SseSerializer serializer,
@@ -473,6 +593,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     (String, String) self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_running_app_dto(RunningAppDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_startup_dto(StartupDto self, SseSerializer serializer);

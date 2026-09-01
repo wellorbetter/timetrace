@@ -4,6 +4,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/theme/timetrace_theme.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/diary_section.dart';
@@ -141,6 +142,54 @@ void main() {
     expect(api.hourAppDates.toSet(), expectedDates);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('app-bar Pomodoro entry binds the process reminder runtime', (
+    tester,
+  ) async {
+    final api = _FakeTimeTraceApi();
+    await _pumpDashboard(tester, const Size(1400, 1000), api: api);
+
+    expect(find.byKey(const ValueKey('dashboard-focus-page')), findsNothing);
+    expect(find.byKey(const ValueKey('focus-app-bar-trigger')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('focus-app-bar-trigger')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const ValueKey('focus-quick-panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-quick-start')), findsOneWidget);
+    expect(api.activityReads, greaterThanOrEqualTo(1));
+
+    await tester.tap(find.byKey(const ValueKey('focus-quick-start')));
+    await tester.pump();
+    expect(find.text('计时暂停'), findsOneWidget);
+
+    api.activityState = 'excluded';
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('计时暂停'), findsNothing);
+    expect(find.text('24:59'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('English Overview exposes Pomodoro outside the data carousel', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester, const Size(1400, 1000), englishLocale: true);
+
+    expect(find.byTooltip('Previous view'), findsOneWidget);
+    expect(find.byTooltip('Next view'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Tooltip &&
+            (widget.message?.contains('Pomodoro') ?? false),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('focus-app-bar-trigger')));
+    await tester.pump();
+    expect(find.text('Pomodoro'), findsOneWidget);
+    expect(find.text('Focus reminders'), findsNothing);
+  });
 }
 
 Future<void> _tapCarouselDot(WidgetTester tester, String label) async {
@@ -157,6 +206,7 @@ Future<void> _pumpDashboard(
   WidgetTester tester,
   Size size, {
   _FakeTimeTraceApi? api,
+  bool englishLocale = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -165,7 +215,11 @@ Future<void> _pumpDashboard(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [apiProvider.overrideWithValue(api ?? _FakeTimeTraceApi())],
+      overrides: [
+        apiProvider.overrideWithValue(api ?? _FakeTimeTraceApi()),
+        if (englishLocale)
+          localeProvider.overrideWith(_EnglishLocaleNotifier.new),
+      ],
       child: MaterialApp(
         theme: TimetraceTheme.light(),
         home: const DashboardScreen(),
@@ -175,9 +229,59 @@ Future<void> _pumpDashboard(
   await tester.pumpAndSettle();
 }
 
+final class _EnglishLocaleNotifier extends LocaleNotifier {
+  @override
+  AppLocale build() => AppLocale.en;
+}
+
 class _FakeTimeTraceApi implements TimeTraceApi {
   final List<String> hourlyDates = [];
   final List<String> hourAppDates = [];
+  String activityState = 'idle';
+  int activityReads = 0;
+
+  @override
+  ConfigDto getConfig() => ConfigDto(
+    pollIntervalMs: BigInt.from(1000),
+    idleThresholdMinutes: BigInt.from(5),
+    minimizeToTray: true,
+    startMinimized: false,
+    autoStartTracking: true,
+    excludedApps: const [],
+    dbPath: '',
+    pomodoro: PomodoroConfigDto(
+      enabled: true,
+      focusMinutes: BigInt.from(25),
+      shortBreakMinutes: BigInt.from(5),
+      longBreakMinutes: BigInt.from(15),
+      longBreakInterval: BigInt.from(4),
+      autoStartNext: false,
+      notificationsEnabled: true,
+      notificationSound: false,
+    ),
+    appTimeout: AppTimeoutConfigDto(
+      enabled: false,
+      defaultThresholdMinutes: BigInt.from(60),
+      defaultCooldownMinutes: BigInt.from(30),
+      notificationsEnabled: true,
+      notificationSound: false,
+    ),
+  );
+
+  @override
+  List<AppTimeoutRuleDto> listAppTimeoutRules() => const [];
+
+  @override
+  ActivitySnapshotDto getActivitySnapshot() {
+    activityReads++;
+    return ActivitySnapshotDto(
+      revision: activityReads,
+      state: activityState,
+      trackingPaused: false,
+      isIdle: activityState == 'idle',
+      observedAt: '2026-08-31T12:00:00Z',
+    );
+  }
 
   @override
   DashboardDataDto getDashboardData({

@@ -13,7 +13,9 @@ use crate::contracts::window::WindowResolver;
 pub struct MacOsWindowResolver;
 
 impl MacOsWindowResolver {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl WindowResolver for MacOsWindowResolver {
@@ -21,17 +23,20 @@ impl WindowResolver for MacOsWindowResolver {
         let workspace = NSWorkspace::sharedWorkspace();
         let app = workspace.frontmostApplication()?;
         let name = app.localizedName()?.to_string();
-        if name.is_empty() { return None; }
+        if name.is_empty() {
+            return None;
+        }
 
         let exe_path = app
             .executableURL()
             .and_then(|url| url.path())
             .map(|path| path.to_string())
-            .filter(|path| !path.is_empty())
-            .unwrap_or_else(|| name.clone());
+            .filter(|path| !path.is_empty())?;
 
         Some(AppInfo::new(exe_path, name))
     }
 
-    fn get_window_title(&self, _hwnd: isize) -> Option<String> { None }
+    fn get_window_title(&self, _hwnd: isize) -> Option<String> {
+        None
+    }
 }

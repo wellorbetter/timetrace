@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
 
 /// Carousel view keys — user-reorderable.
@@ -14,11 +15,44 @@ const kDefaultOrder = ['bar', 'pie', 'summary', 'apps', 'hourly', 'history'];
 
 /// Every carousel page can be enabled or disabled from Overview settings.
 ///
-/// The original five pages and the new history page are all enabled by
-/// default. [dashboardVisibleOrder] keeps a safe fallback if a stale settings
-/// file happens to hide every page.
+/// The original data pages plus history are enabled by default.
+/// [dashboardVisibleOrder] keeps a safe fallback if a stale settings file hides
+/// every page.
 const kOptionalViews = {'bar', 'pie', 'summary', 'apps', 'hourly', 'history'};
 const kDefaultHiddenViews = <String>{};
+
+String dashboardViewLabel(String view, ReminderL10n strings) {
+  return kViews[view] ?? strings.dataView;
+}
+
+/// Normalizes persisted carousel order without mutating preferences.
+///
+/// Unknown legacy keys are discarded, duplicate keys keep their first
+/// position, and every currently supported page is appended if missing.
+List<String> normalizeDashboardOrder(Object? storedOrder) {
+  final order = <String>[];
+  final seen = <String>{};
+  if (storedOrder is List) {
+    for (final view in storedOrder.whereType<String>()) {
+      if (kViews.containsKey(view) && seen.add(view)) {
+        order.add(view);
+      }
+    }
+  }
+  for (final view in kDefaultOrder) {
+    if (seen.add(view)) order.add(view);
+  }
+  return order;
+}
+
+/// Normalizes persisted hidden pages without mutating preferences.
+Set<String> normalizeDashboardHiddenViews(Object? storedHiddenViews) {
+  if (storedHiddenViews is! List) return Set.of(kDefaultHiddenViews);
+  return storedHiddenViews
+      .whereType<String>()
+      .where(kOptionalViews.contains)
+      .toSet();
+}
 
 List<String> dashboardVisibleOrder(
   List<String> order,
@@ -38,16 +72,7 @@ class DashboardOrderNotifier extends Notifier<List<String>> {
   List<String> _load() {
     try {
       final raw = UiPreferencesStore.read();
-      if (raw['order'] is! List) return List.of(kDefaultOrder);
-      final order = (raw['order'] as List)
-          .whereType<String>()
-          .where(kViews.containsKey)
-          .toList();
-      // Always keep every known view (missing ones appended at the end).
-      for (final v in kDefaultOrder) {
-        if (!order.contains(v)) order.add(v);
-      }
-      return order;
+      return normalizeDashboardOrder(raw['order']);
     } catch (e) {
       return List.of(kDefaultOrder);
     }
@@ -89,8 +114,7 @@ class DashboardHiddenViewsNotifier extends Notifier<Set<String>> {
   Set<String> build() {
     try {
       final stored = UiPreferencesStore.read()['hidden_views'];
-      if (stored is! List) return Set.of(kDefaultHiddenViews);
-      return stored.whereType<String>().where(kOptionalViews.contains).toSet();
+      return normalizeDashboardHiddenViews(stored);
     } catch (_) {
       return Set.of(kDefaultHiddenViews);
     }

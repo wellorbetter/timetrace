@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `parse_date`, `setup_logging`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `activity_snapshot_dto`, `activity_state_name`, `apply_config_dto`, `clean_exe_path`, `config_dto`, `csv_field`, `parse_date`, `rule_error_code`, `running_app_dtos`, `running_app_name`, `setup_logging`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -21,8 +21,13 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   void clearData();
 
   /// Create the API, opening the DB and starting the background monitor.
+  ///
+  /// An empty `db_path` selects TimeTrace's platform-native default path.
   static TimeTraceApi create({required String dbPath}) =>
       RustLib.instance.api.crateApiTimeTraceApiCreate(dbPath: dbPath);
+
+  /// Delete a timeout rule by stable ID.
+  void deleteAppTimeoutRule({required PlatformInt64 id});
 
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id});
@@ -31,10 +36,14 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Returns the CSV text (app, date, active_secs, idle_secs).
   String exportCsv({required String start, required String end});
 
+  /// Return the latest in-memory activity snapshot without querying SQLite
+  /// or installing another foreground hook.
+  ActivitySnapshotDto getActivitySnapshot();
+
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date});
 
-  /// Extract an exe icon as raw RGBA pixels.
+  /// Extract an application icon as raw RGBA pixels when supported.
   IconDto? getAppIcon({required String exePath});
 
   /// Read the current user configuration.
@@ -79,7 +88,7 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String end,
   });
 
-  /// Image paths attached to a diary entry (朋友圈 album).
+  /// Image paths attached to a diary entry.
   List<String> getDiaryImagesForEntry({required PlatformInt64 entryId});
 
   /// Apps active within a specific hour of a date (seconds per app).
@@ -112,8 +121,12 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Whether tracking is currently paused.
   bool isTrackingPaused();
 
-  /// Publish: promote the day's draft or insert a new published entry.
-  PlatformInt64 publishDiary({required String date, required String content});
+  /// List all locally persisted application timeout rules.
+  List<AppTimeoutRuleDto> listAppTimeoutRules();
+
+  /// Refresh and list eligible running applications for rule selection.
+  /// Processes without a readable stable path are omitted without elevation.
+  List<RunningAppDto> listRunningApps();
 
   /// Atomically publish an AI-authored diary with model provenance.
   PlatformInt64 publishAiDiary({
@@ -122,17 +135,19 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
     required String sourceModel,
   });
 
+  /// Publish: promote the day's draft or insert a new published entry.
+  PlatformInt64 publishDiary({required String date, required String content});
+
   /// Remove a diary image.
   void removeDiaryImage({required String path});
 
-  /// Resolve a startup command line to its clean exe path (env-expanded,
-  /// quotes/args stripped). Returns None if no .exe is found.
+  /// Resolve a Windows startup command line to its clean executable path.
   String? resolveExePath({required String command});
 
   /// Autosave a draft for a date (one draft per day). Returns its id.
   PlatformInt64 saveDiaryDraft({required String date, required String content});
 
-  /// Persist user configuration (applies on next monitor start).
+  /// Persist user configuration (monitor timing/exclusions apply next launch).
   void setConfig({required ConfigDto config});
 
   /// Set the diary entry for a date.
@@ -150,11 +165,190 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Pause or resume the background tracking monitor.
   void setTrackingPaused({required bool paused});
 
-  /// Enable/disable a startup entry.
+  /// Enable/disable a startup entry when supported by the current platform.
   void toggleStartup({required PlatformInt64 id, required bool enable});
 
   /// Update a diary entry's content by id.
   void updateDiaryEntry({required PlatformInt64 id, required String content});
+
+  /// Insert or update a timeout rule by normalized executable identity.
+  AppTimeoutRuleDto upsertAppTimeoutRule({
+    required AppTimeoutRuleDraftDto draft,
+  });
+}
+
+/// Constant-time privacy-minimal foreground activity projection.
+class ActivitySnapshotDto {
+  final PlatformInt64 revision;
+
+  /// Stable lowercase value: active/idle/excluded/paused/unavailable.
+  final String state;
+  final bool trackingPaused;
+  final bool isIdle;
+  final String? appPath;
+  final String? appName;
+  final String observedAt;
+
+  const ActivitySnapshotDto({
+    required this.revision,
+    required this.state,
+    required this.trackingPaused,
+    required this.isIdle,
+    this.appPath,
+    this.appName,
+    required this.observedAt,
+  });
+
+  @override
+  int get hashCode =>
+      revision.hashCode ^
+      state.hashCode ^
+      trackingPaused.hashCode ^
+      isIdle.hashCode ^
+      appPath.hashCode ^
+      appName.hashCode ^
+      observedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ActivitySnapshotDto &&
+          runtimeType == other.runtimeType &&
+          revision == other.revision &&
+          state == other.state &&
+          trackingPaused == other.trackingPaused &&
+          isIdle == other.isIdle &&
+          appPath == other.appPath &&
+          appName == other.appName &&
+          observedAt == other.observedAt;
+}
+
+/// Persisted application timeout defaults exposed to Flutter.
+class AppTimeoutConfigDto {
+  final bool enabled;
+  final BigInt defaultThresholdMinutes;
+  final BigInt defaultCooldownMinutes;
+  final bool notificationsEnabled;
+  final bool notificationSound;
+
+  const AppTimeoutConfigDto({
+    required this.enabled,
+    required this.defaultThresholdMinutes,
+    required this.defaultCooldownMinutes,
+    required this.notificationsEnabled,
+    required this.notificationSound,
+  });
+
+  @override
+  int get hashCode =>
+      enabled.hashCode ^
+      defaultThresholdMinutes.hashCode ^
+      defaultCooldownMinutes.hashCode ^
+      notificationsEnabled.hashCode ^
+      notificationSound.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppTimeoutConfigDto &&
+          runtimeType == other.runtimeType &&
+          enabled == other.enabled &&
+          defaultThresholdMinutes == other.defaultThresholdMinutes &&
+          defaultCooldownMinutes == other.defaultCooldownMinutes &&
+          notificationsEnabled == other.notificationsEnabled &&
+          notificationSound == other.notificationSound;
+}
+
+/// User-editable application timeout rule fields.
+class AppTimeoutRuleDraftDto {
+  final String appPath;
+  final String appName;
+  final PlatformInt64 thresholdSecs;
+  final PlatformInt64 cooldownSecs;
+  final bool enabled;
+  final bool notifyRepeatedly;
+
+  const AppTimeoutRuleDraftDto({
+    required this.appPath,
+    required this.appName,
+    required this.thresholdSecs,
+    required this.cooldownSecs,
+    required this.enabled,
+    required this.notifyRepeatedly,
+  });
+
+  @override
+  int get hashCode =>
+      appPath.hashCode ^
+      appName.hashCode ^
+      thresholdSecs.hashCode ^
+      cooldownSecs.hashCode ^
+      enabled.hashCode ^
+      notifyRepeatedly.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppTimeoutRuleDraftDto &&
+          runtimeType == other.runtimeType &&
+          appPath == other.appPath &&
+          appName == other.appName &&
+          thresholdSecs == other.thresholdSecs &&
+          cooldownSecs == other.cooldownSecs &&
+          enabled == other.enabled &&
+          notifyRepeatedly == other.notifyRepeatedly;
+}
+
+/// Durable application timeout rule exposed to Flutter.
+class AppTimeoutRuleDto {
+  final PlatformInt64 id;
+  final String appPath;
+  final String appName;
+  final PlatformInt64 thresholdSecs;
+  final PlatformInt64 cooldownSecs;
+  final bool enabled;
+  final bool notifyRepeatedly;
+  final String createdAt;
+  final String updatedAt;
+
+  const AppTimeoutRuleDto({
+    required this.id,
+    required this.appPath,
+    required this.appName,
+    required this.thresholdSecs,
+    required this.cooldownSecs,
+    required this.enabled,
+    required this.notifyRepeatedly,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      appPath.hashCode ^
+      appName.hashCode ^
+      thresholdSecs.hashCode ^
+      cooldownSecs.hashCode ^
+      enabled.hashCode ^
+      notifyRepeatedly.hashCode ^
+      createdAt.hashCode ^
+      updatedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppTimeoutRuleDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          appPath == other.appPath &&
+          appName == other.appName &&
+          thresholdSecs == other.thresholdSecs &&
+          cooldownSecs == other.cooldownSecs &&
+          enabled == other.enabled &&
+          notifyRepeatedly == other.notifyRepeatedly &&
+          createdAt == other.createdAt &&
+          updatedAt == other.updatedAt;
 }
 
 class AppUsageDto {
@@ -188,7 +382,7 @@ class AppUsageDto {
           exePath == other.exePath;
 }
 
-/// User configuration (persisted in AppConfig.json).
+/// User configuration (persisted in config.json).
 class ConfigDto {
   final BigInt pollIntervalMs;
   final BigInt idleThresholdMinutes;
@@ -197,6 +391,8 @@ class ConfigDto {
   final bool autoStartTracking;
   final List<String> excludedApps;
   final String dbPath;
+  final PomodoroConfigDto pomodoro;
+  final AppTimeoutConfigDto appTimeout;
 
   const ConfigDto({
     required this.pollIntervalMs,
@@ -206,6 +402,8 @@ class ConfigDto {
     required this.autoStartTracking,
     required this.excludedApps,
     required this.dbPath,
+    required this.pomodoro,
+    required this.appTimeout,
   });
 
   @override
@@ -216,7 +414,9 @@ class ConfigDto {
       startMinimized.hashCode ^
       autoStartTracking.hashCode ^
       excludedApps.hashCode ^
-      dbPath.hashCode;
+      dbPath.hashCode ^
+      pomodoro.hashCode ^
+      appTimeout.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -229,7 +429,9 @@ class ConfigDto {
           startMinimized == other.startMinimized &&
           autoStartTracking == other.autoStartTracking &&
           excludedApps == other.excludedApps &&
-          dbPath == other.dbPath;
+          dbPath == other.dbPath &&
+          pomodoro == other.pomodoro &&
+          appTimeout == other.appTimeout;
 }
 
 /// Combined dashboard payload (one FFI call instead of two).
@@ -346,6 +548,8 @@ class DiaryEntryDto {
   final String date;
   final String content;
   final String status;
+
+  /// `manual` | `ai_generated` | `ai_assisted`.
   final String source;
   final String? sourceModel;
 
@@ -421,6 +625,73 @@ class PageDto {
           runtimeType == other.runtimeType &&
           title == other.title &&
           seconds == other.seconds;
+}
+
+/// Persisted Pomodoro preferences exposed to Flutter.
+class PomodoroConfigDto {
+  final bool enabled;
+  final BigInt focusMinutes;
+  final BigInt shortBreakMinutes;
+  final BigInt longBreakMinutes;
+  final BigInt longBreakInterval;
+  final bool autoStartNext;
+  final bool notificationsEnabled;
+  final bool notificationSound;
+
+  const PomodoroConfigDto({
+    required this.enabled,
+    required this.focusMinutes,
+    required this.shortBreakMinutes,
+    required this.longBreakMinutes,
+    required this.longBreakInterval,
+    required this.autoStartNext,
+    required this.notificationsEnabled,
+    required this.notificationSound,
+  });
+
+  @override
+  int get hashCode =>
+      enabled.hashCode ^
+      focusMinutes.hashCode ^
+      shortBreakMinutes.hashCode ^
+      longBreakMinutes.hashCode ^
+      longBreakInterval.hashCode ^
+      autoStartNext.hashCode ^
+      notificationsEnabled.hashCode ^
+      notificationSound.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PomodoroConfigDto &&
+          runtimeType == other.runtimeType &&
+          enabled == other.enabled &&
+          focusMinutes == other.focusMinutes &&
+          shortBreakMinutes == other.shortBreakMinutes &&
+          longBreakMinutes == other.longBreakMinutes &&
+          longBreakInterval == other.longBreakInterval &&
+          autoStartNext == other.autoStartNext &&
+          notificationsEnabled == other.notificationsEnabled &&
+          notificationSound == other.notificationSound;
+}
+
+/// One eligible running application for timeout-rule selection.
+class RunningAppDto {
+  final String appPath;
+  final String appName;
+
+  const RunningAppDto({required this.appPath, required this.appName});
+
+  @override
+  int get hashCode => appPath.hashCode ^ appName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RunningAppDto &&
+          runtimeType == other.runtimeType &&
+          appPath == other.appPath &&
+          appName == other.appName;
 }
 
 class StartupDto {

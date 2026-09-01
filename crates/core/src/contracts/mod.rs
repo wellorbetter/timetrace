@@ -13,6 +13,7 @@
 pub mod events;
 pub mod idle;
 pub mod process;
+pub mod reminders;
 pub mod startup;
 pub mod storage;
 pub mod window;
@@ -21,6 +22,7 @@ pub mod window;
 pub use events::*;
 pub use idle::*;
 pub use process::*;
+pub use reminders::*;
 pub use startup::*;
 pub use storage::*;
 pub use window::*;

@@ -36,7 +36,10 @@ impl WindowResolver for Win32WindowResolver {
                 return None;
             }
 
-            let mut exe_path = get_process_path(pid).unwrap_or_default();
+            // A readable absolute executable path is the canonical identity
+            // contract. Returning a title-only AppInfo would make historical
+            // tracking active while the reminder snapshot is unavailable.
+            let mut exe_path = get_process_path(pid)?;
             let exe_stem = exe_path
                 .rsplit('\\')
                 .next()
