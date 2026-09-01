@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/tray/tray_menu_model.dart';
+import 'package:timetrace_app/src/features/app_limits/domain/activity_snapshot.dart';
+import 'package:timetrace_app/src/features/focus/application/focus_runtime_projection.dart';
 import 'package:timetrace_app/src/features/focus/domain/pomodoro.dart';
 
 void main() {
@@ -62,6 +64,44 @@ void main() {
         TrayMenuKeys.pomodoroSkip,
         TrayMenuKeys.pomodoroStop,
       ]);
+    });
+
+    test('system-frozen status uses the shared privacy-minimal projection', () {
+      const state = PomodoroState(
+        phase: PomodoroPhase.focus,
+        intent: PomodoroIntent.running,
+        remaining: Duration(minutes: 18, seconds: 4),
+        completedFocusCount: 2,
+      );
+      final systemFrozen = isPomodoroSystemFrozen(
+        pomodoro: state,
+        activityState: ActivitySnapshotState.idle,
+      );
+      final model = TrayMenuModel.fromPomodoro(
+        enabled: true,
+        state: state,
+        trackingPaused: false,
+        systemFrozen: systemFrozen,
+      );
+      final english = TrayMenuModel.fromPomodoro(
+        enabled: true,
+        state: state,
+        trackingPaused: false,
+        systemFrozen: systemFrozen,
+        strings: ReminderL10n.en,
+      );
+      final eligible = TrayMenuModel.fromPomodoro(
+        enabled: true,
+        state: state,
+        trackingPaused: false,
+      );
+
+      expect(systemFrozen, isTrue);
+      expect(model.pomodoroStatusLabel, '专注 · 18:04 · 计时暂停');
+      expect(model.tooltip, 'TimeTrace — 专注 · 18:04 · 计时暂停');
+      expect(english.pomodoroStatusLabel, 'Focus · 18:04 · Timer paused');
+      expect(model.pomodoroActions.first.key, TrayMenuKeys.pomodoroPause);
+      expect(model, isNot(eligible));
     });
 
     test(
@@ -175,6 +215,7 @@ void main() {
             config: _enabledConfig,
             state: state,
             activityPaused: false,
+            systemFrozen: false,
           ),
         ),
         isTrue,
@@ -186,6 +227,7 @@ void main() {
             config: _enabledConfig,
             state: state,
             activityPaused: false,
+            systemFrozen: false,
             locale: AppLocale.en,
           ),
         ),
@@ -218,6 +260,7 @@ void main() {
               config: _enabledConfig,
               state: state,
               activityPaused: false,
+              systemFrozen: false,
             ),
           );
           if (!admitted) continue;
@@ -253,6 +296,7 @@ void main() {
         required PomodoroConfig config,
         required PomodoroState state,
         bool activityPaused = false,
+        bool systemFrozen = false,
         bool precise = false,
       }) {
         return gate.shouldRequest(
@@ -261,6 +305,7 @@ void main() {
             config: config,
             state: state,
             activityPaused: activityPaused,
+            systemFrozen: systemFrozen,
           ),
           precise: precise,
         );
@@ -341,6 +386,35 @@ void main() {
         ),
         isFalse,
       );
+    });
+
+    test('system freeze boundaries bypass the background cadence', () {
+      final gate = TrayMenuSyncGate();
+      const state = PomodoroState(
+        phase: PomodoroPhase.focus,
+        intent: PomodoroIntent.running,
+        remaining: Duration(minutes: 25),
+        phaseDuration: Duration(minutes: 25),
+        completedFocusCount: 0,
+      );
+
+      bool request({required bool systemFrozen, required int tick}) {
+        return gate.shouldRequest(
+          tickCount: tick,
+          boundary: TrayMenuSyncBoundary.fromPomodoro(
+            config: _enabledConfig,
+            state: state,
+            activityPaused: false,
+            systemFrozen: systemFrozen,
+          ),
+        );
+      }
+
+      expect(request(systemFrozen: false, tick: 1), isTrue);
+      expect(request(systemFrozen: false, tick: 2), isFalse);
+      expect(request(systemFrozen: true, tick: 2), isTrue);
+      expect(request(systemFrozen: true, tick: 3), isFalse);
+      expect(request(systemFrozen: false, tick: 3), isTrue);
     });
   });
 

@@ -8,6 +8,7 @@ import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
 import 'package:timetrace_app/src/core/tray/tray_menu_model.dart';
 import 'package:timetrace_app/src/features/app_limits/domain/activity_snapshot.dart';
+import 'package:timetrace_app/src/features/focus/application/focus_runtime_projection.dart';
 import 'package:timetrace_app/src/features/reminders/application/reminder_runtime_controller.dart';
 import 'package:timetrace_app/src/features/reminders/providers/reminder_runtime_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -118,10 +119,16 @@ class TrayService with TrayListener {
     if (_disposed) {
       return Future<void>.value();
     }
+    final activityState = state.activity?.state;
+    final systemFrozen = isPomodoroSystemFrozen(
+      pomodoro: state.pomodoro,
+      activityState: activityState,
+    );
     final boundary = TrayMenuSyncBoundary.fromPomodoro(
       config: state.configuration.pomodoro,
       state: state.pomodoro,
-      activityPaused: state.activity?.state == ActivitySnapshotState.paused,
+      activityPaused: activityState == ActivitySnapshotState.paused,
+      systemFrozen: systemFrozen,
       locale: _locale,
     );
     if (!_menuSyncGate.shouldRequest(
@@ -131,10 +138,15 @@ class TrayService with TrayListener {
     )) {
       return Future<void>.value();
     }
-    return _menuUpdater.request(() => _resolveMenuModel(state));
+    return _menuUpdater.request(
+      () => _resolveMenuModel(state, systemFrozen: systemFrozen),
+    );
   }
 
-  TrayMenuModel _resolveMenuModel(ReminderRuntimeState state) {
+  TrayMenuModel _resolveMenuModel(
+    ReminderRuntimeState state, {
+    required bool systemFrozen,
+  }) {
     var trackingPaused = _lastKnownTrackingPaused;
     try {
       trackingPaused = _ref.read(apiProvider).isTrackingPaused();
@@ -147,6 +159,7 @@ class TrayService with TrayListener {
       enabled: state.configuration.pomodoro.enabled,
       state: state.pomodoro,
       trackingPaused: trackingPaused,
+      systemFrozen: systemFrozen,
       strings: ReminderL10n(_locale),
     );
   }

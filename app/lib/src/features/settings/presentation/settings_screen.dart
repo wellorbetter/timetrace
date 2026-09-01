@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/i18n/reminder_l10n.dart';
@@ -18,6 +19,7 @@ import 'package:timetrace_app/src/core/widgets/m3_widgets.dart';
 import 'package:timetrace_app/src/features/app_limits/presentation/app_timeout_rules_controller_section.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_order_provider.dart';
 import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
+import 'package:timetrace_app/src/features/focus/presentation/focus_app_bar_action.dart';
 import 'package:timetrace_app/src/features/focus/presentation/focus_settings_controller_section.dart';
 import 'package:timetrace_app/src/features/recap/data/recap_ai_client.dart';
 import 'package:timetrace_app/src/features/recap/domain/recap_ai_settings.dart';
@@ -27,20 +29,49 @@ import 'package:timetrace_app/src/features/settings/presentation/widgets/ai_diar
 import 'package:timetrace_app/src/features/settings/providers/ai_diary_scheduler_provider.dart';
 import 'package:timetrace_app/src/features/settings/providers/settings_provider.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final GlobalKey _focusSettingsKey = GlobalKey(
+    debugLabel: 'focus-settings-section',
+  );
+  final ScrollController _settingsScrollController = ScrollController();
+  bool _focusScrollScheduled = false;
+
+  @override
+  void dispose() {
+    _settingsScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l = L10n(ref.watch(localeProvider));
     final dark = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final asyncSettings = ref.watch(settingsProvider);
     final recapAiSettings = ref.watch(recapAiSettingsProvider);
     final backgroundArea = Platform.isMacOS ? '菜单栏' : '系统托盘';
+    final focusDeepLink =
+        GoRouterState.of(context).uri.queryParameters['section'] == 'focus';
+    if (focusDeepLink) _scheduleFocusSettingsScroll();
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.settings)),
+      appBar: AppBar(
+        title: Text(l.settings),
+        actions: [
+          FocusAppBarAction(
+            strings: ReminderL10n(locale),
+            onOpenSettings: _openFocusSettings,
+          ),
+          const SizedBox(width: TimeTraceSpace.sm),
+        ],
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) => asyncSettings.when(
           loading: () => const Center(
@@ -58,6 +89,7 @@ class SettingsScreen extends ConsumerWidget {
                 maxWidth: TimeTraceLayout.readingWidth,
               ),
               child: ListView(
+                controller: _settingsScrollController,
                 padding: TimeTraceLayout.pagePadding(constraints.maxWidth),
                 children: [
                   _SettingsGroup(
@@ -132,7 +164,10 @@ class SettingsScreen extends ConsumerWidget {
                     children: [_dashboardOrderPicker(ref)],
                   ),
                   const SizedBox(height: TimeTraceSpace.lg),
-                  FocusSettingsControllerSection(settings: settings),
+                  KeyedSubtree(
+                    key: _focusSettingsKey,
+                    child: FocusSettingsControllerSection(settings: settings),
+                  ),
                   const SizedBox(height: TimeTraceSpace.lg),
                   AppTimeoutRulesControllerSection(
                     settings: settings.appTimeout,
@@ -654,6 +689,51 @@ class SettingsScreen extends ConsumerWidget {
       }
     }
   }
+
+  void _openFocusSettings() {
+    final uri = GoRouterState.of(context).uri;
+    if (uri.queryParameters['section'] != 'focus') {
+      context.go('/settings?section=focus');
+    }
+    _scheduleFocusSettingsScroll(force: true);
+  }
+
+  void _scheduleFocusSettingsScroll({bool force = false}) {
+    if (_focusScrollScheduled && !force) return;
+    _focusScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_scrollFocusSettingsIntoView());
+    });
+  }
+
+  Future<void> _scrollFocusSettingsIntoView() async {
+    if (_focusSettingsKey.currentContext == null &&
+        _settingsScrollController.hasClients) {
+      final maxOffset = _settingsScrollController.position.maxScrollExtent;
+      final probeOffset = 1000.0.clamp(0.0, maxOffset).toDouble();
+      await _settingsScrollController.animateTo(
+        probeOffset,
+        duration: TimeTraceMotion.normal,
+        curve: TimeTraceMotion.standard,
+      );
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted) return;
+    final target = _focusSettingsKey.currentContext;
+    if (target == null) {
+      _focusScrollScheduled = false;
+      return;
+    }
+    if (!target.mounted) return;
+    await Scrollable.ensureVisible(
+      target,
+      alignment: 0.08,
+      duration: TimeTraceMotion.normal,
+      curve: TimeTraceMotion.standard,
+    );
+  }
 }
 
 class _SettingsGroup extends StatelessWidget {
@@ -1046,7 +1126,6 @@ Widget _dashboardOrderPicker(WidgetRef ref) {
             'pie' => Icons.donut_large_rounded,
             'hourly' => Icons.schedule_rounded,
             'summary' => Icons.summarize_outlined,
-            'focus' => Icons.timer_outlined,
             'apps' => Icons.apps_rounded,
             'history' => Icons.history_rounded,
             _ => Icons.dashboard_outlined,

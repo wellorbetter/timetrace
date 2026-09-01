@@ -143,40 +143,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('focus carousel entry binds the process reminder runtime', (
+  testWidgets('app-bar Pomodoro entry binds the process reminder runtime', (
     tester,
   ) async {
     final api = _FakeTimeTraceApi();
     await _pumpDashboard(tester, const Size(1400, 1000), api: api);
 
-    await _tapCarouselDot(tester, '专注提醒');
+    expect(find.byKey(const ValueKey('dashboard-focus-page')), findsNothing);
+    expect(find.byKey(const ValueKey('focus-app-bar-trigger')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('focus-app-bar-trigger')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byKey(const ValueKey('dashboard-focus-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('focus-start')), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-quick-panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-quick-start')), findsOneWidget);
     expect(api.activityReads, greaterThanOrEqualTo(1));
 
-    await tester.tap(find.byKey(const ValueKey('focus-start')));
+    await tester.tap(find.byKey(const ValueKey('focus-quick-start')));
     await tester.pump();
-    expect(find.text('活动暂停中'), findsOneWidget);
+    expect(find.text('计时暂停'), findsOneWidget);
 
     api.activityState = 'excluded';
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('活动暂停中'), findsNothing);
+    expect(find.text('计时暂停'), findsNothing);
     expect(find.text('24:59'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('English carousel controls include the Focus view', (
+  testWidgets('English Overview exposes Pomodoro outside the data carousel', (
     tester,
   ) async {
     await _pumpDashboard(tester, const Size(1400, 1000), englishLocale: true);
 
     expect(find.byTooltip('Previous view'), findsOneWidget);
     expect(find.byTooltip('Next view'), findsOneWidget);
-    await _tapCarouselDot(tester, 'Focus reminders');
-    expect(find.byKey(const ValueKey('dashboard-focus-page')), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Tooltip &&
+            (widget.message?.contains('Pomodoro') ?? false),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('focus-app-bar-trigger')));
+    await tester.pump();
+    expect(find.text('Pomodoro'), findsOneWidget);
+    expect(find.text('Focus reminders'), findsNothing);
   });
 }
 

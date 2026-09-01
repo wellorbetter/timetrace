@@ -18,12 +18,11 @@ final class ReminderL10n {
 
   String _pick(String zhValue, String enValue) => isZh ? zhValue : enValue;
 
-  // Dashboard and timer card.
-  String get focusCarouselLabel => _pick('专注提醒', 'Focus reminders');
+  // App-bar timer entry and quick panel.
   String get dataView => _pick('数据视图', 'Data view');
-  String get focusCardTitle => _pick('专注与提醒', 'Focus & reminders');
   String get disabled => _pick('未启用', 'Disabled');
   String get activityPaused => _pick('活动暂停中', 'Activity paused');
+  String get focusTimerFrozen => _pick('计时暂停', 'Timer paused');
   String get readyToFocus => _pick('准备专注', 'Ready to focus');
   String get focus => _pick('专注', 'Focus');
   String get shortBreak => _pick('短休息', 'Short break');
@@ -40,24 +39,10 @@ final class ReminderL10n {
   String completedFocusRounds(int count) => isZh
       ? '已完成 $count 轮专注'
       : '$count focus ${count == 1 ? 'round' : 'rounds'} completed';
-  String get currentApplication => _pick('当前应用', 'Current application');
   String get unnamedApplication => _pick('未命名应用', 'Unnamed application');
-  String get noApplicationStatus => _pick(
-    '启用应用提醒后，这里会显示连续使用状态。',
-    'Enable application reminders to show continuous-use status here.',
-  );
-  String continuousUseWithoutRule(String elapsed) => _pick(
-    '已连续使用 $elapsed · 未配置提醒',
-    'Used continuously for $elapsed · No reminder configured',
-  );
-  String continuousUseWithThreshold(String elapsed, String threshold) => _pick(
-    '已连续使用 $elapsed · 阈值 $threshold',
-    'Used continuously for $elapsed · Threshold $threshold',
-  );
-  String get realtimeData => _pick('实时数据', 'Live data');
-  String get realtime => _pick('实时', 'Live');
   String get enablePomodoroHint =>
       _pick('在设置中启用番茄钟后即可开始。', 'Enable Pomodoro in Settings to get started.');
+  String get pomodoroSettings => _pick('番茄钟设置', 'Pomodoro settings');
   String get start => _pick('开始', 'Start');
   String get pause => _pick('暂停', 'Pause');
   String get resume => _pick('继续', 'Resume');

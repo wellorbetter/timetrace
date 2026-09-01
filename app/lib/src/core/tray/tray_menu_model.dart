@@ -57,11 +57,13 @@ final class TrayMenuModel {
     required bool enabled,
     required PomodoroState state,
     required bool trackingPaused,
+    bool systemFrozen = false,
     ReminderL10n strings = ReminderL10n.zh,
   }) {
     final pomodoroStatus = _pomodoroStatus(
       enabled: enabled,
       state: state,
+      systemFrozen: systemFrozen,
       strings: strings,
     );
     final actions = _pomodoroActions(
@@ -141,6 +143,7 @@ final class TrayMenuSyncBoundary {
     required this.phase,
     required this.intent,
     required this.activityPaused,
+    required this.systemFrozen,
     this.locale = AppLocale.zh,
   });
 
@@ -148,6 +151,7 @@ final class TrayMenuSyncBoundary {
     required PomodoroConfig config,
     required PomodoroState state,
     required bool activityPaused,
+    required bool systemFrozen,
     AppLocale locale = AppLocale.zh,
   }) {
     return TrayMenuSyncBoundary(
@@ -155,6 +159,7 @@ final class TrayMenuSyncBoundary {
       phase: state.phase,
       intent: state.intent,
       activityPaused: activityPaused,
+      systemFrozen: systemFrozen,
       locale: locale,
     );
   }
@@ -163,6 +168,7 @@ final class TrayMenuSyncBoundary {
   final PomodoroPhase phase;
   final PomodoroIntent intent;
   final bool activityPaused;
+  final bool systemFrozen;
   final AppLocale locale;
 
   @override
@@ -172,12 +178,13 @@ final class TrayMenuSyncBoundary {
         other.phase == phase &&
         other.intent == intent &&
         other.activityPaused == activityPaused &&
+        other.systemFrozen == systemFrozen &&
         other.locale == locale;
   }
 
   @override
   int get hashCode =>
-      Object.hash(config, phase, intent, activityPaused, locale);
+      Object.hash(config, phase, intent, activityPaused, systemFrozen, locale);
 }
 
 /// Pure admission gate for expensive tray synchronization requests.
@@ -319,6 +326,7 @@ final class SerializedTrayMenuUpdater {
 String _pomodoroStatus({
   required bool enabled,
   required PomodoroState state,
+  required bool systemFrozen,
   required ReminderL10n strings,
 }) {
   if (!enabled) {
@@ -334,11 +342,13 @@ String _pomodoroStatus({
     PomodoroPhase.shortBreak => strings.shortBreak,
     PomodoroPhase.longBreak => strings.longBreak,
   };
-  final intent = switch (state.intent) {
-    PomodoroIntent.running => '',
-    PomodoroIntent.ready => ' · ${strings.waitingToStart}',
-    PomodoroIntent.userPaused => ' · ${strings.paused}',
-  };
+  final intent = systemFrozen
+      ? ' · ${strings.focusTimerFrozen}'
+      : switch (state.intent) {
+          PomodoroIntent.running => '',
+          PomodoroIntent.ready => ' · ${strings.waitingToStart}',
+          PomodoroIntent.userPaused => ' · ${strings.paused}',
+        };
   return '$phase · ${_clock(state.remaining)}$intent';
 }
 

@@ -8,12 +8,14 @@ void main() {
     const zh = ReminderL10n(AppLocale.zh);
     const en = ReminderL10n(AppLocale.en);
 
-    expect(zh.focusCarouselLabel, '专注提醒');
-    expect(en.focusCarouselLabel, 'Focus reminders');
+    expect(zh.focusTimerFrozen, '计时暂停');
+    expect(en.focusTimerFrozen, 'Timer paused');
+    expect(zh.pomodoroSettings, '番茄钟设置');
+    expect(en.pomodoroSettings, 'Pomodoro settings');
     expect(en.completedFocusRounds(1), '1 focus round completed');
     expect(en.completedFocusRounds(3), '3 focus rounds completed');
     expect(en.compactDuration(const Duration(minutes: 61)), '1 hour 1 minute');
-    expect(dashboardViewLabel('focus', en), 'Focus reminders');
+    expect(dashboardViewLabel('focus', en), 'Data view');
     expect(en.roundsShort(1), 'round');
     expect(en.roundsShort(4), 'rounds');
     expect(
