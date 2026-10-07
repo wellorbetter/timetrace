@@ -1,49 +1,57 @@
-import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
+import '../preferences/ui_preferences_controller.dart';
 
-/// A selectable desktop font.
+/// A selectable font (system fonts available on Windows).
 class AppFont {
-  const AppFont({required this.name, required this.family, required this.preview});
+  const AppFont({
+    required this.name,
+    required this.family,
+    required this.preview,
+  });
 
-  final String name;
-  final String family;
-  final String preview;
+  final String name; // display name
+  final String family; // font family for Flutter
+  final String preview; // sample text showing the style
 
-  static const windows = [
+  static const all = [
     AppFont(name: 'Segoe UI', family: 'Segoe UI', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '微软雅黑 UI', family: 'Microsoft YaHei UI', preview: 'TimeTrace 使用统计'),
+    AppFont(
+      name: '微软雅黑 UI',
+      family: 'Microsoft YaHei UI',
+      preview: 'TimeTrace 使用统计',
+    ),
     AppFont(name: '微软雅黑', family: 'Microsoft YaHei', preview: 'TimeTrace 使用统计'),
     AppFont(name: '等线', family: 'DengXian', preview: 'TimeTrace 使用统计'),
+    AppFont(name: '宋体', family: 'SimSun', preview: 'TimeTrace 使用统计'),
+    AppFont(name: '黑体', family: 'SimHei', preview: 'TimeTrace 使用统计'),
+    AppFont(name: '楷体', family: 'KaiTi', preview: 'TimeTrace 使用统计'),
+    AppFont(name: '仿宋', family: 'FangSong', preview: 'TimeTrace 使用统计'),
     AppFont(name: 'Consolas', family: 'Consolas', preview: 'TimeTrace 使用统计'),
   ];
 
-  static const macos = [
-    AppFont(name: '系统字体', family: '.AppleSystemUIFont', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '苹方', family: 'PingFang SC', preview: 'TimeTrace 使用统计'),
-    AppFont(name: 'SF Pro Text', family: 'SF Pro Text', preview: 'TimeTrace Usage'),
-    AppFont(name: 'Menlo', family: 'Menlo', preview: 'TimeTrace Usage'),
-  ];
-
-  static List<AppFont> get all => Platform.isMacOS ? macos : windows;
-
+  /// Default is Segoe UI (clean, modern).
   static AppFont get defaultFont => all.first;
 
   static AppFont? byName(String? name) =>
       all.where((f) => f.name == name).firstOrNull;
 }
 
+/// Selected font preference.
 class FontNotifier extends Notifier<AppFont> {
   @override
   AppFont build() {
-    final value = UiPreferencesStore.read()['fontName'];
-    return AppFont.byName(value as String?) ?? AppFont.defaultFont;
+    final value = ref
+        .read(uiPreferencesControllerProvider.notifier)
+        .read()['fontName'];
+    return AppFont.byName(value is String ? value : null) ??
+        AppFont.defaultFont;
   }
 
   void select(AppFont font) {
     state = font;
-    UiPreferencesStore.update({'fontName': font.name});
+    ref.read(uiPreferencesControllerProvider.notifier).patch('font', {
+      'fontName': font.name,
+    });
   }
 }
 

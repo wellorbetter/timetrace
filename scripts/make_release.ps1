@@ -1,9 +1,9 @@
 # TimeTrace green-build packager (fixed: data/ must be included + verified)
-param([string]$Version = 'v1.1.0')
+param([string]$Version = 'v1.0.1')
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$runner = "$root\app\build\windows\x64\runner\Release"
+$runner = "$root\app\build\windows\x64\runner"
 $dist = "$root\dist"
 $name = "TimeTrace-$Version-windows-x64"
 $out = "$dist\$name"

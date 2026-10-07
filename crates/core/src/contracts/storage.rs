@@ -58,48 +58,6 @@ pub struct AppMetaRecord {
     pub is_productive: Option<bool>,
 }
 
-/// Provenance of a diary entry.
-///
-/// The persisted string values are part of the Flutter/Rust storage contract;
-/// keep them stable when adding future variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiarySource {
-    Manual,
-    AiGenerated,
-    AiAssisted,
-}
-
-impl DiarySource {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Manual => "manual",
-            Self::AiGenerated => "ai_generated",
-            Self::AiAssisted => "ai_assisted",
-        }
-    }
-
-    /// Read provenance defensively. Unknown values from a newer database are
-    /// treated as manual instead of accidentally presenting them as AI text.
-    pub fn from_stored(value: &str) -> Self {
-        match value {
-            "ai_generated" => Self::AiGenerated,
-            "ai_assisted" => Self::AiAssisted,
-            _ => Self::Manual,
-        }
-    }
-}
-
-/// A diary entry together with its publication state and provenance.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiaryEntryRecord {
-    pub id: i64,
-    pub date: String,
-    pub content: String,
-    pub status: String,
-    pub source: DiarySource,
-    pub source_model: Option<String>,
-}
-
 // ── DataStore Trait ──
 
 /// Persistent storage for all TimeTrace data.
@@ -197,12 +155,12 @@ pub trait DataStore: Send + Sync {
     /// Upsert a diary entry for a date. Returns the new content.
     fn set_diary(&self, date: NaiveDate, content: &str) -> String;
 
-    /// All diary entries in a range, newest first, including provenance.
+    /// All diary entries in a range, newest first: (id, date_str, content, status).
     fn get_diary_entries_detailed(
         &self,
         start: NaiveDate,
         end: NaiveDate,
-    ) -> Vec<DiaryEntryRecord>;
+    ) -> Vec<(i64, String, String, String)>;
 
     /// Add a new published diary entry for a date. Returns the new row id.
     fn add_diary_entry(&self, date: NaiveDate, content: &str) -> i64;
@@ -213,19 +171,10 @@ pub trait DataStore: Send + Sync {
     /// Publish: promote the day's draft or insert a new published entry.
     fn publish_diary(&self, date: NaiveDate, content: &str) -> i64;
 
-    /// Atomically publish an AI-generated diary with its model provenance.
-    fn publish_ai_diary(
-        &self,
-        date: NaiveDate,
-        content: &str,
-        source_model: &str,
-    ) -> Result<i64, String>;
-
     /// The day's draft content, if any.
     fn get_diary_draft(&self, date: NaiveDate) -> Option<String>;
 
-    /// Update a diary entry's content by id. Editing an AI-generated entry
-    /// transitions its provenance to AI-assisted; manual entries stay manual.
+    /// Update a diary entry's content by id.
     fn update_diary_entry(&self, id: i64, content: &str) -> Result<(), String>;
 
     /// Delete a diary entry by id.

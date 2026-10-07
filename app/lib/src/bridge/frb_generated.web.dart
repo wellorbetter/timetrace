@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'accounting.dart';
 import 'api.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -21,11 +22,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_AccountingSnapshotPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_TimeTraceApiPtr => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi;
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  AccountingSnapshot
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    dynamic raw,
+  );
 
   @protected
   TimeTraceApi
@@ -40,6 +51,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AccountingSnapshot
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    dynamic raw,
+  );
+
+  @protected
   TimeTraceApi
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     dynamic raw,
@@ -49,10 +66,44 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AccountingAsOfRequest dco_decode_accounting_as_of_request(dynamic raw);
+
+  @protected
+  AccountingBridgeError dco_decode_accounting_bridge_error(dynamic raw);
+
+  @protected
+  AccountingIntervalDto dco_decode_accounting_interval_dto(dynamic raw);
+
+  @protected
+  AccountingRangeRequest dco_decode_accounting_range_request(dynamic raw);
+
+  @protected
+  AccountingSnapshotDto dco_decode_accounting_snapshot_dto(dynamic raw);
+
+  @protected
+  AccountingStateDto dco_decode_accounting_state_dto(dynamic raw);
+
+  @protected
+  AccountingTotalsDto dco_decode_accounting_totals_dto(dynamic raw);
+
+  @protected
   AppUsageDto dco_decode_app_usage_dto(dynamic raw);
 
   @protected
+  AttributionTotalDto dco_decode_attribution_total_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AccountingAsOfRequest dco_decode_box_autoadd_accounting_as_of_request(
+    dynamic raw,
+  );
+
+  @protected
+  AccountingRangeRequest dco_decode_box_autoadd_accounting_range_request(
+    dynamic raw,
+  );
 
   @protected
   ConfigDto dco_decode_box_autoadd_config_dto(dynamic raw);
@@ -79,6 +130,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DiaryEntryDto dco_decode_diary_entry_dto(dynamic raw);
 
   @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -88,13 +142,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<AccountingIntervalDto> dco_decode_list_accounting_interval_dto(
+    dynamic raw,
+  );
+
+  @protected
   List<AppUsageDto> dco_decode_list_app_usage_dto(dynamic raw);
+
+  @protected
+  List<AttributionTotalDto> dco_decode_list_attribution_total_dto(dynamic raw);
 
   @protected
   List<DaySessionDto> dco_decode_list_day_session_dto(dynamic raw);
 
   @protected
   List<DiaryEntryDto> dco_decode_list_diary_entry_dto(dynamic raw);
+
+  @protected
+  List<LocalHourBucketDto> dco_decode_list_local_hour_bucket_dto(dynamic raw);
 
   @protected
   List<PageDto> dco_decode_list_page_dto(dynamic raw);
@@ -114,6 +179,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<StartupDto> dco_decode_list_startup_dto(dynamic raw);
+
+  @protected
+  LocalHourBucketDto dco_decode_local_hour_bucket_dto(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -136,6 +204,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
+  SnapshotIntegrityDto dco_decode_snapshot_integrity_dto(dynamic raw);
 
   @protected
   StartupDto dco_decode_startup_dto(dynamic raw);
@@ -162,6 +233,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  AccountingSnapshot
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TimeTraceApi
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     SseDeserializer deserializer,
@@ -170,6 +247,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   TimeTraceApi
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingSnapshot
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
     SseDeserializer deserializer,
   );
 
@@ -183,10 +266,60 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AccountingAsOfRequest sse_decode_accounting_as_of_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingBridgeError sse_decode_accounting_bridge_error(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingIntervalDto sse_decode_accounting_interval_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingRangeRequest sse_decode_accounting_range_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingSnapshotDto sse_decode_accounting_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingStateDto sse_decode_accounting_state_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingTotalsDto sse_decode_accounting_totals_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AppUsageDto sse_decode_app_usage_dto(SseDeserializer deserializer);
 
   @protected
+  AttributionTotalDto sse_decode_attribution_total_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AccountingAsOfRequest sse_decode_box_autoadd_accounting_as_of_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountingRangeRequest sse_decode_box_autoadd_accounting_range_request(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ConfigDto sse_decode_box_autoadd_config_dto(SseDeserializer deserializer);
@@ -213,6 +346,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DiaryEntryDto sse_decode_diary_entry_dto(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
@@ -222,7 +358,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<AccountingIntervalDto> sse_decode_list_accounting_interval_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<AppUsageDto> sse_decode_list_app_usage_dto(SseDeserializer deserializer);
+
+  @protected
+  List<AttributionTotalDto> sse_decode_list_attribution_total_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DaySessionDto> sse_decode_list_day_session_dto(
@@ -231,6 +377,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<DiaryEntryDto> sse_decode_list_diary_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<LocalHourBucketDto> sse_decode_list_local_hour_bucket_dto(
     SseDeserializer deserializer,
   );
 
@@ -256,6 +407,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<StartupDto> sse_decode_list_startup_dto(SseDeserializer deserializer);
+
+  @protected
+  LocalHourBucketDto sse_decode_local_hour_bucket_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -286,6 +442,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SnapshotIntegrityDto sse_decode_snapshot_integrity_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   StartupDto sse_decode_startup_dto(SseDeserializer deserializer);
 
   @protected
@@ -307,11 +468,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    AccountingSnapshot self,
     SseSerializer serializer,
   );
 
@@ -331,6 +496,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    AccountingSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     TimeTraceApi self,
     SseSerializer serializer,
@@ -340,10 +512,70 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_accounting_as_of_request(
+    AccountingAsOfRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_bridge_error(
+    AccountingBridgeError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_interval_dto(
+    AccountingIntervalDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_range_request(
+    AccountingRangeRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_snapshot_dto(
+    AccountingSnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_state_dto(
+    AccountingStateDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_accounting_totals_dto(
+    AccountingTotalsDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_app_usage_dto(AppUsageDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_attribution_total_dto(
+    AttributionTotalDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_accounting_as_of_request(
+    AccountingAsOfRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_accounting_range_request(
+    AccountingRangeRequest self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_config_dto(
@@ -379,6 +611,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_diary_entry_dto(DiaryEntryDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
@@ -388,8 +623,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_accounting_interval_dto(
+    List<AccountingIntervalDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_app_usage_dto(
     List<AppUsageDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_attribution_total_dto(
+    List<AttributionTotalDto> self,
     SseSerializer serializer,
   );
 
@@ -402,6 +649,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_diary_entry_dto(
     List<DiaryEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_local_hour_bucket_dto(
+    List<LocalHourBucketDto> self,
     SseSerializer serializer,
   );
 
@@ -435,6 +688,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_startup_dto(
     List<StartupDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_local_hour_bucket_dto(
+    LocalHourBucketDto self,
     SseSerializer serializer,
   );
 
@@ -475,6 +734,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_snapshot_integrity_dto(
+    SnapshotIntegrityDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_startup_dto(StartupDto self, SseSerializer serializer);
 
   @protected
@@ -494,15 +759,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class
 
 class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr,
+      );
 
   void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
@@ -527,6 +805,16 @@ external RustLibWasmModule get wasmModule;
 @JS()
 @anonymous
 extension type RustLibWasmModule._(JSObject _) implements JSObject {
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    int ptr,
+  );
+
   external void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     int ptr,

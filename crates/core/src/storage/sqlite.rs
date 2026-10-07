@@ -8,17 +8,17 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, NaiveDate, Timelike, Utc};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use tracing::{debug, warn};
 
 use crate::contracts::{
-    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, DiaryEntryRecord, DiarySource,
-    SessionRecord, StartupEntryRecord,
+    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord, StartupEntryRecord,
 };
+use crate::engine::aggregator::{CheckpointReceipt, CheckpointStore};
 use crate::storage::schema;
 
 /// Apply guarded one-time migrations. Returns Err only on real failures.
-fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+fn run_migrations(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     // Migration 1: diary_entries.date was UNIQUE (one entry/day) in old DBs.
     // Rebuild the table without the constraint so multiple entries per day
     // are allowed, preserving all existing rows.
@@ -64,27 +64,45 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         tracing::info!("diary_entries migrated: status column");
     }
 
-    // Migration 4: diary provenance and optional source model. These columns
-    // are additive so entry ids, timestamps, publication status, and image
-    // links remain untouched.
-    let has_source: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('diary_entries') WHERE name = 'source'",
-        [],
-        |row| row.get(0),
+    // Accounting schema and its version marker commit atomically. This uses a
+    // separate version domain from the historical diary migrations above.
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS accounting_schema_metadata (
+            singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+            schema_version INTEGER NOT NULL
+        )",
     )?;
-    if has_source == 0 {
-        conn.execute_batch(schema::MIGRATIONS_V4[0])?;
-        tracing::info!("diary_entries migrated: source column");
+    let existing: Option<i32> = tx
+        .query_row(
+            "SELECT schema_version FROM accounting_schema_metadata WHERE singleton_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing.is_some_and(|version| version > schema::ACCOUNTING_SCHEMA_VERSION) {
+        return Err(rusqlite::Error::InvalidQuery);
     }
-    let has_source_model: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('diary_entries') WHERE name = 'source_model'",
-        [],
-        |row| row.get(0),
-    )?;
-    if has_source_model == 0 {
-        conn.execute_batch(schema::MIGRATIONS_V4[1])?;
-        tracing::info!("diary_entries migrated: source_model column");
+    let existing = existing.unwrap_or(0);
+    if existing < 1 {
+        for statement in schema::ACCOUNTING_MIGRATION_V1 {
+            tx.execute_batch(statement)?;
+        }
     }
+    if existing < 2 {
+        for statement in schema::ACCOUNTING_MIGRATION_V2 {
+            tx.execute_batch(statement)?;
+        }
+    }
+    if existing < schema::ACCOUNTING_SCHEMA_VERSION {
+        tx.execute(
+            "INSERT INTO accounting_schema_metadata(singleton_id, schema_version)
+             VALUES(1, ?1)
+             ON CONFLICT(singleton_id) DO UPDATE SET schema_version = excluded.schema_version",
+            params![schema::ACCOUNTING_SCHEMA_VERSION],
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -112,8 +130,13 @@ fn add_session_to_hours(hours: &mut [i64; 24], start: DateTime<Utc>, end: DateTi
 }
 
 pub struct SqliteStore {
-    conn: Mutex<Connection>,
+    pub(crate) conn: Mutex<Connection>,
     degraded: AtomicBool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdleTimeTotal {
+    pub seconds: i64,
 }
 
 impl SqliteStore {
@@ -124,7 +147,7 @@ impl SqliteStore {
             std::fs::create_dir_all(parent).ok();
         }
 
-        let conn = Connection::open(&path)?;
+        let mut conn = Connection::open(&path)?;
 
         // Apply pragmas
         for pragma in schema::PRAGMAS {
@@ -137,7 +160,7 @@ impl SqliteStore {
         }
 
         // Run one-time migrations (guarded).
-        run_migrations(&conn)?;
+        run_migrations(&mut conn)?;
 
         debug!("SQLite opened at {}", path.display());
 
@@ -152,11 +175,29 @@ impl SqliteStore {
         self.degraded.load(Ordering::Relaxed)
     }
 
+    pub fn get_idle_time_total(&self, start: NaiveDate, end: NaiveDate) -> IdleTimeTotal {
+        let conn = self.lock();
+        let seconds = conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_secs), 0) FROM usage_sessions
+             WHERE date >= ?1 AND date <= ?2 AND duration_secs > 0
+               AND (is_idle = 1 OR app_name = '__IDLE__')",
+                params![start.to_string(), end.to_string()],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or_else(|error| {
+                warn!("Failed to query idle total: {error}");
+                self.mark_degraded();
+                0
+            });
+        IdleTimeTotal { seconds }
+    }
+
     fn mark_degraded(&self) {
         self.degraded.store(true, Ordering::Relaxed);
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
+    pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
         match self.conn.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
@@ -615,7 +656,14 @@ impl DataStore for SqliteStore {
 
     fn clear_all_data(&self) {
         let conn = self.lock();
-        let _ = conn.execute_batch("DELETE FROM usage_sessions; DELETE FROM page_visits;");
+        let _ = conn.execute_batch(
+            "BEGIN IMMEDIATE;
+             DELETE FROM usage_sessions;
+             DELETE FROM page_visits;
+             DELETE FROM accounting_intervals;
+             DELETE FROM accounting_metadata;
+             COMMIT;",
+        );
     }
 
     fn get_diary_entries(&self, start: NaiveDate, end: NaiveDate) -> Vec<(String, String)> {
@@ -661,23 +709,15 @@ impl DataStore for SqliteStore {
         &self,
         start: NaiveDate,
         end: NaiveDate,
-    ) -> Vec<DiaryEntryRecord> {
+    ) -> Vec<(i64, String, String, String)> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Ok(mut stmt) = conn.prepare(
-            "SELECT id, date, content, status, source, source_model FROM diary_entries
+            "SELECT id, date, content, status FROM diary_entries
              WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, id DESC",
         ) {
             if let Ok(rows) = stmt.query_map(params![start.to_string(), end.to_string()], |row| {
-                let source = row.get::<_, String>(4)?;
-                Ok(DiaryEntryRecord {
-                    id: row.get(0)?,
-                    date: row.get(1)?,
-                    content: row.get(2)?,
-                    status: row.get(3)?,
-                    source: DiarySource::from_stored(&source),
-                    source_model: row.get(5)?,
-                })
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             }) {
                 out.extend(rows.flatten());
             }
@@ -743,34 +783,6 @@ impl DataStore for SqliteStore {
         conn.last_insert_rowid()
     }
 
-    fn publish_ai_diary(
-        &self,
-        date: NaiveDate,
-        content: &str,
-        source_model: &str,
-    ) -> Result<i64, String> {
-        if content.trim().is_empty() {
-            return Err("AI diary content must not be empty".to_string());
-        }
-        if source_model.trim().is_empty() {
-            return Err("AI diary source model must not be empty".to_string());
-        }
-
-        let mut conn = self.lock();
-        let tx = conn.transaction().map_err(|e| e.to_string())?;
-        let now = Utc::now().to_rfc3339();
-        tx.execute(
-            "INSERT INTO diary_entries
-                (date, content, created_at, updated_at, status, source, source_model)
-             VALUES (?1, ?2, ?3, ?3, 'published', 'ai_generated', ?4)",
-            params![date.to_string(), content, now, source_model.trim()],
-        )
-        .map_err(|e| e.to_string())?;
-        let id = tx.last_insert_rowid();
-        tx.commit().map_err(|e| e.to_string())?;
-        Ok(id)
-    }
-
     /// The day's draft content, if any.
     fn get_diary_draft(&self, date: NaiveDate) -> Option<String> {
         let conn = self.lock();
@@ -786,23 +798,10 @@ impl DataStore for SqliteStore {
         let conn = self.lock();
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE diary_entries
-             SET content = ?1,
-                 updated_at = ?2,
-                 source = CASE
-                     WHEN source = 'ai_generated' THEN 'ai_assisted'
-                     ELSE source
-                 END
-             WHERE id = ?3",
+            "UPDATE diary_entries SET content = ?1, updated_at = ?2 WHERE id = ?3",
             params![content, now, id],
         )
-        .and_then(|changed| {
-            if changed == 0 {
-                Err(rusqlite::Error::QueryReturnedNoRows)
-            } else {
-                Ok(())
-            }
-        })
+        .map(|_| ())
         .map_err(|e| e.to_string())
     }
 
@@ -1023,6 +1022,62 @@ impl DataStore for SqliteStore {
     }
 }
 
+impl CheckpointStore for SqliteStore {
+    fn checkpoint_open_interval(
+        &self,
+        session_id: i64,
+        page_id: Option<i64>,
+        observed_at: DateTime<Utc>,
+    ) -> Result<CheckpointReceipt, String> {
+        let mut conn = self.lock();
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let session_started: String = tx
+            .query_row(
+                "SELECT started_at FROM usage_sessions WHERE id = ?1 AND ended_at IS NULL",
+                params![session_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let session_started = DateTime::parse_from_rfc3339(&session_started)
+            .map_err(|e| e.to_string())?
+            .with_timezone(&Utc);
+        let session_duration = (observed_at - session_started).num_seconds();
+        if session_duration < 0 {
+            return Err("observation predates session".into());
+        }
+        let page_duration = if let Some(page_id) = page_id {
+            let started: String = tx.query_row(
+                "SELECT started_at FROM page_visits WHERE id = ?1 AND session_id = ?2 AND ended_at IS NULL",
+                params![page_id, session_id], |row| row.get(0),
+            ).map_err(|e| e.to_string())?;
+            let started = DateTime::parse_from_rfc3339(&started)
+                .map_err(|e| e.to_string())?
+                .with_timezone(&Utc);
+            let duration = (observed_at - started).num_seconds();
+            if duration < 0 {
+                return Err("observation predates page".into());
+            }
+            Some((page_id, duration))
+        } else {
+            None
+        };
+        if tx.execute(
+            "UPDATE usage_sessions SET duration_secs = MAX(COALESCE(duration_secs, 0), ?1) WHERE id = ?2 AND ended_at IS NULL",
+            params![session_duration, session_id],
+        ).map_err(|e| e.to_string())? != 1 { return Err("session checkpoint lost".into()); }
+        if let Some((page_id, duration)) = page_duration {
+            if tx.execute(
+                "UPDATE page_visits SET duration_secs = MAX(COALESCE(duration_secs, 0), ?1) WHERE id = ?2 AND session_id = ?3 AND ended_at IS NULL",
+                params![duration, page_id, session_id],
+            ).map_err(|e| e.to_string())? != 1 { return Err("page checkpoint lost".into()); }
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(CheckpointReceipt {
+            durable_observed_through: observed_at,
+        })
+    }
+}
+
 // ── Internal helpers ──
 
 impl SqliteStore {
@@ -1054,6 +1109,7 @@ fn parse_dt(s: String) -> DateTime<Utc> {
 #[cfg(test)]
 pub struct MemoryStore {
     sessions: Mutex<Vec<SessionRecord>>,
+    summaries: Mutex<Vec<(String, NaiveDate, i64, i64)>>, // app_name, date, seconds, count
     startups: Mutex<Vec<StartupEntryRecord>>,
     metas: Mutex<Vec<AppMetaRecord>>,
     next_id: Mutex<i64>,
@@ -1064,6 +1120,7 @@ impl MemoryStore {
     pub fn new() -> Self {
         Self {
             sessions: Mutex::new(Vec::new()),
+            summaries: Mutex::new(Vec::new()),
             startups: Mutex::new(Vec::new()),
             metas: Mutex::new(Vec::new()),
             next_id: Mutex::new(1),
@@ -1268,7 +1325,7 @@ impl DataStore for MemoryStore {
         &self,
         _start: NaiveDate,
         _end: NaiveDate,
-    ) -> Vec<DiaryEntryRecord> {
+    ) -> Vec<(i64, String, String, String)> {
         vec![]
     }
 
@@ -1278,15 +1335,6 @@ impl DataStore for MemoryStore {
 
     fn publish_diary(&self, _date: NaiveDate, _content: &str) -> i64 {
         1
-    }
-
-    fn publish_ai_diary(
-        &self,
-        _date: NaiveDate,
-        _content: &str,
-        _source_model: &str,
-    ) -> Result<i64, String> {
-        Ok(1)
     }
 
     fn get_diary_draft(&self, _date: NaiveDate) -> Option<String> {
@@ -1349,6 +1397,32 @@ impl DataStore for MemoryStore {
 }
 
 #[cfg(test)]
+impl CheckpointStore for MemoryStore {
+    fn checkpoint_open_interval(
+        &self,
+        id: i64,
+        _page_id: Option<i64>,
+        observed_at: DateTime<Utc>,
+    ) -> Result<CheckpointReceipt, String> {
+        let mut sessions = Self::lock(&self.sessions);
+        let Some(session) = sessions
+            .iter_mut()
+            .find(|session| session.id == id && session.ended_at.is_none())
+        else {
+            return Err(format!("open session {id} not found"));
+        };
+        let duration = (observed_at - session.started_at).num_seconds();
+        if duration < 0 {
+            return Err("observation predates session".into());
+        }
+        session.duration_secs = Some(session.duration_secs.unwrap_or(0).max(duration));
+        Ok(CheckpointReceipt {
+            durable_observed_through: observed_at,
+        })
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Utc;
@@ -1408,18 +1482,86 @@ mod sqlite_tests {
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    fn temp_path(label: &str) -> PathBuf {
+    fn temp_store() -> SqliteStore {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
         let path =
-            std::env::temp_dir().join(format!("tt_sqlite_{label}_{}_{}.db", std::process::id(), n));
+            std::env::temp_dir().join(format!("tt_sqlite_test_{}_{}.db", std::process::id(), n));
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(&format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(&format!("{}-shm", path.display()));
-        path
+        SqliteStore::open(path).unwrap()
     }
 
-    fn temp_store() -> SqliteStore {
-        SqliteStore::open(temp_path("test")).unwrap()
+    #[test]
+    fn accounting_v1_upgrade_is_idempotent_and_preserves_existing_facts() {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!(
+            "tt_accounting_v1_upgrade_{}_{}.db",
+            std::process::id(),
+            n
+        ));
+        let _ = std::fs::remove_file(&path);
+        let observed = "2026-01-15T11:00:00+00:00";
+        {
+            let conn = Connection::open(&path).unwrap();
+            for statement in schema::ACCOUNTING_MIGRATION_V1 {
+                conn.execute_batch(statement).unwrap();
+            }
+            conn.execute(
+                "INSERT INTO accounting_schema_metadata(singleton_id, schema_version) VALUES(1, 1)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO accounting_metadata(singleton_id, observed_through) VALUES(1, ?1)",
+                params![observed],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO accounting_intervals(
+                    source_identity, source_revision, started_at, ended_at, state
+                 ) VALUES('fixture:v1', 1, '2026-01-15T10:00:00+00:00', ?1, 'active')",
+                params![observed],
+            )
+            .unwrap();
+        }
+
+        for _ in 0..2 {
+            let store = SqliteStore::open(path.clone()).unwrap();
+            let conn = store.lock();
+            let version: i32 = conn
+                .query_row(
+                    "SELECT schema_version FROM accounting_schema_metadata WHERE singleton_id = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let persisted: String = conn
+                .query_row(
+                    "SELECT observed_through FROM accounting_metadata WHERE singleton_id = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let intervals: i64 = conn
+                .query_row("SELECT COUNT(*) FROM accounting_intervals", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            let added_columns: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('accounting_metadata')
+                     WHERE name IN ('cutover_at', 'lifecycle', 'last_source_identity',
+                                    'last_source_revision', 'last_content_hash')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(version, schema::ACCOUNTING_SCHEMA_VERSION);
+            assert_eq!(persisted, observed);
+            assert_eq!(intervals, 1);
+            assert_eq!(added_columns, 5);
+        }
     }
 
     fn sess(app: &str, started: DateTime<Utc>, dur: i64, idle: bool) -> SessionRecord {
@@ -1539,132 +1681,5 @@ mod sqlite_tests {
         let code_hourly = store.get_app_hourly("code", day);
         assert_eq!(code_hourly[10], 300);
         assert_eq!(code_hourly[11], 300);
-    }
-
-    #[test]
-    fn test_diary_provenance_migration_preserves_legacy_rows_and_images() {
-        let path = temp_path("legacy_diary");
-        let legacy = Connection::open(&path).unwrap();
-        legacy
-            .execute_batch(
-                "CREATE TABLE diary_entries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL UNIQUE,
-                    content TEXT NOT NULL DEFAULT '',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE diary_images (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL,
-                    path TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                );
-                INSERT INTO diary_entries
-                    (id, date, content, created_at, updated_at)
-                VALUES
-                    (42, '2026-08-29', 'legacy diary',
-                     '2026-08-29T08:00:00Z', '2026-08-29T09:00:00Z');
-                INSERT INTO diary_images (id, date, path, created_at)
-                VALUES
-                    (7, '2026-08-29', 'legacy-image.png',
-                     '2026-08-29T08:30:00Z');",
-            )
-            .unwrap();
-        drop(legacy);
-
-        let store = SqliteStore::open(path).unwrap();
-        let day = NaiveDate::from_ymd_opt(2026, 8, 29).unwrap();
-        let entries = store.get_diary_entries_detailed(day, day);
-        assert_eq!(entries.len(), 1);
-        let entry = &entries[0];
-        assert_eq!(entry.id, 42);
-        assert_eq!(entry.date, "2026-08-29");
-        assert_eq!(entry.content, "legacy diary");
-        assert_eq!(entry.status, "published");
-        assert_eq!(entry.source, DiarySource::Manual);
-        assert_eq!(entry.source_model, None);
-
-        let conn = store.lock();
-        let timestamps: (String, String) = conn
-            .query_row(
-                "SELECT created_at, updated_at FROM diary_entries WHERE id = 42",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        assert_eq!(timestamps.0, "2026-08-29T08:00:00Z");
-        assert_eq!(timestamps.1, "2026-08-29T09:00:00Z");
-        let image: (i64, String, Option<i64>) = conn
-            .query_row(
-                "SELECT id, path, entry_id FROM diary_images WHERE id = 7",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .unwrap();
-        assert_eq!(image, (7, "legacy-image.png".to_string(), Some(42)));
-    }
-
-    #[test]
-    fn test_ai_diary_publish_and_user_edit_preserve_provenance() {
-        let store = temp_store();
-        let day = NaiveDate::from_ymd_opt(2026, 8, 30).unwrap();
-
-        let ai_id = store
-            .publish_ai_diary(day, "AI wrote this diary", "deepseek-v4-flash")
-            .unwrap();
-        let manual_id = store.add_diary_entry(day, "Handwritten diary");
-
-        let initial = store.get_diary_entries_detailed(day, day);
-        let ai = initial.iter().find(|entry| entry.id == ai_id).unwrap();
-        assert_eq!(ai.status, "published");
-        assert_eq!(ai.source, DiarySource::AiGenerated);
-        assert_eq!(ai.source_model.as_deref(), Some("deepseek-v4-flash"));
-        let manual = initial.iter().find(|entry| entry.id == manual_id).unwrap();
-        assert_eq!(manual.source, DiarySource::Manual);
-        assert_eq!(manual.source_model, None);
-
-        store
-            .update_diary_entry(ai_id, "User refined the AI diary")
-            .unwrap();
-        store
-            .update_diary_entry(manual_id, "User refined the manual diary")
-            .unwrap();
-
-        let edited = store.get_diary_entries_detailed(day, day);
-        let ai = edited.iter().find(|entry| entry.id == ai_id).unwrap();
-        assert_eq!(ai.source, DiarySource::AiAssisted);
-        assert_eq!(ai.source_model.as_deref(), Some("deepseek-v4-flash"));
-        let manual = edited.iter().find(|entry| entry.id == manual_id).unwrap();
-        assert_eq!(manual.source, DiarySource::Manual);
-        assert_eq!(manual.source_model, None);
-    }
-
-    #[test]
-    fn test_ai_diary_publish_rejects_incomplete_rows_atomically() {
-        let store = temp_store();
-        let day = NaiveDate::from_ymd_opt(2026, 8, 30).unwrap();
-
-        assert!(store.publish_ai_diary(day, "", "model").is_err());
-        assert!(store.publish_ai_diary(day, "content", "  ").is_err());
-        assert!(store.get_diary_entries_detailed(day, day).is_empty());
-
-        store
-            .lock()
-            .execute_batch(
-                "CREATE TRIGGER reject_ai_diary
-                 BEFORE INSERT ON diary_entries
-                 WHEN NEW.source = 'ai_generated'
-                 BEGIN
-                     SELECT RAISE(ABORT, 'forced storage failure');
-                 END;",
-            )
-            .unwrap();
-        assert!(
-            store
-                .publish_ai_diary(day, "valid content", "valid-model")
-                .is_err()
-        );
-        assert!(store.get_diary_entries_detailed(day, day).is_empty());
     }
 }

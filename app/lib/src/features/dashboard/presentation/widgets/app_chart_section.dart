@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
+import 'package:timetrace_app/src/core/widgets/app_icon.dart';
+import '../../../../core/format/app_identity.dart';
+import '../../../../core/widgets/terminal_app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
@@ -26,8 +30,7 @@ class AppChartSection extends StatelessWidget {
         .fold<int>(1, (m, v) => v > m ? v : m);
     final scheme = Theme.of(context).colorScheme;
 
-    return Card(
-      key: const ValueKey('dashboard-app-bars'),
+    return MaterialCard(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: LayoutBuilder(
@@ -44,14 +47,12 @@ class AppChartSection extends StatelessWidget {
                 Row(
                   children: [
                     const Text(
-                      '按应用',
+                      '应用时长',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const Spacer(),
                     Text(
-                      apps.length > count
-                          ? '前 $count / ${apps.length} 应用 · 点击柱查看会话'
-                          : '${apps.length} 应用 · 点击柱查看会话',
+                      '${apps.length} 应用 · 点击柱查看会话',
                       style: TextStyle(fontSize: 10, color: scheme.outline),
                     ),
                   ],
@@ -100,19 +101,42 @@ class AppChartSection extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      apps[i].appName,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: selected == i
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: selected == i
-                                            ? scheme.primary
-                                            : scheme.onSurfaceVariant,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        if (apps[i].exePath != null)
+                                          AppIcon(
+                                            exePath: apps[i].exePath!,
+                                            appName: apps[i].appName,
+                                            size: 18,
+                                          )
+                                        else if (isTerminalApp(apps[i].appName))
+                                          const TerminalAppIcon(size: 18)
+                                        else
+                                          Icon(
+                                            Icons.apps_rounded,
+                                            size: 16,
+                                            color: appColor(apps[i].appName),
+                                          ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            appDisplayLabel(apps[i].appName),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: selected == i
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                              color: selected == i
+                                                  ? scheme.primary
+                                                  : scheme.onSurfaceVariant,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -143,12 +167,17 @@ class _Bar extends StatelessWidget {
     final base = selected ? color : color.withValues(alpha: 0.78);
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [base.withValues(alpha: 0.55), base],
-        ),
+        color: base,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: base.withValues(alpha: 0.32),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : const [],
       ),
     );
   }

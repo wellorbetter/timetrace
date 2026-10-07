@@ -1,144 +1,88 @@
-<p align="center">
-  <img src="app/assets/icon_preview.png" width="96" alt="TimeTrace">
-</p>
+# TimeTrace
 
-<h1 align="center">TimeTrace</h1>
+An open-source desktop activity tracker and journal, built with Rust and Flutter. Review which applications you used and how long you spent in them, by hour, day, week, month, or a custom range. Basic records stay local; AI summaries are optional.
 
-<p align="center">
-  A local-first desktop activity tracker and journal
-  <br>
-  <b>Rust</b> core + <b>Flutter</b> UI · Offline by default · Optional AI
-</p>
+[中文](README.md) · [Windows preview](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1) · [All releases](https://github.com/wellorbetter/timetrace/releases) · [Issues](https://github.com/wellorbetter/timetrace/issues)
 
-<p align="center">
-  <a href="README.md">中文</a>
-  ·
-  <a href="https://github.com/wellorbetter/timetrace/releases">
-    <img src="https://img.shields.io/github/v/release/wellorbetter/timetrace" alt="Release">
-  </a>
-  ·
-  <img src="https://github.com/wellorbetter/timetrace/actions/workflows/ci.yml/badge.svg" alt="CI">
-  ·
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/wellorbetter/timetrace" alt="MIT License"></a>
-</p>
+![Calendar, data and journal workspace](docs/screenshots/v1.2-workbench.png)
 
-![TimeTrace v1.1 overview](docs/screenshots/v1.1-overview.png)
+## What's new in the v1.2 preview
 
-TimeTrace automatically records foreground applications and active time, then brings the calendar, charts, app details, and journal into one desktop workspace. Records stay on your computer by default; AI journaling is an explicit opt-in.
+The interface has been reorganized around a customizable workspace: calendar, rotating data views and journal, with task lists, Pomodoro, countdown and poetry widgets. The activity timeline lets you review applications by time segment. Timer history opens in a small dialog. Background, material, theme and settings controls have also been adjusted.
 
-<p align="center">
-  <a href="#download">Download</a> ·
-  <a href="#interface-tour">Interface tour</a> ·
-  <a href="#ai-journal-and-privacy-boundary">AI &amp; privacy</a> ·
-  <a href="#build-from-source">Build</a>
-</p>
-
-## Download
-
-Get the latest build from [GitHub Releases](https://github.com/wellorbetter/timetrace/releases/latest).
-
-| Platform | Status | How to run |
-| --- | --- | --- |
-| Windows 10/11 x64 | Stable | Download `TimeTrace-vX.Y.Z-windows-x64.zip`, extract the complete folder, and run `timetrace_app.exe` |
-| macOS | Self-use preview | Download `TimeTrace-vX.Y.Z-macos.zip`, extract it, and run `Install TimeTrace.command`; the app is not Apple-notarized yet |
+This is a **Windows preview**. Some UI details and folder-opening issues remain and are planned for follow-up fixes.
 
 ## Features
 
-- **Automatic tracking** — records foreground apps, window titles, and active time while excluding idle, locked, and suspended periods
-- **Calendar and overview** — calendar-linked bar, donut, hourly, daily summary, app ranking, and history views
-- **Local journal** — Markdown editing, image albums, draft persistence, and date-based organization beside the day's activity facts
-- **AI journal (optional)** — works with DeepSeek and OpenAI-compatible Chat Completions endpoints, with configurable models, writing preferences, and a daily schedule
-- **Desktop experience** — system tray, startup/minimize behavior, excluded apps, light/dark themes, fonts, backgrounds, and overview layout controls
-- **Data control** — choose the database folder, export CSV, pause tracking, or delete all local data
+- Activity statistics: time ranges, bar and pie charts, application details and hourly distribution.
+- Timeline: review applications and durations by time segment.
+- Local journal: Markdown, images and optional AI summaries.
+- Workspace widgets: tasks, Pomodoro, countdown and poetry.
+- Desktop preferences: background, theme, fonts, materials, tray, startup and excluded applications.
 
-## Interface tour
+## Screenshots
 
-### One calendar, five synchronized views
+### Activity timeline
 
-Select a date and the right-hand carousel stays in sync across the application bars shown in the hero image, usage share, daily summary, application details, and 24-hour distribution—without sending you through separate pages.
+![Activity timeline](docs/screenshots/v1.2-time-flow.png)
 
-| Usage share | Daily summary |
-| --- | --- |
-| ![Application usage share](docs/screenshots/v1.1-share.png) | ![Daily activity summary](docs/screenshots/v1.1-daily-summary.png) |
-| Application details | 24-hour distribution |
-| ![Application list and durations](docs/screenshots/v1.1-app-list.png) | ![Hourly usage](docs/screenshots/v1.1-hourly.png) |
+### Daily activity summary
 
-### The journal lives beside the day's facts
+![Daily summary](docs/screenshots/v1.2-usage-summary.png)
 
-Scroll down from the overview to write Markdown, attach images, or ask AI to draft an editable journal entry from that day's factual activity. Generated entries retain their model provenance instead of pretending to be handwritten.
+### Application details and hourly distribution
 
-![Journal editor and AI-generated entry](docs/screenshots/v1.1-ai-diary.png)
+![Application details](docs/screenshots/v1.2-app-details.png)
 
-### Make the workspace yours
+![Hourly distribution](docs/screenshots/v1.2-hourly.png)
 
-| Theme, font, background, and opacity | Carousel visibility and ordering |
-| --- | --- |
-| ![Appearance and background settings](docs/screenshots/v1.1-appearance.png) | ![Overview layout settings](docs/screenshots/v1.1-layout.png) |
+### Expanded timeline records
 
-### AI is configurable, not a black box
+![Timeline details](docs/screenshots/v1.2-time-flow-details.png)
 
-Control the model endpoint, model name, API-key environment variable, writing voice, reflection and suggestion rules, access to existing journals, and manual or scheduled generation independently.
+### AI summary preview
 
-| Model service and connection check | Writing and generation controls |
-| --- | --- |
-| ![AI model settings](docs/screenshots/v1.1-ai-settings.png) | ![AI writing and schedule settings](docs/screenshots/v1.1-ai-writing.png) |
+![AI summary](docs/screenshots/v1.2-ai-summary.png)
 
-### Background behavior and data remain under your control
+### Appearance settings
 
-| Polling, idle threshold, tray, and startup | Data folder, export, and deletion |
-| --- | --- |
-| ![Tracking and background settings](docs/screenshots/v1.1-monitoring.png) | ![Local data management with username redacted](docs/screenshots/v1.1-data-redacted.png) |
+![Theme, language and fonts](docs/screenshots/v1.2-appearance.png)
 
-## AI journal and privacy boundary
+The owner selected these screenshots to show the current Windows interface. The wallpaper is user-selected and is not bundled as a default.
 
-AI journaling is off by default. While it is off, TimeTrace does not contact a model service or send usage records or journal text.
+## Download
 
-When you opt in and generate an entry, TimeTrace sends the configured endpoint only the selected day's necessary usage facts: aggregate active/idle time, session and context-switch counts, peak time, top applications, and a bounded usage history. Window titles, file paths, and raw events are excluded. Existing journal text is also excluded unless you separately enable “Allow existing journal entries.”
+Get `TimeTrace-v1.2.0-preview.1-windows-x64.zip` from the [preview release](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1), extract the complete archive and run `Release/timetrace_app.exe`. Windows 10 / 11 x64.
 
-The API key comes from a system environment variable that you name; TimeTrace stores the variable name, not the key. The connection test sends no TimeTrace data. Your configured model provider's privacy policy and pricing still apply.
+Exit the old version and back up your records before updating. Do not run multiple recording instances.
 
-## Local data
+There is no new macOS build in this release. Historical macOS packages do not validate the current interface.
 
-The SQLite database can contain application names, executable paths, window titles, usage sessions, and journal entries. Its default location is:
+## Privacy
 
-- Windows: `%APPDATA%\TimeTrace\time.db`
-- macOS: `~/Library/Application Support/TimeTrace/time.db`
+Basic activity records and journals are stored locally, without requiring an account. When enabled and triggered, AI summaries send necessary content to your configured model service, subject to its privacy policy and pricing. Statistics and local journaling work without AI. Poetry may access a public service, so this is not a completely offline application.
 
-Installing or starting TimeTrace does not automatically upload this local data. Treat the database and journal images as private data and back them up accordingly.
+Databases, journal images, executable paths and window titles may contain private information. Back them up and do not include keys or private records in issue reports.
 
-## Build from source
+## Source and build
 
-### Windows
+This version was developed from an earlier baseline, and the current interface has been merged into main. The [v1.2.0-preview.1 tag](https://github.com/wellorbetter/timetrace/tree/v1.2.0-preview.1) retains the source corresponding to the published package. Use that tag to reproduce the package; the release branch also retains its source and documentation.
 
-Requirements: Flutter stable, Rust stable, and Visual Studio 2022 with Desktop development with C++.
+Windows builds require Flutter, Rust and Visual Studio with Desktop development with C++:
 
 ```powershell
-cargo test --workspace
+git switch --detach v1.2.0-preview.1
 cd app
 flutter pub get
-flutter analyze --no-fatal-infos
-flutter test
-flutter build windows --release
+flutter build windows --release --no-tree-shake-icons
 ```
 
-### macOS
-
-Requirements: Flutter stable, Rust stable, and Xcode Command Line Tools.
-
-```bash
-cargo test -p timetrace-core -p timetrace-bridge
-chmod +x scripts/build_macos.sh
-./scripts/build_macos.sh
-```
-
-## Architecture
-
-| Module | Description |
+| Module | Responsibility |
 | --- | --- |
-| `crates/core` | Cross-platform tracking, idle detection, session aggregation, and SQLite storage |
-| `bridge` | `flutter_rust_bridge` bindings |
-| `app/` | Flutter desktop UI (Riverpod + Material 3) |
+| `crates/core` | Activity tracking and SQLite storage |
+| `bridge` | Rust / Flutter bindings |
+| `app` | Flutter desktop interface |
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party components retain their licenses. The personal wallpaper shown in screenshots is not distributed as a reusable default asset.

@@ -100,46 +100,79 @@ pub trait EventSource: Send {
 ///
 /// Dropping this handle signals the source to stop.
 /// Use `pause()` / `resume()` for temporary suspension without full teardown.
+pub(crate) enum MonitorCommand {
+    SetPaused { paused: bool, ack: std::sync::mpsc::Sender<bool> },
+    Stop { ack: std::sync::mpsc::Sender<bool> },
+}
+
 pub struct EventSourceHandle {
-    stop_tx: std::sync::mpsc::Sender<()>,
+    control_tx: std::sync::mpsc::Sender<MonitorCommand>,
     hook_stop_tx: std::sync::mpsc::Sender<()>,
-    pause_tx: std::sync::mpsc::Sender<bool>,
+    monitor_join: Option<std::thread::JoinHandle<()>>,
+    hook_join: Option<std::thread::JoinHandle<()>>,
 }
 
 impl EventSourceHandle {
-    pub fn new(
-        stop_tx: std::sync::mpsc::Sender<()>,
-        pause_tx: std::sync::mpsc::Sender<bool>,
+    pub(crate) fn new(
+        control_tx: std::sync::mpsc::Sender<MonitorCommand>,
         hook_stop_tx: std::sync::mpsc::Sender<()>,
+        monitor_join: std::thread::JoinHandle<()>,
+        hook_join: std::thread::JoinHandle<()>,
     ) -> Self {
-        Self { stop_tx, hook_stop_tx, pause_tx }
+        Self { control_tx, hook_stop_tx, monitor_join: Some(monitor_join), hook_join: Some(hook_join) }
+    }
+
+    fn shutdown(&mut self) -> bool {
+        if self.monitor_join.is_none() && self.hook_join.is_none() { return true; }
+        let (ack_tx, ack_rx) = std::sync::mpsc::channel();
+        let sent = self.control_tx.send(MonitorCommand::Stop { ack: ack_tx }).is_ok();
+        let _ = self.hook_stop_tx.send(());
+        let fenced = sent && ack_rx.recv().unwrap_or(false);
+        let monitor_ok = self.monitor_join.take().map_or(true, |join| join.join().is_ok());
+        let hook_ok = self.hook_join.take().map_or(true, |join| join.join().is_ok());
+        fenced && monitor_ok && hook_ok
     }
 
     /// Signal the event source to stop permanently.
-    pub fn stop(self) {
-        let _ = self.stop_tx.send(());
-        let _ = self.hook_stop_tx.send(());
+    pub fn stop(mut self) -> bool {
+        self.shutdown()
     }
 
     /// Pause event production (tracking suspended).
-    pub fn pause(&self) {
-        let _ = self.pause_tx.send(true);
+    pub fn pause(&self) -> bool {
+        self.set_paused(true)
     }
 
     /// Resume event production.
-    pub fn resume(&self) {
-        let _ = self.pause_tx.send(false);
+    pub fn resume(&self) -> bool {
+        self.set_paused(false)
+    }
+
+    fn set_paused(&self, paused: bool) -> bool {
+        let (ack_tx, ack_rx) = std::sync::mpsc::channel();
+        self.control_tx.send(MonitorCommand::SetPaused { paused, ack: ack_tx }).is_ok()
+            && ack_rx.recv().unwrap_or(false)
     }
 }
 
 impl Drop for EventSourceHandle {
     fn drop(&mut self) {
-        let _ = self.stop_tx.send(());
-        let _ = self.hook_stop_tx.send(());
+        let _ = self.shutdown();
     }
 }
 
 /// Consumes `TrackedEvent`s — typically writes to storage.
 pub trait EventSink: Send {
     fn accept(&mut self, event: TrackedEvent);
+
+    /// A successful observation heartbeat. P0 adapts this explicit contract
+    /// to the existing aggregator's same-app path; consumers must never call
+    /// it when foreground resolution failed.
+    fn observation_checkpoint(&mut self, current: AppInfo, timestamp: chrono::DateTime<chrono::Utc>) {
+        self.accept(TrackedEvent::AppSwitched {
+            previous: Some(current.clone()),
+            current,
+            timestamp,
+        });
+    }
 }

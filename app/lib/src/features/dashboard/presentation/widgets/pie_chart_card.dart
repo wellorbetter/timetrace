@@ -1,12 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
 import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
-/// Original Overview donut — top five apps plus an aggregated "其他" slice.
-/// Compact center text and a one-line legend prevent the chart from becoming
-/// cramped when the selected range contains many applications.
+/// Donut chart — top 5 apps + aggregated 其他 (no tiny-slice seams).
+/// Compact center text, legend matches slices exactly.
 class PieChartCard extends StatelessWidget {
   const PieChartCard({required this.apps, super.key});
 
@@ -16,28 +16,27 @@ class PieChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final total = apps
-        .fold<int>(0, (sum, app) => sum + app.activeSeconds)
+        .fold<int>(0, (s, a) => s + a.activeSeconds)
         .clamp(1, 1 << 62);
-    final top = apps.take(5).toList(growable: false);
-    final restSeconds = apps
-        .skip(5)
-        .fold<int>(0, (sum, app) => sum + app.activeSeconds);
+    final top = apps.take(5).toList();
+    final rest = apps.skip(5).toList();
+    final restSec = rest.fold<int>(0, (s, a) => s + a.activeSeconds);
 
-    return Card(
-      key: const ValueKey('dashboard-app-share'),
+    return MaterialCard(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final legendRows = top.length + (restSeconds > 0 ? 1 : 0);
-            final legendHeight = legendRows * 18.0;
-            final reserved = 12.0 * 2 + 20.0 + 8.0 + 8.0 + legendHeight + 4.0;
+            final legendRows = top.length + (restSec > 0 ? 1 : 0);
+            final legendH = legendRows * 18.0;
+            // Reserve title, gap, divider, legend rows and vertical padding
+            // for the donut; shrink it so it never overlaps the legend.
+            final reserved = 12.0 * 2 + 20.0 + 8.0 + 8.0 + legendH + 4.0;
             final diameter = (constraints.maxHeight - reserved)
                 .clamp(90.0, 160.0)
                 .toDouble();
             final centerSpaceRadius = diameter * 0.31;
             final radius = diameter / 2 - centerSpaceRadius;
-
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -45,8 +44,9 @@ class PieChartCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Expanded(
                   child: Center(
-                    child: SizedBox.square(
-                      dimension: diameter,
+                    child: SizedBox(
+                      width: diameter,
+                      height: diameter,
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -65,9 +65,9 @@ class PieChartCard extends StatelessWidget {
                                     title: '',
                                     showTitle: false,
                                   ),
-                                if (restSeconds > 0)
+                                if (restSec > 0)
                                   PieChartSectionData(
-                                    value: restSeconds.toDouble(),
+                                    value: restSec.toDouble(),
                                     color: scheme.surfaceContainerHighest,
                                     radius: radius,
                                     title: '',
@@ -105,6 +105,7 @@ class PieChartCard extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 8),
+                // Legend — top 5 + 其他
                 for (final app in top)
                   SizedBox(
                     height: 18,
@@ -120,14 +121,10 @@ class PieChartCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Tooltip(
-                            message: app.appName,
-                            child: Text(
-                              app.appName,
-                              style: const TextStyle(fontSize: 11),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          child: Text(
+                            app.appName,
+                            style: const TextStyle(fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Text(
@@ -142,7 +139,7 @@ class PieChartCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                if (restSeconds > 0)
+                if (restSec > 0)
                   SizedBox(
                     height: 18,
                     child: Row(
@@ -157,10 +154,14 @@ class PieChartCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         const Expanded(
-                          child: Text('其他', style: TextStyle(fontSize: 11)),
+                          child: Text(
+                            '其他',
+                            style: TextStyle(fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         Text(
-                          '${(restSeconds / total * 100).round()}%',
+                          '${(restSec / total * 100).round()}%',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,

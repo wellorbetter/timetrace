@@ -30,7 +30,6 @@ pub const CREATE_TABLES: &[&str] = &[
     )",
     "CREATE INDEX IF NOT EXISTS idx_sessions_date ON usage_sessions(date)",
     "CREATE INDEX IF NOT EXISTS idx_sessions_app_date ON usage_sessions(app_name, date)",
-
     // Page-level visits within a session (window title segments)
     "CREATE TABLE IF NOT EXISTS page_visits (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +42,6 @@ pub const CREATE_TABLES: &[&str] = &[
         date            TEXT    NOT NULL
     )",
     "CREATE INDEX IF NOT EXISTS idx_page_visits_app ON page_visits(app_name, date)",
-
     // Daily diary / journal entries (multiple per day allowed)
     "CREATE TABLE IF NOT EXISTS diary_entries (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,14 +49,10 @@ pub const CREATE_TABLES: &[&str] = &[
         content         TEXT    NOT NULL DEFAULT '',
         created_at      TEXT    NOT NULL,
         updated_at      TEXT    NOT NULL,
-        status          TEXT    NOT NULL DEFAULT 'published',
-        source          TEXT    NOT NULL DEFAULT 'manual'
-                                CHECK(source IN ('manual', 'ai_generated', 'ai_assisted')),
-        source_model    TEXT
+        status          TEXT    NOT NULL DEFAULT 'published'
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_entries_date_id ON diary_entries(date, id)",
-
     // Diary images (stackable per day, overlaid on calendar cells).
     // entry_id links an image to a specific diary entry (nullable: staged
     // uploads before publish).
@@ -70,6 +64,44 @@ pub const CREATE_TABLES: &[&str] = &[
         entry_id        INTEGER
     )",
     "CREATE INDEX IF NOT EXISTS idx_diary_images_date ON diary_images(date)",
+];
+
+/// Accounting schema has its own version domain. The migration runner executes
+/// these statements and its version marker in one IMMEDIATE transaction.
+pub const ACCOUNTING_SCHEMA_VERSION: i32 = 2;
+pub const ACCOUNTING_MIGRATION_V1: &[&str] = &[
+    "CREATE TABLE IF NOT EXISTS accounting_schema_metadata (
+        singleton_id        INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+        schema_version      INTEGER NOT NULL
+    )",
+    "CREATE TABLE IF NOT EXISTS accounting_intervals (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_identity     TEXT    NOT NULL,
+        source_revision     INTEGER NOT NULL,
+        started_at          TEXT    NOT NULL,
+        ended_at            TEXT    NOT NULL,
+        state               TEXT    NOT NULL,
+        app_id              TEXT,
+        window_id           TEXT,
+        window_app_id       TEXT,
+        page_id             TEXT,
+        page_window_id      TEXT,
+        UNIQUE(source_identity, source_revision, started_at, ended_at, state)
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_accounting_intervals_range
+        ON accounting_intervals(started_at, ended_at)",
+    "CREATE TABLE IF NOT EXISTS accounting_metadata (
+        singleton_id        INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+        observed_through    TEXT NOT NULL
+    )",
+];
+
+pub const ACCOUNTING_MIGRATION_V2: &[&str] = &[
+    "ALTER TABLE accounting_metadata ADD COLUMN cutover_at TEXT",
+    "ALTER TABLE accounting_metadata ADD COLUMN lifecycle TEXT",
+    "ALTER TABLE accounting_metadata ADD COLUMN last_source_identity TEXT",
+    "ALTER TABLE accounting_metadata ADD COLUMN last_source_revision INTEGER",
+    "ALTER TABLE accounting_metadata ADD COLUMN last_content_hash TEXT",
 ];
 
 /// One-time migration for databases created before multi-entry diaries:
@@ -85,8 +117,7 @@ pub const MIGRATIONS: &[&str] = &[
         updated_at      TEXT    NOT NULL
     )",
     "INSERT OR IGNORE INTO diary_entries_v2 (id, date, content, created_at, updated_at)
-     SELECT id, date, content, COALESCE(created_at, date || 'T00:00:00'),
-            COALESCE(updated_at, created_at, date || 'T00:00:00')
+     SELECT id, date, content, COALESCE(updated_at, date || 'T00:00:00'), updated_at
      FROM diary_entries",
     "DROP TABLE diary_entries",
     "ALTER TABLE diary_entries_v2 RENAME TO diary_entries",
@@ -104,23 +135,14 @@ pub const MIGRATIONS_V2: &[&str] = &[
 ];
 
 /// Migration 3: diary_entries.status — add column, existing rows are published.
-pub const MIGRATIONS_V3: &[&str] = &[
-    "ALTER TABLE diary_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'published'",
-];
-
-/// Migration 4: structured diary provenance. Existing entries are handwritten
-/// and therefore backfill to `manual`; model metadata is intentionally nullable.
-pub const MIGRATIONS_V4: &[&str] = &[
-    "ALTER TABLE diary_entries ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'
-        CHECK(source IN ('manual', 'ai_generated', 'ai_assisted'))",
-    "ALTER TABLE diary_entries ADD COLUMN source_model TEXT",
-];
+pub const MIGRATIONS_V3: &[&str] =
+    &["ALTER TABLE diary_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'published'"];
 
 /// Enable WAL mode and set pragmas for performance.
 pub const PRAGMAS: &[&str] = &[
     "PRAGMA journal_mode = WAL",
     "PRAGMA synchronous = NORMAL",
     "PRAGMA foreign_keys = ON",
-    "PRAGMA cache_size = -8000",       // 8 MB cache
+    "PRAGMA cache_size = -8000", // 8 MB cache
     "PRAGMA busy_timeout = 5000",
 ];

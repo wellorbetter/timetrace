@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DashboardState {
 
- List<AppUsageItem> get apps; int get totalActiveSeconds; int get totalIdleSeconds; int get lifetimeSeconds; int get thisWeekSeconds; int get lastWeekSeconds; bool get databaseDegraded; String? get since;
+ List<AppUsageItem> get apps; List<AttributionTotalDto> get appAttribution; List<AttributionTotalDto> get windows; List<AttributionTotalDto> get pages; List<LocalHourBucketDto> get hours; int get totalActiveSeconds; int get totalIdleSeconds; int get pausedSeconds; int get privacyExcludedSeconds; int get systemGapSeconds; int get unknownSeconds; int get accountedSeconds; SnapshotIntegrityDto get integrity; String get requestedStartUtc; String get requestedEndUtc; String get effectiveStartUtc; String get effectiveEndUtc; String get observedThroughUtc; bool get databaseDegraded;
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $DashboardStateCopyWith<DashboardState> get copyWith => _$DashboardStateCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardState&&const DeepCollectionEquality().equals(other.apps, apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded)&&(identical(other.since, since) || other.since == since));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardState&&const DeepCollectionEquality().equals(other.apps, apps)&&const DeepCollectionEquality().equals(other.appAttribution, appAttribution)&&const DeepCollectionEquality().equals(other.windows, windows)&&const DeepCollectionEquality().equals(other.pages, pages)&&const DeepCollectionEquality().equals(other.hours, hours)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.pausedSeconds, pausedSeconds) || other.pausedSeconds == pausedSeconds)&&(identical(other.privacyExcludedSeconds, privacyExcludedSeconds) || other.privacyExcludedSeconds == privacyExcludedSeconds)&&(identical(other.systemGapSeconds, systemGapSeconds) || other.systemGapSeconds == systemGapSeconds)&&(identical(other.unknownSeconds, unknownSeconds) || other.unknownSeconds == unknownSeconds)&&(identical(other.accountedSeconds, accountedSeconds) || other.accountedSeconds == accountedSeconds)&&(identical(other.integrity, integrity) || other.integrity == integrity)&&(identical(other.requestedStartUtc, requestedStartUtc) || other.requestedStartUtc == requestedStartUtc)&&(identical(other.requestedEndUtc, requestedEndUtc) || other.requestedEndUtc == requestedEndUtc)&&(identical(other.effectiveStartUtc, effectiveStartUtc) || other.effectiveStartUtc == effectiveStartUtc)&&(identical(other.effectiveEndUtc, effectiveEndUtc) || other.effectiveEndUtc == effectiveEndUtc)&&(identical(other.observedThroughUtc, observedThroughUtc) || other.observedThroughUtc == observedThroughUtc)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,databaseDegraded,since);
+int get hashCode => Object.hashAll([runtimeType,const DeepCollectionEquality().hash(apps),const DeepCollectionEquality().hash(appAttribution),const DeepCollectionEquality().hash(windows),const DeepCollectionEquality().hash(pages),const DeepCollectionEquality().hash(hours),totalActiveSeconds,totalIdleSeconds,pausedSeconds,privacyExcludedSeconds,systemGapSeconds,unknownSeconds,accountedSeconds,integrity,requestedStartUtc,requestedEndUtc,effectiveStartUtc,effectiveEndUtc,observedThroughUtc,databaseDegraded]);
 
 @override
 String toString() {
-  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, databaseDegraded: $databaseDegraded, since: $since)';
+  return 'DashboardState(apps: $apps, appAttribution: $appAttribution, windows: $windows, pages: $pages, hours: $hours, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, pausedSeconds: $pausedSeconds, privacyExcludedSeconds: $privacyExcludedSeconds, systemGapSeconds: $systemGapSeconds, unknownSeconds: $unknownSeconds, accountedSeconds: $accountedSeconds, integrity: $integrity, requestedStartUtc: $requestedStartUtc, requestedEndUtc: $requestedEndUtc, effectiveStartUtc: $effectiveStartUtc, effectiveEndUtc: $effectiveEndUtc, observedThroughUtc: $observedThroughUtc, databaseDegraded: $databaseDegraded)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $DashboardStateCopyWith<$Res>  {
   factory $DashboardStateCopyWith(DashboardState value, $Res Function(DashboardState) _then) = _$DashboardStateCopyWithImpl;
 @useResult
 $Res call({
- List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, bool databaseDegraded, String? since
+ List<AppUsageItem> apps, List<AttributionTotalDto> appAttribution, List<AttributionTotalDto> windows, List<AttributionTotalDto> pages, List<LocalHourBucketDto> hours, int totalActiveSeconds, int totalIdleSeconds, int pausedSeconds, int privacyExcludedSeconds, int systemGapSeconds, int unknownSeconds, int accountedSeconds, SnapshotIntegrityDto integrity, String requestedStartUtc, String requestedEndUtc, String effectiveStartUtc, String effectiveEndUtc, String observedThroughUtc, bool databaseDegraded
 });
 
 
@@ -62,17 +62,28 @@ class _$DashboardStateCopyWithImpl<$Res>
 
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? databaseDegraded = null,Object? since = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? apps = null,Object? appAttribution = null,Object? windows = null,Object? pages = null,Object? hours = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? pausedSeconds = null,Object? privacyExcludedSeconds = null,Object? systemGapSeconds = null,Object? unknownSeconds = null,Object? accountedSeconds = null,Object? integrity = null,Object? requestedStartUtc = null,Object? requestedEndUtc = null,Object? effectiveStartUtc = null,Object? effectiveEndUtc = null,Object? observedThroughUtc = null,Object? databaseDegraded = null,}) {
   return _then(_self.copyWith(
 apps: null == apps ? _self.apps : apps // ignore: cast_nullable_to_non_nullable
-as List<AppUsageItem>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
+as List<AppUsageItem>,appAttribution: null == appAttribution ? _self.appAttribution : appAttribution // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,windows: null == windows ? _self.windows : windows // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,pages: null == pages ? _self.pages : pages // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,hours: null == hours ? _self.hours : hours // ignore: cast_nullable_to_non_nullable
+as List<LocalHourBucketDto>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
 as int,totalIdleSeconds: null == totalIdleSeconds ? _self.totalIdleSeconds : totalIdleSeconds // ignore: cast_nullable_to_non_nullable
-as int,lifetimeSeconds: null == lifetimeSeconds ? _self.lifetimeSeconds : lifetimeSeconds // ignore: cast_nullable_to_non_nullable
-as int,thisWeekSeconds: null == thisWeekSeconds ? _self.thisWeekSeconds : thisWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,lastWeekSeconds: null == lastWeekSeconds ? _self.lastWeekSeconds : lastWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
-as bool,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
-as String?,
+as int,pausedSeconds: null == pausedSeconds ? _self.pausedSeconds : pausedSeconds // ignore: cast_nullable_to_non_nullable
+as int,privacyExcludedSeconds: null == privacyExcludedSeconds ? _self.privacyExcludedSeconds : privacyExcludedSeconds // ignore: cast_nullable_to_non_nullable
+as int,systemGapSeconds: null == systemGapSeconds ? _self.systemGapSeconds : systemGapSeconds // ignore: cast_nullable_to_non_nullable
+as int,unknownSeconds: null == unknownSeconds ? _self.unknownSeconds : unknownSeconds // ignore: cast_nullable_to_non_nullable
+as int,accountedSeconds: null == accountedSeconds ? _self.accountedSeconds : accountedSeconds // ignore: cast_nullable_to_non_nullable
+as int,integrity: null == integrity ? _self.integrity : integrity // ignore: cast_nullable_to_non_nullable
+as SnapshotIntegrityDto,requestedStartUtc: null == requestedStartUtc ? _self.requestedStartUtc : requestedStartUtc // ignore: cast_nullable_to_non_nullable
+as String,requestedEndUtc: null == requestedEndUtc ? _self.requestedEndUtc : requestedEndUtc // ignore: cast_nullable_to_non_nullable
+as String,effectiveStartUtc: null == effectiveStartUtc ? _self.effectiveStartUtc : effectiveStartUtc // ignore: cast_nullable_to_non_nullable
+as String,effectiveEndUtc: null == effectiveEndUtc ? _self.effectiveEndUtc : effectiveEndUtc // ignore: cast_nullable_to_non_nullable
+as String,observedThroughUtc: null == observedThroughUtc ? _self.observedThroughUtc : observedThroughUtc // ignore: cast_nullable_to_non_nullable
+as String,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -157,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  List<AttributionTotalDto> appAttribution,  List<AttributionTotalDto> windows,  List<AttributionTotalDto> pages,  List<LocalHourBucketDto> hours,  int totalActiveSeconds,  int totalIdleSeconds,  int pausedSeconds,  int privacyExcludedSeconds,  int systemGapSeconds,  int unknownSeconds,  int accountedSeconds,  SnapshotIntegrityDto integrity,  String requestedStartUtc,  String requestedEndUtc,  String effectiveStartUtc,  String effectiveEndUtc,  String observedThroughUtc,  bool databaseDegraded)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DashboardState() when $default != null:
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
+return $default(_that.apps,_that.appAttribution,_that.windows,_that.pages,_that.hours,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.pausedSeconds,_that.privacyExcludedSeconds,_that.systemGapSeconds,_that.unknownSeconds,_that.accountedSeconds,_that.integrity,_that.requestedStartUtc,_that.requestedEndUtc,_that.effectiveStartUtc,_that.effectiveEndUtc,_that.observedThroughUtc,_that.databaseDegraded);case _:
   return orElse();
 
 }
@@ -178,10 +189,10 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<AppUsageItem> apps,  List<AttributionTotalDto> appAttribution,  List<AttributionTotalDto> windows,  List<AttributionTotalDto> pages,  List<LocalHourBucketDto> hours,  int totalActiveSeconds,  int totalIdleSeconds,  int pausedSeconds,  int privacyExcludedSeconds,  int systemGapSeconds,  int unknownSeconds,  int accountedSeconds,  SnapshotIntegrityDto integrity,  String requestedStartUtc,  String requestedEndUtc,  String effectiveStartUtc,  String effectiveEndUtc,  String observedThroughUtc,  bool databaseDegraded)  $default,) {final _that = this;
 switch (_that) {
 case _DashboardState():
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
+return $default(_that.apps,_that.appAttribution,_that.windows,_that.pages,_that.hours,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.pausedSeconds,_that.privacyExcludedSeconds,_that.systemGapSeconds,_that.unknownSeconds,_that.accountedSeconds,_that.integrity,_that.requestedStartUtc,_that.requestedEndUtc,_that.effectiveStartUtc,_that.effectiveEndUtc,_that.observedThroughUtc,_that.databaseDegraded);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -198,10 +209,10 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<AppUsageItem> apps,  int totalActiveSeconds,  int totalIdleSeconds,  int lifetimeSeconds,  int thisWeekSeconds,  int lastWeekSeconds,  bool databaseDegraded,  String? since)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<AppUsageItem> apps,  List<AttributionTotalDto> appAttribution,  List<AttributionTotalDto> windows,  List<AttributionTotalDto> pages,  List<LocalHourBucketDto> hours,  int totalActiveSeconds,  int totalIdleSeconds,  int pausedSeconds,  int privacyExcludedSeconds,  int systemGapSeconds,  int unknownSeconds,  int accountedSeconds,  SnapshotIntegrityDto integrity,  String requestedStartUtc,  String requestedEndUtc,  String effectiveStartUtc,  String effectiveEndUtc,  String observedThroughUtc,  bool databaseDegraded)?  $default,) {final _that = this;
 switch (_that) {
 case _DashboardState() when $default != null:
-return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.lifetimeSeconds,_that.thisWeekSeconds,_that.lastWeekSeconds,_that.databaseDegraded,_that.since);case _:
+return $default(_that.apps,_that.appAttribution,_that.windows,_that.pages,_that.hours,_that.totalActiveSeconds,_that.totalIdleSeconds,_that.pausedSeconds,_that.privacyExcludedSeconds,_that.systemGapSeconds,_that.unknownSeconds,_that.accountedSeconds,_that.integrity,_that.requestedStartUtc,_that.requestedEndUtc,_that.effectiveStartUtc,_that.effectiveEndUtc,_that.observedThroughUtc,_that.databaseDegraded);case _:
   return null;
 
 }
@@ -213,7 +224,7 @@ return $default(_that.apps,_that.totalActiveSeconds,_that.totalIdleSeconds,_that
 
 
 class _DashboardState extends DashboardState {
-  const _DashboardState({required final  List<AppUsageItem> apps, required this.totalActiveSeconds, required this.totalIdleSeconds, required this.lifetimeSeconds, this.thisWeekSeconds = 0, this.lastWeekSeconds = 0, this.databaseDegraded = false, this.since}): _apps = apps,super._();
+  const _DashboardState({required final  List<AppUsageItem> apps, required final  List<AttributionTotalDto> appAttribution, required final  List<AttributionTotalDto> windows, required final  List<AttributionTotalDto> pages, required final  List<LocalHourBucketDto> hours, required this.totalActiveSeconds, required this.totalIdleSeconds, required this.pausedSeconds, required this.privacyExcludedSeconds, required this.systemGapSeconds, required this.unknownSeconds, required this.accountedSeconds, required this.integrity, required this.requestedStartUtc, required this.requestedEndUtc, required this.effectiveStartUtc, required this.effectiveEndUtc, required this.observedThroughUtc, this.databaseDegraded = false}): _apps = apps,_appAttribution = appAttribution,_windows = windows,_pages = pages,_hours = hours,super._();
   
 
  final  List<AppUsageItem> _apps;
@@ -223,13 +234,48 @@ class _DashboardState extends DashboardState {
   return EqualUnmodifiableListView(_apps);
 }
 
+ final  List<AttributionTotalDto> _appAttribution;
+@override List<AttributionTotalDto> get appAttribution {
+  if (_appAttribution is EqualUnmodifiableListView) return _appAttribution;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_appAttribution);
+}
+
+ final  List<AttributionTotalDto> _windows;
+@override List<AttributionTotalDto> get windows {
+  if (_windows is EqualUnmodifiableListView) return _windows;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_windows);
+}
+
+ final  List<AttributionTotalDto> _pages;
+@override List<AttributionTotalDto> get pages {
+  if (_pages is EqualUnmodifiableListView) return _pages;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_pages);
+}
+
+ final  List<LocalHourBucketDto> _hours;
+@override List<LocalHourBucketDto> get hours {
+  if (_hours is EqualUnmodifiableListView) return _hours;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_hours);
+}
+
 @override final  int totalActiveSeconds;
 @override final  int totalIdleSeconds;
-@override final  int lifetimeSeconds;
-@override@JsonKey() final  int thisWeekSeconds;
-@override@JsonKey() final  int lastWeekSeconds;
+@override final  int pausedSeconds;
+@override final  int privacyExcludedSeconds;
+@override final  int systemGapSeconds;
+@override final  int unknownSeconds;
+@override final  int accountedSeconds;
+@override final  SnapshotIntegrityDto integrity;
+@override final  String requestedStartUtc;
+@override final  String requestedEndUtc;
+@override final  String effectiveStartUtc;
+@override final  String effectiveEndUtc;
+@override final  String observedThroughUtc;
 @override@JsonKey() final  bool databaseDegraded;
-@override final  String? since;
 
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +287,16 @@ _$DashboardStateCopyWith<_DashboardState> get copyWith => __$DashboardStateCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardState&&const DeepCollectionEquality().equals(other._apps, _apps)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.lifetimeSeconds, lifetimeSeconds) || other.lifetimeSeconds == lifetimeSeconds)&&(identical(other.thisWeekSeconds, thisWeekSeconds) || other.thisWeekSeconds == thisWeekSeconds)&&(identical(other.lastWeekSeconds, lastWeekSeconds) || other.lastWeekSeconds == lastWeekSeconds)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded)&&(identical(other.since, since) || other.since == since));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardState&&const DeepCollectionEquality().equals(other._apps, _apps)&&const DeepCollectionEquality().equals(other._appAttribution, _appAttribution)&&const DeepCollectionEquality().equals(other._windows, _windows)&&const DeepCollectionEquality().equals(other._pages, _pages)&&const DeepCollectionEquality().equals(other._hours, _hours)&&(identical(other.totalActiveSeconds, totalActiveSeconds) || other.totalActiveSeconds == totalActiveSeconds)&&(identical(other.totalIdleSeconds, totalIdleSeconds) || other.totalIdleSeconds == totalIdleSeconds)&&(identical(other.pausedSeconds, pausedSeconds) || other.pausedSeconds == pausedSeconds)&&(identical(other.privacyExcludedSeconds, privacyExcludedSeconds) || other.privacyExcludedSeconds == privacyExcludedSeconds)&&(identical(other.systemGapSeconds, systemGapSeconds) || other.systemGapSeconds == systemGapSeconds)&&(identical(other.unknownSeconds, unknownSeconds) || other.unknownSeconds == unknownSeconds)&&(identical(other.accountedSeconds, accountedSeconds) || other.accountedSeconds == accountedSeconds)&&(identical(other.integrity, integrity) || other.integrity == integrity)&&(identical(other.requestedStartUtc, requestedStartUtc) || other.requestedStartUtc == requestedStartUtc)&&(identical(other.requestedEndUtc, requestedEndUtc) || other.requestedEndUtc == requestedEndUtc)&&(identical(other.effectiveStartUtc, effectiveStartUtc) || other.effectiveStartUtc == effectiveStartUtc)&&(identical(other.effectiveEndUtc, effectiveEndUtc) || other.effectiveEndUtc == effectiveEndUtc)&&(identical(other.observedThroughUtc, observedThroughUtc) || other.observedThroughUtc == observedThroughUtc)&&(identical(other.databaseDegraded, databaseDegraded) || other.databaseDegraded == databaseDegraded));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_apps),totalActiveSeconds,totalIdleSeconds,lifetimeSeconds,thisWeekSeconds,lastWeekSeconds,databaseDegraded,since);
+int get hashCode => Object.hashAll([runtimeType,const DeepCollectionEquality().hash(_apps),const DeepCollectionEquality().hash(_appAttribution),const DeepCollectionEquality().hash(_windows),const DeepCollectionEquality().hash(_pages),const DeepCollectionEquality().hash(_hours),totalActiveSeconds,totalIdleSeconds,pausedSeconds,privacyExcludedSeconds,systemGapSeconds,unknownSeconds,accountedSeconds,integrity,requestedStartUtc,requestedEndUtc,effectiveStartUtc,effectiveEndUtc,observedThroughUtc,databaseDegraded]);
 
 @override
 String toString() {
-  return 'DashboardState(apps: $apps, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, lifetimeSeconds: $lifetimeSeconds, thisWeekSeconds: $thisWeekSeconds, lastWeekSeconds: $lastWeekSeconds, databaseDegraded: $databaseDegraded, since: $since)';
+  return 'DashboardState(apps: $apps, appAttribution: $appAttribution, windows: $windows, pages: $pages, hours: $hours, totalActiveSeconds: $totalActiveSeconds, totalIdleSeconds: $totalIdleSeconds, pausedSeconds: $pausedSeconds, privacyExcludedSeconds: $privacyExcludedSeconds, systemGapSeconds: $systemGapSeconds, unknownSeconds: $unknownSeconds, accountedSeconds: $accountedSeconds, integrity: $integrity, requestedStartUtc: $requestedStartUtc, requestedEndUtc: $requestedEndUtc, effectiveStartUtc: $effectiveStartUtc, effectiveEndUtc: $effectiveEndUtc, observedThroughUtc: $observedThroughUtc, databaseDegraded: $databaseDegraded)';
 }
 
 
@@ -261,7 +307,7 @@ abstract mixin class _$DashboardStateCopyWith<$Res> implements $DashboardStateCo
   factory _$DashboardStateCopyWith(_DashboardState value, $Res Function(_DashboardState) _then) = __$DashboardStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<AppUsageItem> apps, int totalActiveSeconds, int totalIdleSeconds, int lifetimeSeconds, int thisWeekSeconds, int lastWeekSeconds, bool databaseDegraded, String? since
+ List<AppUsageItem> apps, List<AttributionTotalDto> appAttribution, List<AttributionTotalDto> windows, List<AttributionTotalDto> pages, List<LocalHourBucketDto> hours, int totalActiveSeconds, int totalIdleSeconds, int pausedSeconds, int privacyExcludedSeconds, int systemGapSeconds, int unknownSeconds, int accountedSeconds, SnapshotIntegrityDto integrity, String requestedStartUtc, String requestedEndUtc, String effectiveStartUtc, String effectiveEndUtc, String observedThroughUtc, bool databaseDegraded
 });
 
 
@@ -278,17 +324,28 @@ class __$DashboardStateCopyWithImpl<$Res>
 
 /// Create a copy of DashboardState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? apps = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? lifetimeSeconds = null,Object? thisWeekSeconds = null,Object? lastWeekSeconds = null,Object? databaseDegraded = null,Object? since = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? apps = null,Object? appAttribution = null,Object? windows = null,Object? pages = null,Object? hours = null,Object? totalActiveSeconds = null,Object? totalIdleSeconds = null,Object? pausedSeconds = null,Object? privacyExcludedSeconds = null,Object? systemGapSeconds = null,Object? unknownSeconds = null,Object? accountedSeconds = null,Object? integrity = null,Object? requestedStartUtc = null,Object? requestedEndUtc = null,Object? effectiveStartUtc = null,Object? effectiveEndUtc = null,Object? observedThroughUtc = null,Object? databaseDegraded = null,}) {
   return _then(_DashboardState(
 apps: null == apps ? _self._apps : apps // ignore: cast_nullable_to_non_nullable
-as List<AppUsageItem>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
+as List<AppUsageItem>,appAttribution: null == appAttribution ? _self._appAttribution : appAttribution // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,windows: null == windows ? _self._windows : windows // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,pages: null == pages ? _self._pages : pages // ignore: cast_nullable_to_non_nullable
+as List<AttributionTotalDto>,hours: null == hours ? _self._hours : hours // ignore: cast_nullable_to_non_nullable
+as List<LocalHourBucketDto>,totalActiveSeconds: null == totalActiveSeconds ? _self.totalActiveSeconds : totalActiveSeconds // ignore: cast_nullable_to_non_nullable
 as int,totalIdleSeconds: null == totalIdleSeconds ? _self.totalIdleSeconds : totalIdleSeconds // ignore: cast_nullable_to_non_nullable
-as int,lifetimeSeconds: null == lifetimeSeconds ? _self.lifetimeSeconds : lifetimeSeconds // ignore: cast_nullable_to_non_nullable
-as int,thisWeekSeconds: null == thisWeekSeconds ? _self.thisWeekSeconds : thisWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,lastWeekSeconds: null == lastWeekSeconds ? _self.lastWeekSeconds : lastWeekSeconds // ignore: cast_nullable_to_non_nullable
-as int,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
-as bool,since: freezed == since ? _self.since : since // ignore: cast_nullable_to_non_nullable
-as String?,
+as int,pausedSeconds: null == pausedSeconds ? _self.pausedSeconds : pausedSeconds // ignore: cast_nullable_to_non_nullable
+as int,privacyExcludedSeconds: null == privacyExcludedSeconds ? _self.privacyExcludedSeconds : privacyExcludedSeconds // ignore: cast_nullable_to_non_nullable
+as int,systemGapSeconds: null == systemGapSeconds ? _self.systemGapSeconds : systemGapSeconds // ignore: cast_nullable_to_non_nullable
+as int,unknownSeconds: null == unknownSeconds ? _self.unknownSeconds : unknownSeconds // ignore: cast_nullable_to_non_nullable
+as int,accountedSeconds: null == accountedSeconds ? _self.accountedSeconds : accountedSeconds // ignore: cast_nullable_to_non_nullable
+as int,integrity: null == integrity ? _self.integrity : integrity // ignore: cast_nullable_to_non_nullable
+as SnapshotIntegrityDto,requestedStartUtc: null == requestedStartUtc ? _self.requestedStartUtc : requestedStartUtc // ignore: cast_nullable_to_non_nullable
+as String,requestedEndUtc: null == requestedEndUtc ? _self.requestedEndUtc : requestedEndUtc // ignore: cast_nullable_to_non_nullable
+as String,effectiveStartUtc: null == effectiveStartUtc ? _self.effectiveStartUtc : effectiveStartUtc // ignore: cast_nullable_to_non_nullable
+as String,effectiveEndUtc: null == effectiveEndUtc ? _self.effectiveEndUtc : effectiveEndUtc // ignore: cast_nullable_to_non_nullable
+as String,observedThroughUtc: null == observedThroughUtc ? _self.observedThroughUtc : observedThroughUtc // ignore: cast_nullable_to_non_nullable
+as String,databaseDegraded: null == databaseDegraded ? _self.databaseDegraded : databaseDegraded // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

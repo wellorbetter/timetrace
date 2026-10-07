@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:timetrace_app/src/core/theme/timetrace_tokens.dart';
 
-/// Reusable stat chip. Keep the treatment quiet: color marks the datum while
-/// text stays neutral, so several chips can coexist without competing.
+/// Reusable Material 3 stat chip (colored dot + label + value).
 class StatChip extends StatelessWidget {
   const StatChip({
     required this.label,
@@ -17,40 +15,29 @@ class StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: TimeTraceSpace.xs,
-        vertical: TimeTraceSpace.xxs,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.065),
-        borderRadius: BorderRadius.circular(TimeTraceRadius.control),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.8),
-        ),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
             Icon(icon, size: 12, color: color),
-            const SizedBox(width: TimeTraceSpace.xxs),
+            const SizedBox(width: 4),
           ] else
             Container(
-              width: 6,
-              height: 6,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-          const SizedBox(width: TimeTraceSpace.xxs),
+          const SizedBox(width: 4),
           Text(
             label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(
+                fontSize: 11, color: color, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -58,7 +45,7 @@ class StatChip extends StatelessWidget {
   }
 }
 
-/// Small contextual help affordance for desktop hover / mobile long-press.
+/// 小问号图标：鼠标悬停（或长按）显示说明文字，用于解释不易理解的概念。
 class HelpIcon extends StatelessWidget {
   const HelpIcon({required this.message, this.size = 14, super.key});
 
@@ -71,15 +58,15 @@ class HelpIcon extends StatelessWidget {
     return Tooltip(
       message: message,
       waitDuration: const Duration(milliseconds: 300),
-      child: SizedBox.square(
-        dimension: size + 8,
-        child: Center(
-          child: Icon(
-            Icons.help_outline_rounded,
-            size: size,
-            color: scheme.onSurfaceVariant,
-          ),
+      child: Container(
+        width: size + 6,
+        height: size + 6,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          shape: BoxShape.circle,
         ),
+        child: Icon(Icons.help_outline, size: size, color: scheme.outline),
       ),
     );
   }
@@ -108,53 +95,42 @@ class DotRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TimeTraceSpace.xxs),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           if (icon != null)
-            Icon(icon, size: 13, color: scheme.onSurfaceVariant)
+            Icon(icon, size: 13, color: scheme.outline)
           else
             Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-          const SizedBox(width: TimeTraceSpace.xs),
+          const SizedBox(width: 8),
           if (time != null) ...[
             SizedBox(
               width: 42,
-              child: Text(
-                time!,
-                style: TextStyle(
-                  fontSize: fontSize - 2,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+              child: Text(time!,
+                  style: TextStyle(fontSize: fontSize - 2, color: scheme.outline)),
             ),
-            const SizedBox(width: TimeTraceSpace.xxs),
+            const SizedBox(width: 4),
           ],
           Expanded(
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: fontSize),
-            ),
+            child: Text(name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: fontSize)),
           ),
-          const SizedBox(width: TimeTraceSpace.xs),
-          Text(
-            trailing,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(trailing,
+              style: TextStyle(
+                  fontSize: fontSize, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 }
 
-/// Section header used inside compact data/settings surfaces.
+/// Section header (icon + title, M3 styling).
 class SectionTitle extends StatelessWidget {
   const SectionTitle({required this.icon, required this.title, super.key});
 
@@ -163,19 +139,16 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, size: 17, color: scheme.primary),
-        const SizedBox(width: TimeTraceSpace.xs),
-        Text(
-          title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-        ),
+        Icon(icon, size: 18, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(title,
+            style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: scheme.primary)),
       ],
     );
   }

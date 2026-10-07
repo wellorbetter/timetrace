@@ -26,12 +26,8 @@ void showImagePreview(BuildContext context, String path, {String? title}) {
                 child: Image.file(
                   File(path),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Center(
-                    child: Icon(
-                      Icons.broken_image,
-                      size: 64,
-                      color: Colors.white54,
-                    ),
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image, size: 64, color: Colors.white54),
                   ),
                 ),
               ),
@@ -40,10 +36,8 @@ void showImagePreview(BuildContext context, String path, {String? title}) {
           if (title != null)
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text(
-                title,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
+              child: Text(title,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
             ),
         ],
       ),

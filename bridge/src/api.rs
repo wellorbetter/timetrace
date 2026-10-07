@@ -1,7 +1,8 @@
 //! TimeTrace Flutter bridge API.
 //!
 //! Exposes the Rust core to Flutter/Dart via flutter_rust_bridge.
-//! All methods are synchronous; data is small and local.
+//! Compatibility endpoints remain synchronous; typed queries and CSV export
+//! use normal FRB worker tasks.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,16 +10,31 @@ use std::time::Duration;
 
 use anyhow::Result;
 use flutter_rust_bridge::frb;
+pub use timetrace_core::AccountingSnapshot;
+use timetrace_core::engine::aggregator::CheckpointStore;
+use timetrace_core::engine::{CanonicalMonitorHandle, run_canonical_monitor_loop};
 use timetrace_core::*;
 
-/// Set up Rust-side file logging in the platform-native TimeTrace directory.
+use crate::accounting::{
+    AccountingAsOfRequest, AccountingBridgeError, AccountingExportCsv, AccountingRangeRequest,
+    AccountingSnapshotDto, map_accounting_snapshot, resolve_accounting_request,
+    utc_range_for_local_dates,
+};
+
+const CANONICAL_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(5);
+
+// AppConfig has no IANA zone field yet. Keep the legacy String endpoint
+// deterministic; callers needing local-day semantics use the typed endpoint.
+const COMPAT_EXPORT_TIMEZONE: &str = "UTC";
+
+/// Set up file logging at %APPDATA%/TimeTrace/timetrace.log
 fn setup_logging() {
     use tracing_subscriber::prelude::*;
-
-    let log_path = rust_log_path();
-    if let Some(dir) = log_path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
+    let dir = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("TimeTrace");
+    let _ = std::fs::create_dir_all(&dir);
+    let log_path = dir.join("timetrace.log");
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -65,16 +81,13 @@ pub struct StatsDto {
     pub since: Option<String>,
 }
 
-/// A diary entry with its publish status and structured provenance.
+/// A diary entry with its publish status ('draft' | 'published').
 #[derive(Debug, Clone)]
 pub struct DiaryEntryDto {
     pub id: i64,
     pub date: String,
     pub content: String,
     pub status: String,
-    /// `manual` | `ai_generated` | `ai_assisted`.
-    pub source: String,
-    pub source_model: Option<String>,
 }
 
 /// Raw RGBA icon pixels for rendering in Flutter.
@@ -115,7 +128,7 @@ pub struct DashboardDataDto {
     pub since: Option<String>,
 }
 
-/// User configuration (persisted in config.json).
+/// User configuration (persisted in AppConfig.json).
 #[derive(Debug, Clone)]
 pub struct ConfigDto {
     pub poll_interval_ms: u64,
@@ -131,68 +144,60 @@ pub struct ConfigDto {
 
 pub struct TimeTraceApi {
     db: Arc<SqliteStore>,
-    db_path: PathBuf,
-    monitor: std::sync::Mutex<Option<EventSourceHandle>>,
+    monitor: std::sync::Mutex<Option<CanonicalMonitorHandle>>,
     paused: std::sync::atomic::AtomicBool,
 }
 
 impl TimeTraceApi {
+    /// Resolve the host's IANA time zone for canonical local-day queries.
+    #[frb(sync)]
+    pub fn get_system_iana_timezone() -> Result<String> {
+        Ok(iana_time_zone::get_timezone()?)
+    }
+
     /// Create the API, opening the DB and starting the background monitor.
-    ///
-    /// An empty `db_path` selects TimeTrace's platform-native default path.
     #[frb(sync)]
     pub fn create(db_path: String) -> Result<TimeTraceApi> {
         setup_logging();
-        let config = AppConfig::load();
-        let resolved_db_path = if db_path.trim().is_empty() {
-            if config.db_path.trim().is_empty() {
-                database_path()
-            } else {
-                PathBuf::from(config.db_path.trim())
-            }
-        } else {
-            PathBuf::from(db_path)
-        };
-        if let Some(parent) = resolved_db_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        tracing::info!(
-            "TimeTrace bridge starting, platform={}, db={}",
-            std::env::consts::OS,
-            resolved_db_path.display()
-        );
-        let db = Arc::new(SqliteStore::open(resolved_db_path.clone())?);
+        tracing::info!("TimeTrace bridge starting, db={}", db_path);
+        let db = Arc::new(SqliteStore::open(PathBuf::from(&db_path))?);
 
-        // Auto-scan startup entries on first launch. Platforms that cannot
-        // enumerate arbitrary login items simply return an empty list.
+        // Auto-scan startup entries on first launch
         if DataStore::get_all_startup_entries(&*db).is_empty() {
-            let entries = PlatformStartupScanner::new().scan();
+            let entries = WindowsStartupScanner::new().scan();
             DataStore::upsert_startup_entries(&*db, &entries);
         }
 
-        // Start the shared monitor with target-specific adapters selected by
-        // timetrace-core. Flutter never needs to know which implementation runs.
+        // Start background monitor.
+        let config = AppConfig::load();
         let initially_paused = !config.auto_start_tracking;
         let excluded_apps = config.excluded_apps.clone();
         let sink: Box<dyn EventSink> = Box::new(SessionAggregator::new(db.clone()));
-        let handle = run_monitor_loop(
-            PlatformWindowResolver::new(),
-            PlatformIdleDetector::new(),
+        let accounting_store: Arc<dyn AccountingStore> = db.clone();
+        let staging_store: Arc<dyn CheckpointStore> = db.clone();
+        let clock: Arc<dyn AccountingClock> = Arc::new(SystemAccountingClock);
+        let handle = run_canonical_monitor_loop(
+            Win32WindowResolver,
+            Win32IdleDetector::new(),
             Duration::from_millis(config.poll_interval_ms),
             Duration::from_secs(config.idle_threshold_minutes * 60),
             excluded_apps,
             sink,
+            accounting_store,
+            staging_store,
+            clock,
         );
         if initially_paused {
-            handle.pause();
+            handle
+                .pause(CANONICAL_CHECKPOINT_TIMEOUT)
+                .map_err(|error| anyhow::anyhow!(error.message.clone()))?;
         }
-
-        Ok(TimeTraceApi {
+        let api = TimeTraceApi {
             db,
-            db_path: resolved_db_path,
             monitor: std::sync::Mutex::new(Some(handle)),
             paused: std::sync::atomic::AtomicBool::new(initially_paused),
-        })
+        };
+        Ok(api)
     }
 
     /// Pause or resume the background tracking monitor.
@@ -200,9 +205,23 @@ impl TimeTraceApi {
     pub fn set_tracking_paused(&self, paused: bool) {
         if let Ok(guard) = self.monitor.lock() {
             if let Some(h) = guard.as_ref() {
-                if paused { h.pause(); } else { h.resume(); }
-                self.paused.store(paused, std::sync::atomic::Ordering::SeqCst);
-                tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
+                let result = if paused {
+                    h.pause(CANONICAL_CHECKPOINT_TIMEOUT)
+                } else {
+                    h.resume(CANONICAL_CHECKPOINT_TIMEOUT)
+                };
+                match result {
+                    Ok(_) => {
+                        self.paused
+                            .store(paused, std::sync::atomic::Ordering::SeqCst);
+                        tracing::info!("Tracking {}", if paused { "paused" } else { "resumed" });
+                    }
+                    Err(error) => tracing::warn!(
+                        "Tracking state checkpoint failed at {:?}: {}",
+                        error.last_acknowledged_observed_through,
+                        error.message
+                    ),
+                }
             }
         }
     }
@@ -213,6 +232,73 @@ impl TimeTraceApi {
         self.paused.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Fence the producer at one Current boundary, then query exactly one
+    /// canonical snapshot. A failed fence still queries at the producer-owned
+    /// boundary so the core ledger returns a partial snapshot with an unknown
+    /// tail after the last acknowledged watermark.
+    #[frb(sync)]
+    pub fn get_accounting_snapshot_current(
+        &self,
+        start_utc: String,
+        end_utc: String,
+    ) -> Result<AccountingSnapshot> {
+        let requested = UtcInterval::new(
+            parse_utc_boundary("start_utc", &start_utc)?,
+            parse_utc_boundary("end_utc", &end_utc)?,
+        )?;
+        let guard = self
+            .monitor
+            .lock()
+            .map_err(|_| anyhow::anyhow!("monitor handle is unavailable"))?;
+        let handle = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("monitor has stopped"))?;
+        current_accounting_snapshot(
+            handle,
+            &*self.db,
+            &SystemAccountingClock,
+            requested,
+            CANONICAL_CHECKPOINT_TIMEOUT,
+        )
+    }
+
+    /// Query and map exactly one canonical accounting snapshot. Current reads
+    /// first use the accepted producer fence; historical reads remain durable
+    /// and side-effect free.
+    pub fn get_accounting_snapshot(
+        &self,
+        range: AccountingRangeRequest,
+        as_of: AccountingAsOfRequest,
+    ) -> Result<AccountingSnapshotDto, AccountingBridgeError> {
+        let resolved = resolve_accounting_request(range, as_of)?;
+        let snapshot = match resolved.query {
+            AccountingQuery::Current => {
+                let guard = self.monitor.lock().map_err(|_| {
+                    AccountingBridgeError::ProducerUnavailable {
+                        message: "monitor handle is unavailable".to_owned(),
+                    }
+                })?;
+                let handle =
+                    guard
+                        .as_ref()
+                        .ok_or_else(|| AccountingBridgeError::ProducerUnavailable {
+                            message: "monitor has stopped".to_owned(),
+                        })?;
+                current_accounting_snapshot(
+                    handle,
+                    &*self.db,
+                    &SystemAccountingClock,
+                    resolved.requested.clone(),
+                    CANONICAL_CHECKPOINT_TIMEOUT,
+                )
+                .map_err(map_current_snapshot_error)?
+            }
+            query => AccountingQueryService::new(&*self.db, &SystemAccountingClock)
+                .snapshot(resolved.requested.clone(), query)?,
+        };
+        map_accounting_snapshot(&snapshot, &resolved)
+    }
+
     /// One-call dashboard payload: usage split + overall stats.
     #[frb(sync)]
     pub fn get_dashboard_data(&self, start: String, end: String) -> DashboardDataDto {
@@ -220,7 +306,7 @@ impl TimeTraceApi {
         let e = parse_date(&end);
         let split = DataStore::get_usage_split(&*self.db, s, e);
         let active: i64 = split.iter().map(|x| x.active_seconds).sum();
-        let idle: i64 = split.iter().map(|x| x.idle_seconds).sum();
+        let idle = self.db.get_idle_time_total(s, e).seconds;
         DashboardDataDto {
             apps: split
                 .into_iter()
@@ -252,7 +338,12 @@ impl TimeTraceApi {
         let e = parse_date(&end);
         DataStore::get_usage_split(&*self.db, s, e)
             .into_iter()
-            .map(|x| AppUsageDto { app_name: x.app_name, active_seconds: x.active_seconds, idle_seconds: x.idle_seconds, exe_path: x.exe_path })
+            .map(|x| AppUsageDto {
+                app_name: x.app_name,
+                active_seconds: x.active_seconds,
+                idle_seconds: x.idle_seconds,
+                exe_path: x.exe_path,
+            })
             .collect()
     }
 
@@ -270,11 +361,17 @@ impl TimeTraceApi {
     pub fn get_startup_entries(&self) -> Vec<StartupDto> {
         DataStore::get_all_startup_entries(&*self.db)
             .into_iter()
-            .map(|e| StartupDto { id: e.id, name: e.name, exe_path: e.command, source: e.source, enabled: e.enabled })
+            .map(|e| StartupDto {
+                id: e.id,
+                name: e.name,
+                exe_path: e.command,
+                source: e.source,
+                enabled: e.enabled,
+            })
             .collect()
     }
 
-    /// Enable/disable a startup entry when supported by the current platform.
+    /// Enable/disable a startup entry.
     #[frb(sync)]
     pub fn toggle_startup(&self, id: i64, enable: bool) -> Result<()> {
         let entries = DataStore::get_all_startup_entries(&*self.db);
@@ -283,7 +380,7 @@ impl TimeTraceApi {
             .find(|e| e.id == id)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("entry not found"))?;
-        let scanner = PlatformStartupScanner::new();
+        let scanner = WindowsStartupScanner::new();
         if enable {
             scanner.enable(&entry).map_err(|e| anyhow::anyhow!(e))?;
             DataStore::set_startup_enabled(&*self.db, id, true, None, None);
@@ -309,8 +406,7 @@ impl TimeTraceApi {
     /// Configures current-user startup without requiring administrator rights.
     #[frb(sync)]
     pub fn set_self_start_enabled(&self, enabled: bool, minimized: bool) -> Result<()> {
-        timetrace_core::set_self_start_enabled(enabled, minimized)
-            .map_err(|e| anyhow::anyhow!(e))
+        timetrace_core::set_self_start_enabled(enabled, minimized).map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Overall recording statistics.
@@ -320,7 +416,7 @@ impl TimeTraceApi {
         let e = parse_date(&end);
         let split = DataStore::get_usage_split(&*self.db, s, e);
         let active: i64 = split.iter().map(|x| x.active_seconds).sum();
-        let idle: i64 = split.iter().map(|x| x.idle_seconds).sum();
+        let idle = self.db.get_idle_time_total(s, e).seconds;
         StatsDto {
             active_seconds: active,
             idle_seconds: idle,
@@ -330,7 +426,7 @@ impl TimeTraceApi {
         }
     }
 
-    /// Extract an application icon as raw RGBA pixels when supported.
+    /// Extract an exe icon as raw RGBA pixels.
     #[frb(sync)]
     pub fn get_app_icon(&self, exe_path: String) -> Option<IconDto> {
         let cleaned = clean_exe_path(&exe_path).unwrap_or_else(|| exe_path.clone());
@@ -341,7 +437,8 @@ impl TimeTraceApi {
         })
     }
 
-    /// Resolve a Windows startup command line to its clean executable path.
+    /// Resolve a startup command line to its clean exe path (env-expanded,
+    /// quotes/args stripped). Returns None if no .exe is found.
     #[frb(sync)]
     pub fn resolve_exe_path(&self, command: String) -> Option<String> {
         clean_exe_path(&command)
@@ -358,23 +455,25 @@ impl TimeTraceApi {
             start_minimized: config.start_minimized,
             auto_start_tracking: config.auto_start_tracking,
             excluded_apps: config.excluded_apps,
-            db_path: self.db_path.to_string_lossy().into_owned(),
+            db_path: String::new(),
         }
     }
 
-    /// Persist user configuration (monitor timing/exclusions apply next launch).
+    /// Persist user configuration (applies on next monitor start).
     #[frb(sync)]
     pub fn set_config(&self, config: ConfigDto) -> Result<()> {
-        let mut app_config = AppConfig::load();
+        // New public values must fail before configuration or startup IO.
+        validate_config_polling(&config)?;
+        let mut app_config = AppConfig::try_load_for_update()?;
         app_config.poll_interval_ms = config.poll_interval_ms;
         app_config.idle_threshold_minutes = config.idle_threshold_minutes;
         app_config.minimize_to_tray = config.minimize_to_tray;
         app_config.start_minimized = config.start_minimized;
         app_config.auto_start_tracking = config.auto_start_tracking;
         app_config.excluded_apps = config.excluded_apps;
-        app_config.db_path = config.db_path;
-        app_config.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
+        app_config
+            .save()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         // Keep the startup command's optional --minimized flag aligned with the
         // persisted preference when the user changes it after enabling startup.
         if timetrace_core::is_self_start_enabled().unwrap_or(false) {
@@ -409,7 +508,11 @@ impl TimeTraceApi {
         let mut idle = 0i64;
         let mut dtos = Vec::with_capacity(sessions.len());
         for (app, is_idle, dur, started) in sessions {
-            if is_idle { idle += dur; } else { active += dur; }
+            if is_idle {
+                idle += dur;
+            } else {
+                active += dur;
+            }
             dtos.push(DaySessionDto {
                 app_name: app,
                 is_idle,
@@ -445,20 +548,14 @@ impl TimeTraceApi {
 
     /// All diary entries in a range with ids + status, newest first.
     #[frb(sync)]
-    pub fn get_diary_entries_detailed(
-        &self,
-        start: String,
-        end: String,
-    ) -> Vec<DiaryEntryDto> {
+    pub fn get_diary_entries_detailed(&self, start: String, end: String) -> Vec<DiaryEntryDto> {
         DataStore::get_diary_entries_detailed(&*self.db, parse_date(&start), parse_date(&end))
             .into_iter()
-            .map(|entry| DiaryEntryDto {
-                id: entry.id,
-                date: entry.date,
-                content: entry.content,
-                status: entry.status,
-                source: entry.source.as_str().to_string(),
-                source_model: entry.source_model,
+            .map(|(id, date, content, status)| DiaryEntryDto {
+                id,
+                date,
+                content,
+                status,
             })
             .collect()
     }
@@ -473,22 +570,6 @@ impl TimeTraceApi {
     #[frb(sync)]
     pub fn publish_diary(&self, date: String, content: String) -> i64 {
         DataStore::publish_diary(&*self.db, parse_date(&date), &content)
-    }
-
-    /// Atomically publish an AI-authored diary with model provenance.
-    #[frb(sync)]
-    pub fn publish_ai_diary(
-        &self,
-        date: String,
-        content: String,
-        source_model: String,
-    ) -> Result<i64, String> {
-        DataStore::publish_ai_diary(
-            &*self.db,
-            parse_date(&date),
-            &content,
-            &source_model,
-        )
     }
 
     /// The day's draft content, if any.
@@ -565,7 +646,7 @@ impl TimeTraceApi {
         DataStore::set_diary_image_entry(&*self.db, &path, entry_id)
     }
 
-    /// Image paths attached to a diary entry.
+    /// Image paths attached to a diary entry (朋友圈 album).
     #[frb(sync)]
     pub fn get_diary_images_for_entry(&self, entry_id: i64) -> Vec<String> {
         DataStore::get_diary_images_for_entry(&*self.db, entry_id)
@@ -584,32 +665,100 @@ impl TimeTraceApi {
         DataStore::clear_all_data(&*self.db);
     }
 
-    /// Export usage data for a date range as CSV.
-    /// Returns the CSV text (app, date, active_secs, idle_secs).
+    /// Export one canonical accounting snapshot as versioned CSV.
+    ///
+    /// The external String contract is preserved. Invalid input or an
+    /// unavailable snapshot produces a header-only document instead of
+    /// silently substituting today's date.
     #[frb(sync)]
     pub fn export_csv(&self, start: String, end: String) -> String {
-        let s = parse_date(&start);
-        let e = parse_date(&end);
-        let rows = DataStore::export_rows(&*self.db, s, e);
-        let mut csv = String::from("app,date,active_secs,idle_secs\n");
-        for (app, date, active, idle) in rows {
-            csv.push_str(&format!(
-                "{},{},{},{}\n",
-                csv_field(&app),
-                csv_field(&date),
-                active,
-                idle
-            ));
-        }
-        csv
+        self.export_csv_async(start, end).unwrap_or_else(|error| {
+            tracing::warn!("Accounting CSV export failed: {error}");
+            AccountingExportCsv::empty()
+        })
     }
+
+    /// Run canonical export on the FRB normal worker, preserving actual errors.
+    /// A legitimate partial/unknown snapshot remains successful canonical CSV;
+    /// the existing producer fence and snapshot degradation policy are unchanged.
+    pub fn export_csv_async(
+        &self,
+        start: String,
+        end: String,
+    ) -> Result<String, AccountingBridgeError> {
+        let requested = utc_range_for_local_dates(&start, &end, COMPAT_EXPORT_TIMEZONE)?;
+        let guard =
+            self.monitor
+                .lock()
+                .map_err(|_| AccountingBridgeError::ProducerUnavailable {
+                    message: "monitor handle is unavailable".to_owned(),
+                })?;
+        let handle =
+            guard
+                .as_ref()
+                .ok_or_else(|| AccountingBridgeError::ProducerUnavailable {
+                    message: "monitor has stopped".to_owned(),
+                })?;
+        let snapshot = current_accounting_snapshot(
+            handle,
+            &*self.db,
+            &SystemAccountingClock,
+            requested,
+            CANONICAL_CHECKPOINT_TIMEOUT,
+        )
+        .map_err(map_current_snapshot_error)?;
+        Ok::<_, AccountingBridgeError>(AccountingExportCsv::serialize(&snapshot))
+    }
+}
+
+/// Pure public configuration boundary, shared by set_config and its DTO test.
+fn validate_config_polling(config: &ConfigDto) -> Result<()> {
+    AppConfig::validate_poll_interval(config.poll_interval_ms)
+        .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn map_current_snapshot_error(error: anyhow::Error) -> AccountingBridgeError {
+    error
+        .downcast_ref::<AccountingError>()
+        .cloned()
+        .map(AccountingBridgeError::from)
+        .unwrap_or_else(|| AccountingBridgeError::ProducerUnavailable {
+            message: error.to_string(),
+        })
+}
+
+pub fn current_accounting_snapshot<S, C>(
+    monitor: &CanonicalMonitorHandle,
+    store: &S,
+    clock: &C,
+    requested: UtcInterval,
+    timeout: Duration,
+) -> Result<AccountingSnapshot>
+where
+    S: AccountingStore,
+    C: AccountingClock,
+{
+    let as_of = match monitor.checkpoint_current(timeout) {
+        Ok(ack) => ack.durable_observed_through,
+        Err(error) => {
+            tracing::warn!(
+                "Current checkpoint failed at {:?}: {}",
+                error.last_acknowledged_observed_through,
+                error.message
+            );
+            error.requested_as_of
+        }
+    };
+    AccountingQueryService::new(store, clock)
+        .snapshot(requested, AccountingQuery::At { as_of })
+        .map_err(anyhow::Error::from)
 }
 
 fn csv_field(value: &str) -> String {
     if value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
-        value.to_string()
+        value.to_owned()
     }
 }
 
@@ -618,28 +767,49 @@ fn parse_date(s: &str) -> chrono::NaiveDate {
         .unwrap_or_else(|_| chrono::Local::now().date_naive())
 }
 
-/// Extract a clean, env-expanded exe path from a Windows startup command line.
+fn parse_utc_boundary(field: &str, value: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(value)
+        .map_err(|error| anyhow::anyhow!("invalid {field}: {error}"))?;
+    if parsed.offset().local_minus_utc() != 0 {
+        return Err(anyhow::anyhow!("{field} must use UTC offset"));
+    }
+    Ok(parsed.with_timezone(&chrono::Utc))
+}
+
+/// Extract a clean, env-expanded exe path from a startup command line.
+/// Handles: quoted paths, trailing args, %VAR% env vars, double backslashes.
 fn clean_exe_path(cmd: &str) -> Option<String> {
     let lower = cmd.to_lowercase();
     let idx = lower.find(".exe").or_else(|| lower.find(".lnk"))?;
-    let end = idx + 4;
+    let end = idx
+        + if lower[idx..].starts_with(".exe") {
+            4
+        } else {
+            4
+        };
     if end > cmd.len() {
         return None;
     }
     let before = &cmd[..end];
+    // The exe path itself may contain spaces (e.g. "C:\\Program Files\\...").
+    // Only a quoted command lets us trim leading tokens; otherwise the whole
+    // prefix up to ".exe" IS the path (arguments can only follow ".exe").
     let start = before.rfind('"').map(|q| q + 1).unwrap_or(0);
     if start >= end {
         return None;
     }
     let raw = &cmd[start..end];
 
-    // Normalize doubled backslashes from registry escaping.
+    // Normalize double backslashes from registry escaping: \\ → \
+    // (only when the path otherwise parses — a single backslash stays)
     let raw = raw.replace("\\\\", "\\");
 
+    // Expand %VAR% using process environment (windir, SystemRoot, etc.)
     let mut expanded = raw.to_string();
     for (k, v) in std::env::vars() {
         expanded = expanded.replace(&format!("%{}%", k), &v);
     }
+    // Fallback for common vars if somehow not in env
     let common = [
         ("windir", "C:\\Windows"),
         ("SystemRoot", "C:\\Windows"),
@@ -651,20 +821,86 @@ fn clean_exe_path(cmd: &str) -> Option<String> {
         expanded = expanded.replace(&format!("%{}%", k), v);
     }
 
-    if expanded.contains('%') {
-        return None;
+    if expanded.contains("%") {
+        return None; // unresolved env var — can't iconify
     }
     Some(expanded)
 }
-
 #[cfg(test)]
 mod tests {
-    use super::{clean_exe_path, csv_field};
+    use super::{clean_exe_path, csv_field, validate_config_polling, ConfigDto};
+
+    // In-memory only: no create API, monitor, logging, environment or user DB.
+    fn export_without_producer() -> super::TimeTraceApi {
+        super::TimeTraceApi {
+            db: std::sync::Arc::new(
+                timetrace_core::SqliteStore::open(std::path::PathBuf::from(":memory:"))
+                    .expect("isolated in-memory export fixture"),
+            ),
+            monitor: std::sync::Mutex::new(None),
+            paused: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    #[test]
+    fn async_export_invalid_date_preserves_error_and_sync_header_compatibility() {
+        let api = export_without_producer();
+        let result = api.export_csv_async("not-a-date".to_owned(), "2026-01-02".to_owned());
+        assert!(matches!(result, Err(super::AccountingBridgeError::InvalidLocalDate { .. })));
+        assert_eq!(
+            api.export_csv("not-a-date".to_owned(), "2026-01-02".to_owned()),
+            super::AccountingExportCsv::empty(),
+        );
+    }
+
+    #[test]
+    fn async_export_unavailable_producer_is_error_not_empty_success() {
+        let api = export_without_producer();
+        assert!(matches!(
+            api.export_csv_async("2026-01-01".to_owned(), "2026-01-02".to_owned()),
+            Err(super::AccountingBridgeError::ProducerUnavailable { .. }),
+        ));
+        assert_eq!(
+            api.export_csv("2026-01-01".to_owned(), "2026-01-02".to_owned()),
+            super::AccountingExportCsv::empty(),
+        );
+    }
+
+    #[test]
+    fn public_polling_validation_accepts_canonical_range_only() {
+        for (poll_interval_ms, valid) in [
+            (0, false), (500, false), (1000, false), (3000, false),
+            (29999, false), (30000, true), (30001, true),
+            (59999, true), (60000, true), (60001, false), (u64::MAX, false),
+        ] {
+            let config = ConfigDto {
+                poll_interval_ms,
+                idle_threshold_minutes: 5,
+                minimize_to_tray: true,
+                start_minimized: false,
+                auto_start_tracking: true,
+                excluded_apps: vec!["fixture.exe".to_owned()],
+                db_path: "synthetic-only".to_owned(),
+            };
+            assert_eq!(validate_config_polling(&config).is_ok(), valid);
+            assert_eq!(config.poll_interval_ms, poll_interval_ms);
+            assert_eq!(config.idle_threshold_minutes, 5);
+            assert!(config.minimize_to_tray);
+            assert!(!config.start_minimized);
+            assert!(config.auto_start_tracking);
+            assert_eq!(config.excluded_apps, ["fixture.exe"]);
+            assert_eq!(config.db_path, "synthetic-only");
+        }
+    }
 
     #[test]
     fn spaced_unquoted_path_kept_intact() {
-        let p = clean_exe_path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").unwrap();
-        assert_eq!(p, r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe");
+        let p = clean_exe_path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+            .unwrap();
+        assert_eq!(
+            p,
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        );
     }
 
     #[test]

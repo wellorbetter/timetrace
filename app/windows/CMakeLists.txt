@@ -35,10 +35,13 @@ project(timetrace_app LANGUAGES CXX)
 set(TT_RUST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 set(TT_BRIDGE_DLL "${TT_RUST_ROOT}/target/release/timetrace_bridge.dll")
 
-add_custom_command(
-  OUTPUT "${TT_BRIDGE_DLL}"
+# Run Cargo on every Windows build. Cargo itself is incremental, while making
+# the DLL only an OUTPUT lets CMake reuse a stale bridge after Rust or FRB
+# generated sources change.
+add_custom_target(build_timetrace_bridge
   COMMAND cargo build -p timetrace-bridge --release
   WORKING_DIRECTORY "${TT_RUST_ROOT}"
+  BYPRODUCTS "${TT_BRIDGE_DLL}"
   COMMENT "Building timetrace_bridge.dll (Rust)"
 )
 
@@ -137,7 +140,7 @@ endif()
 # Install the Rust bridge DLL next to the executable (built via cargo)
 add_custom_target(copy_timetrace_bridge ALL
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${TT_BRIDGE_DLL}" "${BUILD_BUNDLE_DIR}"
-  DEPENDS "${TT_BRIDGE_DLL}"
+  DEPENDS build_timetrace_bridge
   COMMENT "Copying timetrace_bridge.dll"
 )
 
