@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import '../format/app_identity.dart';
+import 'terminal_app_icon.dart';
 
 /// In-memory cache of decoded exe icons (keyed by exe path).
 class _IconCache {
   static final Map<String, ui.Image> _cache = {};
   static final Set<String> _failedPaths = {};
+  static final Map<String, Completer<ui.Image?>> _pending = {};
 
   static ui.Image? get(String path) => _cache[path];
   static void put(String path, ui.Image img) {
@@ -34,9 +37,15 @@ class _IconCache {
 
 /// Renders a real exe icon extracted via the Rust bridge, with caching.
 class AppIcon extends ConsumerStatefulWidget {
-  const AppIcon({required this.exePath, this.size = 32, super.key});
+  const AppIcon({
+    required this.exePath,
+    this.appName,
+    this.size = 32,
+    super.key,
+  });
 
   final String exePath;
+  final String? appName;
   final double size;
 
   @override
@@ -65,6 +74,7 @@ class _AppIconState extends ConsumerState<AppIcon> {
 
   Future<void> _load() async {
     if (_loading || widget.exePath.isEmpty) return;
+    final requestedPath = widget.exePath;
     // Skip paths that already failed — avoids repeated FFI calls.
     if (_IconCache._failedPaths.contains(widget.exePath)) return;
     // Another instance may have loaded it while we waited.
@@ -74,12 +84,29 @@ class _AppIconState extends ConsumerState<AppIcon> {
       return;
     }
     _loading = true;
+    final pending = _IconCache._pending[requestedPath];
+    if (pending != null) {
+      try {
+        final img = await pending.future;
+        if (mounted && widget.exePath == requestedPath && img != null) {
+          setState(() => _image = img);
+        }
+      } finally {
+        _loading = false;
+        if (mounted && widget.exePath != requestedPath && _image == null) {
+          _load();
+        }
+      }
+      return;
+    }
+    final pendingCompletion = Completer<ui.Image?>();
+    _IconCache._pending[requestedPath] = pendingCompletion;
     try {
       final api = ref.read(apiProvider);
-      final icon = api.getAppIcon(exePath: widget.exePath);
+      final icon = api.getAppIcon(exePath: requestedPath);
       if (icon == null || icon.rgba.isEmpty) {
         AppLogger.log('icon NULL for: ${widget.exePath}');
-        _IconCache.markFailed(widget.exePath);
+        _IconCache.markFailed(requestedPath);
         return;
       }
       final w = icon.width.toInt();
@@ -95,11 +122,20 @@ class _AppIconState extends ConsumerState<AppIcon> {
         completer.complete,
       );
       final img = await completer.future;
-      _IconCache.put(widget.exePath, img);
-      if (mounted) setState(() => _image = img);
+      _IconCache.put(requestedPath, img);
+      if (mounted && widget.exePath == requestedPath) {
+        setState(() => _image = img);
+      }
     } catch (e, st) {
       AppLogger.log('icon load FAIL ${widget.exePath}: $e\n$st');
-      _IconCache.markFailed(widget.exePath);
+      _IconCache.markFailed(requestedPath);
+    } finally {
+      pendingCompletion.complete(_IconCache.get(requestedPath));
+      _IconCache._pending.remove(requestedPath);
+      _loading = false;
+      if (mounted && widget.exePath != requestedPath && _image == null) {
+        _load();
+      }
     }
   }
 
@@ -132,6 +168,9 @@ class _AppIconState extends ConsumerState<AppIcon> {
       );
     }
     final name = _exeName(widget.exePath) ?? '?';
+    if (isTerminalApp(widget.appName ?? name)) {
+      return TerminalAppIcon(size: widget.size);
+    }
     final color = Colors.blueGrey;
     final first = name.isNotEmpty ? name[0].toUpperCase() : '?';
     return Container(

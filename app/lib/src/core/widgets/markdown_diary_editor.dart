@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:timetrace_app/src/core/logging/app_logger.dart';
 
 /// Markdown diary editor, UI modeled after open-source editors (Typora/StackEdit):
 /// three explicit modes via a segmented control — 编辑 / 分屏 / 预览.
@@ -13,7 +12,10 @@ class MarkdownDiaryEditor extends StatefulWidget {
     required this.initialText,
     required this.onAutoSave,
     required this.onPublish,
-    this.placeholder = '写下今天做了什么…（支持 Markdown）',
+    this.onDraftChanged,
+    this.initiallyDirty = false,
+    this.readOnly = false,
+    this.placeholder = '写日记…',
     this.maxLines = 6,
     super.key,
   });
@@ -25,6 +27,11 @@ class MarkdownDiaryEditor extends StatefulWidget {
 
   /// Called by the 发布 button — publishes (draft → published).
   final Future<void> Function(String text) onPublish;
+
+  /// Synchronous mirror of typing and formatting, before the debounce.
+  final ValueChanged<String>? onDraftChanged;
+  final bool initiallyDirty;
+  final bool readOnly;
   final String placeholder;
   final int maxLines;
 
@@ -39,12 +46,19 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   bool _dirty = false;
   Timer? _saveTimer;
   bool _saved = false;
+  bool _publishing = false;
+  int _revision = 0;
+  String _lastText = '';
+  String? _error;
   _EditMode _mode = _EditMode.edit;
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.initialText);
+    _lastText = _ctrl.text;
+    _dirty = widget.initiallyDirty;
+    _ctrl.addListener(_textChanged);
   }
 
   @override
@@ -53,7 +67,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     // Only sync when the external text changes AND the editor is empty —
     // never mid-typing (avoids refresh resetting the input).
     if (oldWidget.initialText != widget.initialText &&
+        !_dirty &&
+        !_publishing &&
         _ctrl.text.trim().isEmpty) {
+      _lastText = widget.initialText;
       _ctrl.text = widget.initialText;
     }
   }
@@ -61,7 +78,15 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    final text = _ctrl.text;
+    final save = widget.onAutoSave;
+    final shouldFlush = _dirty && !_publishing && !widget.readOnly;
+    _ctrl.removeListener(_textChanged);
     _ctrl.dispose();
+    if (shouldFlush) {
+      // Captured callback owns the date/API; never touch this state after dispose.
+      unawaited(Future<void>.sync(() => save(text)).catchError((Object _) {}));
+    }
     super.dispose();
   }
 
@@ -86,11 +111,19 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
       offset: start + prefix.length + selected.length,
     );
     setState(() {});
+  }
+
+  void _textChanged() {
+    if (_ctrl.text == _lastText) return;
+    _lastText = _ctrl.text;
+    _revision++;
+    widget.onDraftChanged?.call(_ctrl.text);
     _scheduleSave();
   }
 
   /// Debounced auto-save: saves a DRAFT after typing pauses.
   void _scheduleSave() {
+    if (_publishing || widget.readOnly) return;
     _saveTimer?.cancel();
     setState(() {
       _dirty = true;
@@ -101,32 +134,45 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
 
   Future<void> _autosave() async {
     _saveTimer?.cancel();
+    final revision = _revision;
+    final text = _ctrl.text;
+    final save = widget.onAutoSave;
     try {
-      await widget.onAutoSave(_ctrl.text);
-      if (mounted) {
+      await save(text);
+      if (mounted && _revision == revision && !_publishing) {
         setState(() {
           _dirty = false;
           _saved = true;
+          _error = null;
         });
       }
-    } catch (e) {
-      AppLogger.log('diary draft save failed: $e');
+    } catch (_) {
+      if (mounted) setState(() => _error = '草稿未保存');
     }
   }
 
   /// Explicit publish (发布 button) — draft becomes published.
   Future<void> publish() async {
+    if (_publishing) return;
     _saveTimer?.cancel();
+    final text = _ctrl.text;
+    final publish = widget.onPublish;
+    setState(() => _publishing = true);
     try {
-      await widget.onPublish(_ctrl.text);
+      await publish(text);
       if (mounted) {
         setState(() {
           _dirty = false;
-          _saved = true;
+          _saved = false;
+          _error = null;
+          _lastText = '';
+          _ctrl.clear();
         });
       }
-    } catch (e) {
-      AppLogger.log('diary publish failed: $e');
+    } catch (_) {
+      if (mounted) setState(() => _error = '发布未完成，请重试');
+    } finally {
+      if (mounted) setState(() => _publishing = false);
     }
   }
 
@@ -134,7 +180,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     return IconButton(
       icon: Icon(icon, size: 17),
       tooltip: tooltip,
-      onPressed: onTap,
+      onPressed: _publishing || widget.readOnly ? null : onTap,
       visualDensity: VisualDensity.compact,
     );
   }
@@ -268,7 +314,10 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                         const SizedBox(width: 4),
                       ],
                       Text(
-                        _dirty ? '输入中' : (_saved ? '草稿已存' : ''),
+                        _error ??
+                            (_publishing
+                                ? '发布中'
+                                : (_dirty ? '输入中' : (_saved ? '草稿已存' : ''))),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -281,7 +330,9 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
                   ),
                 ),
                 IconButton.filledTonal(
-                  onPressed: _ctrl.text.trim().isEmpty ? null : publish,
+                  onPressed: _publishing || _ctrl.text.trim().isEmpty
+                      ? null
+                      : publish,
                   icon: const Icon(Icons.publish, size: 16),
                   tooltip: _ctrl.text.trim().isEmpty ? '先写点什么再发布' : '发布',
                   visualDensity: VisualDensity.compact,
@@ -321,6 +372,7 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
   Widget _editor(ColorScheme scheme) {
     return TextField(
       controller: _ctrl,
+      readOnly: widget.readOnly || _publishing,
       maxLines: widget.maxLines,
       minLines: 4,
       decoration: InputDecoration(
@@ -330,7 +382,6 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
         hintStyle: TextStyle(fontSize: 13, color: scheme.outline),
       ),
       style: const TextStyle(fontSize: 13, height: 1.6),
-      onChanged: (_) => _scheduleSave(),
     );
   }
 
@@ -373,3 +424,4 @@ class _MarkdownDiaryEditorState extends State<MarkdownDiaryEditor> {
     );
   }
 }
+

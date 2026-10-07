@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
 
 class StatCard extends StatelessWidget {
   const StatCard({
@@ -21,7 +22,7 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Card(
+      child: MaterialCard(
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -31,21 +32,28 @@ class StatCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   Text(
                     value,
                     // Tabular figures: digit widths don't change as the
                     // value ticks up → no layout jitter on live refresh.
                     style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()]),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                   if (subtitle != null)
-                    Text(subtitle!,
-                        style: TextStyle(
-                            fontSize: 10, color: Colors.grey.shade500)),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
                 ],
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
 
@@ -19,10 +20,11 @@ class _BarChartCardState extends State<BarChartCard> {
   @override
   Widget build(BuildContext context) {
     final apps = widget.apps;
-    final maxTotal =
-        apps.map((a) => a.activeSeconds).fold<int>(1, (m, v) => v > m ? v : m);
+    final maxTotal = apps
+        .map((a) => a.activeSeconds)
+        .fold<int>(1, (m, v) => v > m ? v : m);
 
-    return Card(
+    return MaterialCard(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -40,9 +42,11 @@ class _BarChartCardState extends State<BarChartCard> {
                     Expanded(
                       child: GestureDetector(
                         onTap: () => setState(
-                            () => _selected = _selected == i ? null : i),
+                          () => _selected = _selected == i ? null : i,
+                        ),
                         child: Tooltip(
-                          message: '${apps[i].appName}\n活跃: ${apps[i].activeLabel}',
+                          message:
+                              '${apps[i].appName}\n活跃: ${apps[i].activeLabel}',
                           waitDuration: const Duration(milliseconds: 400),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -106,20 +110,23 @@ class _BarChartCardState extends State<BarChartCard> {
                 child: Container(
                   key: ValueKey(_selected),
                   margin: const EdgeInsets.only(top: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .secondaryContainer
-                        .withValues(alpha: 0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.touch_app_outlined,
-                          size: 14,
-                          color: Theme.of(context).colorScheme.primary),
+                      Icon(
+                        Icons.touch_app_outlined,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -156,8 +163,7 @@ class _Bar extends StatelessWidget {
           end: Alignment.topCenter,
           colors: [base.withValues(alpha: 0.55), base],
         ),
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(5)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
       ),
     );
   }

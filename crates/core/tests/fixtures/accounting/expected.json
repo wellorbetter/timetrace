@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "expectations": {
+    "active_idle_one_hour": {"effective_range": ["2026-01-15T10:00:00Z", "2026-01-15T11:00:00Z"], "segments": [{"state": "active", "start": "2026-01-15T10:00:00Z", "end": "2026-01-15T10:50:00Z", "seconds": 3000}, {"state": "idle", "start": "2026-01-15T10:50:00Z", "end": "2026-01-15T11:00:00Z", "seconds": 600}], "totals": {"active": 3000, "idle": 600, "unknown": 0, "accounted": 3600}},
+    "closed_40_open_20": {"effective_range": ["2026-01-15T10:00:00Z", "2026-01-15T11:00:00Z"], "segments": [{"state": "active", "start": "2026-01-15T10:00:00Z", "end": "2026-01-15T11:00:00Z", "seconds": 3600}], "totals": {"active": 3600, "unknown": 0}, "observed_through": "2026-01-15T11:00:00Z"},
+    "pause_resume": {"segments": [{"state": "active", "start": "2026-01-15T13:00:00Z", "end": "2026-01-15T13:10:00Z", "seconds": 600}, {"state": "paused", "start": "2026-01-15T13:10:00Z", "end": "2026-01-15T13:20:00Z", "seconds": 600}, {"state": "unknown", "start": "2026-01-15T13:20:00Z", "end": "2026-01-15T13:21:00Z", "seconds": 60}, {"state": "active", "start": "2026-01-15T13:21:00Z", "end": "2026-01-15T13:30:00Z", "seconds": 540}], "totals": {"active": 1140, "paused": 600, "unknown": 60}},
+    "normal_stop": {"segments": [{"state": "active", "start": "2026-01-15T13:30:00Z", "end": "2026-01-15T13:40:00Z", "seconds": 600}, {"state": "system_gap", "start": "2026-01-15T13:40:00Z", "end": "2026-01-15T13:45:00Z", "seconds": 300, "evidence": "persisted_stop_and_next_start"}], "stop_ack_processing_time": "2026-01-15T13:40:02Z", "ack_requires": ["checkpoint_committed", "monitor_joined"]},
+    "continuity_and_attribution": {"segments": [{"state": "active", "start": "2026-01-15T12:00:00Z", "end": "2026-01-15T12:00:07Z", "seconds": 7}, {"state": "unknown", "start": "2026-01-15T12:00:07Z", "end": "2026-01-15T12:10:00Z", "seconds": 593}, {"state": "active", "start": "2026-01-15T12:10:00Z", "end": "2026-01-15T12:15:00Z", "seconds": 300}, {"state": "system_gap", "start": "2026-01-15T12:15:00Z", "end": "2026-01-15T12:18:00Z", "seconds": 180}, {"state": "unknown", "start": "2026-01-15T12:18:00Z", "end": "2026-01-15T12:19:00Z", "seconds": 60}, {"state": "active", "start": "2026-01-15T12:19:00Z", "end": "2026-01-15T12:20:00Z", "seconds": 60}], "totals": {"active": 367, "system_gap": 180, "unknown": 653}, "attribution": [{"bucket": "editor.synthetic", "seconds": 3}, {"bucket": "__UNATTRIBUTED__", "seconds": 4}, {"bucket": "browser.synthetic", "seconds": 300}, {"bucket": "terminal.synthetic", "seconds": 60}]},
+    "crash_unknown_tail": {"effective_range": ["2026-01-15T14:00:00Z", "2026-01-15T14:31:00Z"], "segments": [{"state": "active", "start": "2026-01-15T14:00:00Z", "end": "2026-01-15T14:10:00Z", "seconds": 600}, {"state": "unknown", "start": "2026-01-15T14:10:00Z", "end": "2026-01-15T14:31:00Z", "seconds": 1260}], "durable_observed_through": "2026-01-15T14:10:00Z", "kill_variants_equal": true, "restart_at_advances_active": false},
+    "checkpoint_failure_then_kill": {"effective_range": ["2026-01-15T15:00:00Z", "2026-01-15T15:31:00Z"], "segments": [{"state": "active", "start": "2026-01-15T15:00:00Z", "end": "2026-01-15T15:10:00Z", "seconds": 600}, {"state": "unknown", "start": "2026-01-15T15:10:00Z", "end": "2026-01-15T15:31:00Z", "seconds": 1260}], "durable_observed_through": "2026-01-15T15:10:00Z", "failed_candidate_is_not_durable": true},
+    "cross_midnight": {"2026-01-15": {"active_seconds": 600, "segment": ["2026-01-15T23:50:00Z", "2026-01-16T00:00:00Z"]}, "2026-01-16": {"active_seconds": 600, "segment": ["2026-01-16T00:00:00Z", "2026-01-16T00:10:00Z"]}},
+    "legacy_migration_restart": {"effective_range": ["2026-01-15T15:00:00Z", "2026-01-15T16:00:00Z"], "totals": {"active": 1800, "idle": 600, "unknown": 1200}, "app_totals": {"editor.synthetic": 1800}, "durable_cursor_after_run_1": "usage-2", "durable_cursor_after_run_2": "usage-3", "canonical_source_ids": ["legacy:usage_session:1", "legacy:usage_session:2", "native-1"], "usage-3": "legacy_open_unbounded_unknown", "native_precedence": true, "run_3_additional_rows": 0},
+    "as_of_matrix": {
+      "future": {"result": "FutureAsOf", "refresh_calls": 0},
+      "historical": {"effective_end": "2026-01-15T17:59:30Z", "active": 30, "unknown": 0, "refresh_calls": 0, "integrity": "complete"},
+      "current_success": {"effective_end": "2026-01-15T18:00:00Z", "active": 60, "unknown": 0, "observed_through": "2026-01-15T18:00:00Z", "refresh_calls": 1, "integrity": "complete"},
+      "current_sample_failed": {"effective_end": "2026-01-15T18:00:00Z", "active": 50, "unknown": 10, "observed_through": "2026-01-15T17:59:50Z", "refresh_calls": 1, "integrity": "partial"},
+      "current_sample_timeout": {"effective_end": "2026-01-15T18:00:00Z", "active": 50, "unknown": 10, "observed_through": "2026-01-15T17:59:50Z", "refresh_calls": 1, "integrity": "partial"},
+      "current_commit_failure": {"effective_end": "2026-01-15T18:00:00Z", "active": 50, "unknown": 10, "observed_through": "2026-01-15T17:59:50Z", "refresh_calls": 1, "integrity": "partial"},
+      "current_read_failure": {"effective_end": "2026-01-15T18:00:00Z", "active": 50, "unknown": 10, "observed_through": "2026-01-15T17:59:50Z", "refresh_calls": 1, "integrity": "partial"}
+    },
+    "invalid_ranges": {"reversed": "InvalidRange", "invalid_date": "InvalidLocalDate", "invalid_timezone": "InvalidTimezone"},
+    "dst_spring_forward": {"day_start_utc": "2026-03-08T05:00:00Z", "day_end_utc": "2026-03-09T04:00:00Z", "day_seconds": 82800, "bucket_count": 23, "all_state": "unknown", "hour_sum_equals_day": true},
+    "dst_fall_back": {"day_start_utc": "2026-11-01T04:00:00Z", "day_end_utc": "2026-11-02T05:00:00Z", "day_seconds": 90000, "bucket_count": 25, "all_state": "unknown", "hour_sum_equals_day": true},
+    "production_checkpoint_matrix": {
+      "range": ["2026-02-10T09:50:00Z", "2026-02-10T10:20:00Z"],
+      "legacy_observed_through": "2026-02-10T10:10:00Z",
+      "cutover_observed_through": "2026-02-10T10:20:00Z",
+      "step_seconds": 600,
+      "fault_points": ["after_legacy_closure", "after_canonical_interval", "after_metadata_identity_hash", "after_observed_through"],
+      "post_cutover_totals": {"active": 1200, "unknown": 600, "accounted": 1800},
+      "lifecycle_order": ["first_cutover", "heartbeat", "current_read", "pause", "resume", "stop", "startup_recovery"],
+      "lifecycle_totals": {"unknown": 1200, "accounted": 4200},
+      "startup_recovery_state": "unknown",
+      "exact_replay_rows_delta": 0
+    }
+  },
+  "global_invariants": ["active+idle+paused+privacy_excluded+system_gap+unknown=range_seconds", "sum(app.active)=active", "sum(window.active)<=parent_app.active", "sum(hour.state)=day.state", "future_as_of_is_rejected", "durable_observed_through_only_advances_after_commit"]
+}
+

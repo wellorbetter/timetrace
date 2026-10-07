@@ -1,20 +1,32 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:timetrace_app/src/bridge/accounting.dart';
 import 'package:timetrace_app/src/core/format.dart';
 
 part 'dashboard_state.freezed.dart';
 
-/// Immutable dashboard state combining usage split + overall stats.
+/// A projection of one canonical Rust accounting snapshot.
 @freezed
 abstract class DashboardState with _$DashboardState {
   const factory DashboardState({
     required List<AppUsageItem> apps,
+    required List<AttributionTotalDto> appAttribution,
+    required List<AttributionTotalDto> windows,
+    required List<AttributionTotalDto> pages,
+    required List<LocalHourBucketDto> hours,
     required int totalActiveSeconds,
     required int totalIdleSeconds,
-    required int lifetimeSeconds,
-    @Default(0) int thisWeekSeconds,
-    @Default(0) int lastWeekSeconds,
+    required int pausedSeconds,
+    required int privacyExcludedSeconds,
+    required int systemGapSeconds,
+    required int unknownSeconds,
+    required int accountedSeconds,
+    required SnapshotIntegrityDto integrity,
+    required String requestedStartUtc,
+    required String requestedEndUtc,
+    required String effectiveStartUtc,
+    required String effectiveEndUtc,
+    required String observedThroughUtc,
     @Default(false) bool databaseDegraded,
-    String? since,
   }) = _DashboardState;
 
   const DashboardState._();
@@ -39,6 +51,6 @@ abstract class AppUsageItem with _$AppUsageItem {
 
   String get idleLabel {
     final m = idleSeconds ~/ 60;
-    return '${m}分';
+    return '$m分';
   }
 }

@@ -10,6 +10,7 @@
 //! - `tui/` consumes `DataStore`, `ProcessQuery`, `StartupScanner` — never engine types.
 //! - No `pub` fields on structs that should be constructed via `new()`.
 
+pub mod accounting;
 pub mod events;
 pub mod idle;
 pub mod process;
@@ -18,6 +19,7 @@ pub mod storage;
 pub mod window;
 
 // Re-export everything for convenience
+pub use accounting::*;
 pub use events::*;
 pub use idle::*;
 pub use process::*;

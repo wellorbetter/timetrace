@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1560329493;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -713476408;
 
 // Section: executor
 
@@ -328,6 +328,174 @@ fn wire__crate__api__TimeTraceApi_export_csv_impl(
                 ))?;
                 Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_export_csv_async_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_export_csv_async",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_start = <String>::sse_decode(&mut deserializer);
+            let api_end = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::accounting::AccountingBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::TimeTraceApi::export_csv_async(
+                        &*api_that_guard,
+                        api_start,
+                        api_end,
+                    )?;
+                    Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_accounting_snapshot_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_accounting_snapshot",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_range =
+                <crate::accounting::AccountingRangeRequest>::sse_decode(&mut deserializer);
+            let api_as_of =
+                <crate::accounting::AccountingAsOfRequest>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::accounting::AccountingBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::TimeTraceApi::get_accounting_snapshot(
+                        &*api_that_guard,
+                        api_range,
+                        api_as_of,
+                    )?;
+                    Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_accounting_snapshot_current_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_accounting_snapshot_current",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
+            >>::sse_decode(&mut deserializer);
+            let api_start_utc = <String>::sse_decode(&mut deserializer);
+            let api_end_utc = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::TimeTraceApi::get_accounting_snapshot_current(
+                        &*api_that_guard,
+                        api_start_utc,
+                        api_end_utc,
+                    )?;
+                    Ok(output_ok)
+                })(),
+            )
         },
     )
 }
@@ -1092,6 +1260,37 @@ fn wire__crate__api__TimeTraceApi_get_stats_impl(
                 ))?;
                 Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__TimeTraceApi_get_system_iana_timezone_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TimeTraceApi_get_system_iana_timezone",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::TimeTraceApi::get_system_iana_timezone()?;
+                    Ok(output_ok)
+                })(),
+            )
         },
     )
 }
@@ -1962,6 +2161,9 @@ fn wire__crate__api__TimeTraceApi_update_diary_entry_impl(
 // Section: related_funcs
 
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>
 );
 
@@ -1975,6 +2177,16 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
+impl SseDecode for AccountingSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
 impl SseDecode for TimeTraceApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1982,6 +2194,16 @@ impl SseDecode for TimeTraceApi {
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>,
         >>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
+impl SseDecode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
     }
 }
 
@@ -2003,6 +2225,253 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::accounting::AccountingAsOfRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::accounting::AccountingAsOfRequest::Current;
+            }
+            1 => {
+                let mut var_asOfUtc = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingAsOfRequest::At {
+                    as_of_utc: var_asOfUtc,
+                };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingBridgeError {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field = <String>::sse_decode(deserializer);
+                let mut var_value = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidUtcTimestamp {
+                    field: var_field,
+                    value: var_value,
+                };
+            }
+            1 => {
+                let mut var_value = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidLocalDate {
+                    value: var_value,
+                };
+            }
+            2 => {
+                let mut var_start = <String>::sse_decode(deserializer);
+                let mut var_end = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidDateRange {
+                    start: var_start,
+                    end: var_end,
+                };
+            }
+            3 => {
+                let mut var_startUtc = <String>::sse_decode(deserializer);
+                let mut var_endUtc = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidRange {
+                    start_utc: var_startUtc,
+                    end_utc: var_endUtc,
+                };
+            }
+            4 => {
+                let mut var_asOfUtc = <String>::sse_decode(deserializer);
+                let mut var_startUtc = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::AsOfBeforeStart {
+                    as_of_utc: var_asOfUtc,
+                    start_utc: var_startUtc,
+                };
+            }
+            5 => {
+                let mut var_asOfUtc = <String>::sse_decode(deserializer);
+                let mut var_deadlineUtc = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::FutureAsOf {
+                    as_of_utc: var_asOfUtc,
+                    deadline_utc: var_deadlineUtc,
+                };
+            }
+            6 => {
+                let mut var_timezone = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidTimeZone {
+                    timezone: var_timezone,
+                };
+            }
+            7 => {
+                let mut var_timezone = <String>::sse_decode(deserializer);
+                let mut var_boundary = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::InvalidLocalBoundary {
+                    timezone: var_timezone,
+                    boundary: var_boundary,
+                };
+            }
+            8 => {
+                let mut var_message = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::Storage {
+                    message: var_message,
+                };
+            }
+            9 => {
+                let mut var_sourceIdentity = <String>::sse_decode(deserializer);
+                let mut var_incoming = <i64>::sse_decode(deserializer);
+                let mut var_existing = <i64>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::StaleRevision {
+                    source_identity: var_sourceIdentity,
+                    incoming: var_incoming,
+                    existing: var_existing,
+                };
+            }
+            10 => {
+                let mut var_message = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingBridgeError::ProducerUnavailable {
+                    message: var_message,
+                };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingIntervalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_startUtc = <String>::sse_decode(deserializer);
+        let mut var_endUtc = <String>::sse_decode(deserializer);
+        let mut var_state = <crate::accounting::AccountingStateDto>::sse_decode(deserializer);
+        let mut var_appId = <Option<String>>::sse_decode(deserializer);
+        let mut var_windowId = <Option<String>>::sse_decode(deserializer);
+        let mut var_windowAppId = <Option<String>>::sse_decode(deserializer);
+        let mut var_pageId = <Option<String>>::sse_decode(deserializer);
+        let mut var_pageWindowId = <Option<String>>::sse_decode(deserializer);
+        let mut var_sourceIdentity = <String>::sse_decode(deserializer);
+        let mut var_sourceRevision = <i64>::sse_decode(deserializer);
+        return crate::accounting::AccountingIntervalDto {
+            start_utc: var_startUtc,
+            end_utc: var_endUtc,
+            state: var_state,
+            app_id: var_appId,
+            window_id: var_windowId,
+            window_app_id: var_windowAppId,
+            page_id: var_pageId,
+            page_window_id: var_pageWindowId,
+            source_identity: var_sourceIdentity,
+            source_revision: var_sourceRevision,
+        };
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingRangeRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_startUtc = <String>::sse_decode(deserializer);
+                let mut var_endUtc = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingRangeRequest::Utc {
+                    start_utc: var_startUtc,
+                    end_utc: var_endUtc,
+                };
+            }
+            1 => {
+                let mut var_localDate = <String>::sse_decode(deserializer);
+                let mut var_timezone = <String>::sse_decode(deserializer);
+                return crate::accounting::AccountingRangeRequest::LocalDate {
+                    local_date: var_localDate,
+                    timezone: var_timezone,
+                };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingSnapshotDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_requestedStartUtc = <String>::sse_decode(deserializer);
+        let mut var_requestedEndUtc = <String>::sse_decode(deserializer);
+        let mut var_effectiveStartUtc = <String>::sse_decode(deserializer);
+        let mut var_effectiveEndUtc = <String>::sse_decode(deserializer);
+        let mut var_observedThroughUtc = <String>::sse_decode(deserializer);
+        let mut var_totals = <crate::accounting::AccountingTotalsDto>::sse_decode(deserializer);
+        let mut var_intervals =
+            <Vec<crate::accounting::AccountingIntervalDto>>::sse_decode(deserializer);
+        let mut var_apps = <Vec<crate::accounting::AttributionTotalDto>>::sse_decode(deserializer);
+        let mut var_windows =
+            <Vec<crate::accounting::AttributionTotalDto>>::sse_decode(deserializer);
+        let mut var_pages = <Vec<crate::accounting::AttributionTotalDto>>::sse_decode(deserializer);
+        let mut var_integrity = <crate::accounting::SnapshotIntegrityDto>::sse_decode(deserializer);
+        let mut var_timezone = <Option<String>>::sse_decode(deserializer);
+        let mut var_localDate = <Option<String>>::sse_decode(deserializer);
+        let mut var_hours = <Vec<crate::accounting::LocalHourBucketDto>>::sse_decode(deserializer);
+        return crate::accounting::AccountingSnapshotDto {
+            requested_start_utc: var_requestedStartUtc,
+            requested_end_utc: var_requestedEndUtc,
+            effective_start_utc: var_effectiveStartUtc,
+            effective_end_utc: var_effectiveEndUtc,
+            observed_through_utc: var_observedThroughUtc,
+            totals: var_totals,
+            intervals: var_intervals,
+            apps: var_apps,
+            windows: var_windows,
+            pages: var_pages,
+            integrity: var_integrity,
+            timezone: var_timezone,
+            local_date: var_localDate,
+            hours: var_hours,
+        };
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingStateDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::accounting::AccountingStateDto::Active,
+            1 => crate::accounting::AccountingStateDto::Idle,
+            2 => crate::accounting::AccountingStateDto::Paused,
+            3 => crate::accounting::AccountingStateDto::PrivacyExcluded,
+            4 => crate::accounting::AccountingStateDto::SystemGap,
+            5 => crate::accounting::AccountingStateDto::Unknown,
+            _ => unreachable!("Invalid variant for AccountingStateDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::accounting::AccountingTotalsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_activeSeconds = <i64>::sse_decode(deserializer);
+        let mut var_idleSeconds = <i64>::sse_decode(deserializer);
+        let mut var_pausedSeconds = <i64>::sse_decode(deserializer);
+        let mut var_privacyExcludedSeconds = <i64>::sse_decode(deserializer);
+        let mut var_systemGapSeconds = <i64>::sse_decode(deserializer);
+        let mut var_unknownSeconds = <i64>::sse_decode(deserializer);
+        let mut var_accountedSeconds = <i64>::sse_decode(deserializer);
+        return crate::accounting::AccountingTotalsDto {
+            active_seconds: var_activeSeconds,
+            idle_seconds: var_idleSeconds,
+            paused_seconds: var_pausedSeconds,
+            privacy_excluded_seconds: var_privacyExcludedSeconds,
+            system_gap_seconds: var_systemGapSeconds,
+            unknown_seconds: var_unknownSeconds,
+            accounted_seconds: var_accountedSeconds,
+        };
+    }
+}
+
 impl SseDecode for crate::api::AppUsageDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2015,6 +2484,20 @@ impl SseDecode for crate::api::AppUsageDto {
             active_seconds: var_activeSeconds,
             idle_seconds: var_idleSeconds,
             exe_path: var_exePath,
+        };
+    }
+}
+
+impl SseDecode for crate::accounting::AttributionTotalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_parentId = <Option<String>>::sse_decode(deserializer);
+        let mut var_seconds = <i64>::sse_decode(deserializer);
+        return crate::accounting::AttributionTotalDto {
+            id: var_id,
+            parent_id: var_parentId,
+            seconds: var_seconds,
         };
     }
 }
@@ -2118,6 +2601,13 @@ impl SseDecode for crate::api::DiaryEntryDto {
     }
 }
 
+impl SseDecode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2151,6 +2641,20 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::accounting::AccountingIntervalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::accounting::AccountingIntervalDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::AppUsageDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2158,6 +2662,20 @@ impl SseDecode for Vec<crate::api::AppUsageDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::AppUsageDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::accounting::AttributionTotalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::accounting::AttributionTotalDto>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -2182,6 +2700,20 @@ impl SseDecode for Vec<crate::api::DiaryEntryDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::DiaryEntryDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::accounting::LocalHourBucketDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::accounting::LocalHourBucketDto>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -2259,6 +2791,32 @@ impl SseDecode for Vec<crate::api::StartupDto> {
     }
 }
 
+impl SseDecode for crate::accounting::LocalHourBucketDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_stableId = <String>::sse_decode(deserializer);
+        let mut var_localDate = <String>::sse_decode(deserializer);
+        let mut var_localHour = <u32>::sse_decode(deserializer);
+        let mut var_utcOffsetSeconds = <i32>::sse_decode(deserializer);
+        let mut var_fold = <u8>::sse_decode(deserializer);
+        let mut var_startUtc = <String>::sse_decode(deserializer);
+        let mut var_endUtc = <String>::sse_decode(deserializer);
+        let mut var_totals = <crate::accounting::AccountingTotalsDto>::sse_decode(deserializer);
+        let mut var_apps = <Vec<crate::accounting::AttributionTotalDto>>::sse_decode(deserializer);
+        return crate::accounting::LocalHourBucketDto {
+            stable_id: var_stableId,
+            local_date: var_localDate,
+            local_hour: var_localHour,
+            utc_offset_seconds: var_utcOffsetSeconds,
+            fold: var_fold,
+            start_utc: var_startUtc,
+            end_utc: var_endUtc,
+            totals: var_totals,
+            apps: var_apps,
+        };
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2332,6 +2890,18 @@ impl SseDecode for (String, String) {
     }
 }
 
+impl SseDecode for crate::accounting::SnapshotIntegrityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::accounting::SnapshotIntegrityDto::Complete,
+            1 => crate::accounting::SnapshotIntegrityDto::Partial,
+            _ => unreachable!("Invalid variant for SnapshotIntegrityDto: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::StartupDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2399,13 +2969,6 @@ impl SseDecode for usize {
     }
 }
 
-impl SseDecode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
-    }
-}
-
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -2415,6 +2978,15 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
+        7 => {
+            wire__crate__api__TimeTraceApi_export_csv_async_impl(port, ptr, rust_vec_len, data_len)
+        }
+        8 => wire__crate__api__TimeTraceApi_get_accounting_snapshot_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -2433,61 +3005,89 @@ fn pde_ffi_dispatcher_sync_impl(
         4 => wire__crate__api__TimeTraceApi_create_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__TimeTraceApi_delete_diary_entry_impl(ptr, rust_vec_len, data_len),
         6 => wire__crate__api__TimeTraceApi_export_csv_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__TimeTraceApi_get_app_hourly_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__TimeTraceApi_get_app_icon_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__TimeTraceApi_get_config_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__TimeTraceApi_get_dashboard_data_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__TimeTraceApi_get_day_detail_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__TimeTraceApi_get_day_hourly_impl(ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__TimeTraceApi_get_diary_draft_impl(ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__TimeTraceApi_get_diary_entries_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__TimeTraceApi_get_diary_entries_detailed_impl(
+        9 => wire__crate__api__TimeTraceApi_get_accounting_snapshot_current_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__TimeTraceApi_get_diary_images_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__TimeTraceApi_get_diary_images_detailed_impl(
+        10 => wire__crate__api__TimeTraceApi_get_app_hourly_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__TimeTraceApi_get_app_icon_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__TimeTraceApi_get_config_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__TimeTraceApi_get_dashboard_data_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__TimeTraceApi_get_day_detail_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__TimeTraceApi_get_day_hourly_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__TimeTraceApi_get_diary_draft_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__TimeTraceApi_get_diary_entries_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__TimeTraceApi_get_diary_entries_detailed_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__TimeTraceApi_get_diary_images_for_entry_impl(
+        19 => wire__crate__api__TimeTraceApi_get_diary_images_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__TimeTraceApi_get_diary_images_detailed_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__TimeTraceApi_get_hour_apps_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__TimeTraceApi_get_week_totals_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__TimeTraceApi_is_database_degraded_impl(ptr, rust_vec_len, data_len),
-        26 => {
+        21 => wire__crate__api__TimeTraceApi_get_diary_images_for_entry_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        22 => wire__crate__api__TimeTraceApi_get_hour_apps_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__TimeTraceApi_get_startup_entries_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__TimeTraceApi_get_stats_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__TimeTraceApi_get_system_iana_timezone_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        26 => wire__crate__api__TimeTraceApi_get_usage_split_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__TimeTraceApi_get_week_totals_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__TimeTraceApi_get_window_titles_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__TimeTraceApi_is_database_degraded_impl(ptr, rust_vec_len, data_len),
+        30 => {
             wire__crate__api__TimeTraceApi_is_self_start_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__TimeTraceApi_publish_diary_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__TimeTraceApi_remove_diary_image_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__TimeTraceApi_save_diary_draft_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__TimeTraceApi_set_diary_impl(ptr, rust_vec_len, data_len),
-        34 => {
+        31 => wire__crate__api__TimeTraceApi_is_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__TimeTraceApi_publish_diary_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__TimeTraceApi_remove_diary_image_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__TimeTraceApi_resolve_exe_path_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__TimeTraceApi_save_diary_draft_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__TimeTraceApi_set_config_impl(ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__TimeTraceApi_set_diary_impl(ptr, rust_vec_len, data_len),
+        38 => {
             wire__crate__api__TimeTraceApi_set_diary_image_entry_impl(ptr, rust_vec_len, data_len)
         }
-        35 => {
+        39 => {
             wire__crate__api__TimeTraceApi_set_self_start_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        36 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__TimeTraceApi_update_diary_entry_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__TimeTraceApi_set_tracking_paused_impl(ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__TimeTraceApi_toggle_startup_impl(ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__TimeTraceApi_update_diary_entry_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
 
 // Section: rust2dart
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<AccountingSnapshot> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<AccountingSnapshot>
+{
+}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<AccountingSnapshot>> for AccountingSnapshot {
+    fn into_into_dart(self) -> FrbWrapper<AccountingSnapshot> {
+        self.into()
+    }
+}
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<TimeTraceApi> {
@@ -2505,6 +3105,269 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<TimeTraceApi>> for TimeTraceAp
 }
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingAsOfRequest {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::accounting::AccountingAsOfRequest::Current => [0.into_dart()].into_dart(),
+            crate::accounting::AccountingAsOfRequest::At { as_of_utc } => {
+                [1.into_dart(), as_of_utc.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingAsOfRequest
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingAsOfRequest>
+    for crate::accounting::AccountingAsOfRequest
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingAsOfRequest {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingBridgeError {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::accounting::AccountingBridgeError::InvalidUtcTimestamp { field, value } => [
+                0.into_dart(),
+                field.into_into_dart().into_dart(),
+                value.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::InvalidLocalDate { value } => {
+                [1.into_dart(), value.into_into_dart().into_dart()].into_dart()
+            }
+            crate::accounting::AccountingBridgeError::InvalidDateRange { start, end } => [
+                2.into_dart(),
+                start.into_into_dart().into_dart(),
+                end.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::InvalidRange { start_utc, end_utc } => [
+                3.into_dart(),
+                start_utc.into_into_dart().into_dart(),
+                end_utc.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::AsOfBeforeStart {
+                as_of_utc,
+                start_utc,
+            } => [
+                4.into_dart(),
+                as_of_utc.into_into_dart().into_dart(),
+                start_utc.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::FutureAsOf {
+                as_of_utc,
+                deadline_utc,
+            } => [
+                5.into_dart(),
+                as_of_utc.into_into_dart().into_dart(),
+                deadline_utc.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::InvalidTimeZone { timezone } => {
+                [6.into_dart(), timezone.into_into_dart().into_dart()].into_dart()
+            }
+            crate::accounting::AccountingBridgeError::InvalidLocalBoundary {
+                timezone,
+                boundary,
+            } => [
+                7.into_dart(),
+                timezone.into_into_dart().into_dart(),
+                boundary.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::Storage { message } => {
+                [8.into_dart(), message.into_into_dart().into_dart()].into_dart()
+            }
+            crate::accounting::AccountingBridgeError::StaleRevision {
+                source_identity,
+                incoming,
+                existing,
+            } => [
+                9.into_dart(),
+                source_identity.into_into_dart().into_dart(),
+                incoming.into_into_dart().into_dart(),
+                existing.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingBridgeError::ProducerUnavailable { message } => {
+                [10.into_dart(), message.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingBridgeError
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingBridgeError>
+    for crate::accounting::AccountingBridgeError
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingBridgeError {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingIntervalDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.start_utc.into_into_dart().into_dart(),
+            self.end_utc.into_into_dart().into_dart(),
+            self.state.into_into_dart().into_dart(),
+            self.app_id.into_into_dart().into_dart(),
+            self.window_id.into_into_dart().into_dart(),
+            self.window_app_id.into_into_dart().into_dart(),
+            self.page_id.into_into_dart().into_dart(),
+            self.page_window_id.into_into_dart().into_dart(),
+            self.source_identity.into_into_dart().into_dart(),
+            self.source_revision.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingIntervalDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingIntervalDto>
+    for crate::accounting::AccountingIntervalDto
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingIntervalDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingRangeRequest {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::accounting::AccountingRangeRequest::Utc { start_utc, end_utc } => [
+                0.into_dart(),
+                start_utc.into_into_dart().into_dart(),
+                end_utc.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::accounting::AccountingRangeRequest::LocalDate {
+                local_date,
+                timezone,
+            } => [
+                1.into_dart(),
+                local_date.into_into_dart().into_dart(),
+                timezone.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingRangeRequest
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingRangeRequest>
+    for crate::accounting::AccountingRangeRequest
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingRangeRequest {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingSnapshotDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.requested_start_utc.into_into_dart().into_dart(),
+            self.requested_end_utc.into_into_dart().into_dart(),
+            self.effective_start_utc.into_into_dart().into_dart(),
+            self.effective_end_utc.into_into_dart().into_dart(),
+            self.observed_through_utc.into_into_dart().into_dart(),
+            self.totals.into_into_dart().into_dart(),
+            self.intervals.into_into_dart().into_dart(),
+            self.apps.into_into_dart().into_dart(),
+            self.windows.into_into_dart().into_dart(),
+            self.pages.into_into_dart().into_dart(),
+            self.integrity.into_into_dart().into_dart(),
+            self.timezone.into_into_dart().into_dart(),
+            self.local_date.into_into_dart().into_dart(),
+            self.hours.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingSnapshotDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingSnapshotDto>
+    for crate::accounting::AccountingSnapshotDto
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingSnapshotDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingStateDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Active => 0.into_dart(),
+            Self::Idle => 1.into_dart(),
+            Self::Paused => 2.into_dart(),
+            Self::PrivacyExcluded => 3.into_dart(),
+            Self::SystemGap => 4.into_dart(),
+            Self::Unknown => 5.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingStateDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingStateDto>
+    for crate::accounting::AccountingStateDto
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingStateDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AccountingTotalsDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.active_seconds.into_into_dart().into_dart(),
+            self.idle_seconds.into_into_dart().into_dart(),
+            self.paused_seconds.into_into_dart().into_dart(),
+            self.privacy_excluded_seconds.into_into_dart().into_dart(),
+            self.system_gap_seconds.into_into_dart().into_dart(),
+            self.unknown_seconds.into_into_dart().into_dart(),
+            self.accounted_seconds.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AccountingTotalsDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AccountingTotalsDto>
+    for crate::accounting::AccountingTotalsDto
+{
+    fn into_into_dart(self) -> crate::accounting::AccountingTotalsDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::AppUsageDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2519,6 +3382,28 @@ impl flutter_rust_bridge::IntoDart for crate::api::AppUsageDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::AppUsageDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::AppUsageDto> for crate::api::AppUsageDto {
     fn into_into_dart(self) -> crate::api::AppUsageDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::AttributionTotalDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.parent_id.into_into_dart().into_dart(),
+            self.seconds.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::AttributionTotalDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::AttributionTotalDto>
+    for crate::accounting::AttributionTotalDto
+{
+    fn into_into_dart(self) -> crate::accounting::AttributionTotalDto {
         self
     }
 }
@@ -2638,6 +3523,34 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::IconDto> for crate::api::Icon
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::LocalHourBucketDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.stable_id.into_into_dart().into_dart(),
+            self.local_date.into_into_dart().into_dart(),
+            self.local_hour.into_into_dart().into_dart(),
+            self.utc_offset_seconds.into_into_dart().into_dart(),
+            self.fold.into_into_dart().into_dart(),
+            self.start_utc.into_into_dart().into_dart(),
+            self.end_utc.into_into_dart().into_dart(),
+            self.totals.into_into_dart().into_dart(),
+            self.apps.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::LocalHourBucketDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::LocalHourBucketDto>
+    for crate::accounting::LocalHourBucketDto
+{
+    fn into_into_dart(self) -> crate::accounting::LocalHourBucketDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::PageDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2650,6 +3563,27 @@ impl flutter_rust_bridge::IntoDart for crate::api::PageDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PageDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::PageDto> for crate::api::PageDto {
     fn into_into_dart(self) -> crate::api::PageDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::accounting::SnapshotIntegrityDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Complete => 0.into_dart(),
+            Self::Partial => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::accounting::SnapshotIntegrityDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::accounting::SnapshotIntegrityDto>
+    for crate::accounting::SnapshotIntegrityDto
+{
+    fn into_into_dart(self) -> crate::accounting::SnapshotIntegrityDto {
         self
     }
 }
@@ -2698,10 +3632,28 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
+impl SseEncode for AccountingSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+    }
+}
+
 impl SseEncode for TimeTraceApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+    }
+}
+
+impl SseEncode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
     }
 }
 
@@ -2723,6 +3675,193 @@ impl SseEncode for String {
     }
 }
 
+impl SseEncode for crate::accounting::AccountingAsOfRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::accounting::AccountingAsOfRequest::Current => {
+                <i32>::sse_encode(0, serializer);
+            }
+            crate::accounting::AccountingAsOfRequest::At { as_of_utc } => {
+                <i32>::sse_encode(1, serializer);
+                <String>::sse_encode(as_of_utc, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingBridgeError {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::accounting::AccountingBridgeError::InvalidUtcTimestamp { field, value } => {
+                <i32>::sse_encode(0, serializer);
+                <String>::sse_encode(field, serializer);
+                <String>::sse_encode(value, serializer);
+            }
+            crate::accounting::AccountingBridgeError::InvalidLocalDate { value } => {
+                <i32>::sse_encode(1, serializer);
+                <String>::sse_encode(value, serializer);
+            }
+            crate::accounting::AccountingBridgeError::InvalidDateRange { start, end } => {
+                <i32>::sse_encode(2, serializer);
+                <String>::sse_encode(start, serializer);
+                <String>::sse_encode(end, serializer);
+            }
+            crate::accounting::AccountingBridgeError::InvalidRange { start_utc, end_utc } => {
+                <i32>::sse_encode(3, serializer);
+                <String>::sse_encode(start_utc, serializer);
+                <String>::sse_encode(end_utc, serializer);
+            }
+            crate::accounting::AccountingBridgeError::AsOfBeforeStart {
+                as_of_utc,
+                start_utc,
+            } => {
+                <i32>::sse_encode(4, serializer);
+                <String>::sse_encode(as_of_utc, serializer);
+                <String>::sse_encode(start_utc, serializer);
+            }
+            crate::accounting::AccountingBridgeError::FutureAsOf {
+                as_of_utc,
+                deadline_utc,
+            } => {
+                <i32>::sse_encode(5, serializer);
+                <String>::sse_encode(as_of_utc, serializer);
+                <String>::sse_encode(deadline_utc, serializer);
+            }
+            crate::accounting::AccountingBridgeError::InvalidTimeZone { timezone } => {
+                <i32>::sse_encode(6, serializer);
+                <String>::sse_encode(timezone, serializer);
+            }
+            crate::accounting::AccountingBridgeError::InvalidLocalBoundary {
+                timezone,
+                boundary,
+            } => {
+                <i32>::sse_encode(7, serializer);
+                <String>::sse_encode(timezone, serializer);
+                <String>::sse_encode(boundary, serializer);
+            }
+            crate::accounting::AccountingBridgeError::Storage { message } => {
+                <i32>::sse_encode(8, serializer);
+                <String>::sse_encode(message, serializer);
+            }
+            crate::accounting::AccountingBridgeError::StaleRevision {
+                source_identity,
+                incoming,
+                existing,
+            } => {
+                <i32>::sse_encode(9, serializer);
+                <String>::sse_encode(source_identity, serializer);
+                <i64>::sse_encode(incoming, serializer);
+                <i64>::sse_encode(existing, serializer);
+            }
+            crate::accounting::AccountingBridgeError::ProducerUnavailable { message } => {
+                <i32>::sse_encode(10, serializer);
+                <String>::sse_encode(message, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingIntervalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.start_utc, serializer);
+        <String>::sse_encode(self.end_utc, serializer);
+        <crate::accounting::AccountingStateDto>::sse_encode(self.state, serializer);
+        <Option<String>>::sse_encode(self.app_id, serializer);
+        <Option<String>>::sse_encode(self.window_id, serializer);
+        <Option<String>>::sse_encode(self.window_app_id, serializer);
+        <Option<String>>::sse_encode(self.page_id, serializer);
+        <Option<String>>::sse_encode(self.page_window_id, serializer);
+        <String>::sse_encode(self.source_identity, serializer);
+        <i64>::sse_encode(self.source_revision, serializer);
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingRangeRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::accounting::AccountingRangeRequest::Utc { start_utc, end_utc } => {
+                <i32>::sse_encode(0, serializer);
+                <String>::sse_encode(start_utc, serializer);
+                <String>::sse_encode(end_utc, serializer);
+            }
+            crate::accounting::AccountingRangeRequest::LocalDate {
+                local_date,
+                timezone,
+            } => {
+                <i32>::sse_encode(1, serializer);
+                <String>::sse_encode(local_date, serializer);
+                <String>::sse_encode(timezone, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingSnapshotDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.requested_start_utc, serializer);
+        <String>::sse_encode(self.requested_end_utc, serializer);
+        <String>::sse_encode(self.effective_start_utc, serializer);
+        <String>::sse_encode(self.effective_end_utc, serializer);
+        <String>::sse_encode(self.observed_through_utc, serializer);
+        <crate::accounting::AccountingTotalsDto>::sse_encode(self.totals, serializer);
+        <Vec<crate::accounting::AccountingIntervalDto>>::sse_encode(self.intervals, serializer);
+        <Vec<crate::accounting::AttributionTotalDto>>::sse_encode(self.apps, serializer);
+        <Vec<crate::accounting::AttributionTotalDto>>::sse_encode(self.windows, serializer);
+        <Vec<crate::accounting::AttributionTotalDto>>::sse_encode(self.pages, serializer);
+        <crate::accounting::SnapshotIntegrityDto>::sse_encode(self.integrity, serializer);
+        <Option<String>>::sse_encode(self.timezone, serializer);
+        <Option<String>>::sse_encode(self.local_date, serializer);
+        <Vec<crate::accounting::LocalHourBucketDto>>::sse_encode(self.hours, serializer);
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingStateDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::accounting::AccountingStateDto::Active => 0,
+                crate::accounting::AccountingStateDto::Idle => 1,
+                crate::accounting::AccountingStateDto::Paused => 2,
+                crate::accounting::AccountingStateDto::PrivacyExcluded => 3,
+                crate::accounting::AccountingStateDto::SystemGap => 4,
+                crate::accounting::AccountingStateDto::Unknown => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::accounting::AccountingTotalsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.active_seconds, serializer);
+        <i64>::sse_encode(self.idle_seconds, serializer);
+        <i64>::sse_encode(self.paused_seconds, serializer);
+        <i64>::sse_encode(self.privacy_excluded_seconds, serializer);
+        <i64>::sse_encode(self.system_gap_seconds, serializer);
+        <i64>::sse_encode(self.unknown_seconds, serializer);
+        <i64>::sse_encode(self.accounted_seconds, serializer);
+    }
+}
+
 impl SseEncode for crate::api::AppUsageDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2730,6 +3869,15 @@ impl SseEncode for crate::api::AppUsageDto {
         <i64>::sse_encode(self.active_seconds, serializer);
         <i64>::sse_encode(self.idle_seconds, serializer);
         <String>::sse_encode(self.exe_path, serializer);
+    }
+}
+
+impl SseEncode for crate::accounting::AttributionTotalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <Option<String>>::sse_encode(self.parent_id, serializer);
+        <i64>::sse_encode(self.seconds, serializer);
     }
 }
 
@@ -2796,6 +3944,13 @@ impl SseEncode for crate::api::DiaryEntryDto {
     }
 }
 
+impl SseEncode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2822,12 +3977,32 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::accounting::AccountingIntervalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::accounting::AccountingIntervalDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::AppUsageDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::AppUsageDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::accounting::AttributionTotalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::accounting::AttributionTotalDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -2848,6 +4023,16 @@ impl SseEncode for Vec<crate::api::DiaryEntryDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::DiaryEntryDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::accounting::LocalHourBucketDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::accounting::LocalHourBucketDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -2909,6 +4094,21 @@ impl SseEncode for Vec<crate::api::StartupDto> {
         for item in self {
             <crate::api::StartupDto>::sse_encode(item, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::accounting::LocalHourBucketDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.stable_id, serializer);
+        <String>::sse_encode(self.local_date, serializer);
+        <u32>::sse_encode(self.local_hour, serializer);
+        <i32>::sse_encode(self.utc_offset_seconds, serializer);
+        <u8>::sse_encode(self.fold, serializer);
+        <String>::sse_encode(self.start_utc, serializer);
+        <String>::sse_encode(self.end_utc, serializer);
+        <crate::accounting::AccountingTotalsDto>::sse_encode(self.totals, serializer);
+        <Vec<crate::accounting::AttributionTotalDto>>::sse_encode(self.apps, serializer);
     }
 }
 
@@ -2975,6 +4175,22 @@ impl SseEncode for (String, String) {
     }
 }
 
+impl SseEncode for crate::accounting::SnapshotIntegrityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::accounting::SnapshotIntegrityDto::Complete => 0,
+                crate::accounting::SnapshotIntegrityDto::Partial => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::StartupDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3032,13 +4248,6 @@ impl SseEncode for usize {
     }
 }
 
-impl SseEncode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
-    }
-}
-
 #[cfg(not(target_family = "wasm"))]
 mod io {
     // This file is automatically generated, so please do not edit it.
@@ -3057,6 +4266,20 @@ mod io {
     // Section: boilerplate
 
     flutter_rust_bridge::frb_generated_boilerplate_io!();
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_timetrace_app_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_timetrace_app_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>::decrement_strong_count(ptr as _);
+    }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn frbgen_timetrace_app_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
@@ -3096,6 +4319,20 @@ mod web {
     // Section: boilerplate
 
     flutter_rust_bridge::frb_generated_boilerplate_web!();
+
+    #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>::decrement_strong_count(ptr as _);
+    }
 
     #[wasm_bindgen]
     pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(

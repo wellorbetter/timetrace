@@ -6,31 +6,115 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Local, Utc};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
-use crate::engine::app_identity::normalize_app_name;
+use crate::contracts::accounting::{
+    CanonicalBatch, CheckpointReason, ProducerCheckpointState, ProductionCheckpoint,
+    ProductionCheckpointError,
+};
 use crate::contracts::events::{AppInfo, EventSink, TrackedEvent};
 use crate::contracts::storage::{DataStore, SessionRecord};
+use crate::engine::app_identity::normalize_app_name;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckpointReceipt {
+    pub durable_observed_through: DateTime<Utc>,
+}
+
+/// Atomic storage operation used by the monitor's successful-observation
+/// path. The contract temporarily lives here because this P0 job cannot edit
+/// `contracts/storage.rs`; P1 should move it to the storage contract module.
+pub trait CheckpointStore: DataStore {
+    fn checkpoint_open_interval(
+        &self,
+        session_id: i64,
+        page_id: Option<i64>,
+        observed_at: DateTime<Utc>,
+    ) -> Result<CheckpointReceipt, String>;
+}
 
 pub struct SessionAggregator {
-    db: Arc<dyn DataStore>,
+    db: Arc<dyn CheckpointStore>,
     current_session_id: Option<i64>,
     current_app_path: Option<String>,
     current_app_name: Option<String>,
     current_page_id: Option<i64>,
+    current_page_title: Option<String>,
+    durable_observed_through: Option<DateTime<Utc>>,
 }
 
 impl SessionAggregator {
-    pub fn new(db: Arc<dyn DataStore>) -> Self {
-        Self { db, current_session_id: None, current_app_path: None, current_app_name: None, current_page_id: None }
+    pub fn new(db: Arc<dyn CheckpointStore>) -> Self {
+        Self {
+            db,
+            current_session_id: None,
+            current_app_path: None,
+            current_app_name: None,
+            current_page_id: None,
+            current_page_title: None,
+            durable_observed_through: None,
+        }
     }
 
-    pub fn db(&self) -> &dyn DataStore { &*self.db }
+    pub fn db(&self) -> &dyn CheckpointStore {
+        &*self.db
+    }
+
+    pub fn durable_observed_through(&self) -> Option<DateTime<Utc>> {
+        self.durable_observed_through
+    }
+
+    pub fn stage_production_checkpoint(
+        &self,
+        state: &ProducerCheckpointState,
+        reason: CheckpointReason,
+        boundary: DateTime<Utc>,
+        source_identity: impl Into<String>,
+        source_revision: i64,
+        mut batch: CanonicalBatch,
+    ) -> Result<ProductionCheckpoint, ProductionCheckpointError> {
+        let first_cutover = matches!(state, ProducerCheckpointState::LegacyPreCutover { .. });
+        if first_cutover != (reason == CheckpointReason::FirstCutover) {
+            return Err(ProductionCheckpointError::ModeConflict(
+                "legacy state requires FirstCutover; canonical state forbids it".to_owned(),
+            ));
+        }
+        batch.observed_through = boundary;
+        ProductionCheckpoint::staged(
+            reason,
+            boundary,
+            state.observed_through(),
+            source_identity.into(),
+            source_revision,
+            batch,
+            first_cutover,
+        )
+    }
+
+    fn checkpoint(&mut self, observed_at: DateTime<Utc>) -> bool {
+        let Some(session_id) = self.current_session_id else {
+            return false;
+        };
+        match self
+            .db
+            .checkpoint_open_interval(session_id, self.current_page_id, observed_at)
+        {
+            Ok(receipt) => {
+                self.durable_observed_through = Some(receipt.durable_observed_through);
+                true
+            }
+            Err(error) => {
+                warn!("open interval checkpoint failed: {error}");
+                false
+            }
+        }
+    }
 
     fn close_page(&mut self, end_time: DateTime<Utc>) {
         if let Some(pid) = self.current_page_id.take() {
             self.db.close_page_visit(pid, end_time);
         }
+        self.current_page_title = None;
     }
 
     fn close_session(&mut self, end_time: DateTime<Utc>) {
@@ -52,7 +136,7 @@ impl SessionAggregator {
             ended_at: None,
             duration_secs: None,
             is_idle: app.is_idle(),
-            date: Local::now().date_naive(),
+            date: started_at.with_timezone(&Local).date_naive(),
         };
         let sid = self.db.insert_session(&session);
         self.current_session_id = Some(sid);
@@ -69,20 +153,30 @@ impl SessionAggregator {
             &normalize_app_name(&app.display_name),
             app.window_title.as_deref(),
             started_at,
-            Local::now().date_naive(),
+            started_at.with_timezone(&Local).date_naive(),
         );
-        self.current_page_id = Some(pid);
+        self.current_page_id = (pid >= 0).then_some(pid);
+        self.current_page_title = app.window_title.clone();
     }
 }
 
 impl EventSink for SessionAggregator {
     fn accept(&mut self, event: TrackedEvent) {
         match event {
-            TrackedEvent::AppSwitched { current, timestamp, .. } => {
-                // Same app (exe)? Just a page change -- record page visit.
+            TrackedEvent::AppSwitched {
+                current, timestamp, ..
+            } => {
+                // Every successful observation advances the durable boundary.
+                // A repeated app/title is a checkpoint, not a new page visit.
                 if self.current_app_path.as_deref() == Some(current.exe_path.as_str()) {
-                    debug!("Page change in {}: {:?}", current.display_name, current.window_title);
-                    self.start_page(&current, timestamp);
+                    self.checkpoint(timestamp);
+                    if self.current_page_title != current.window_title {
+                        debug!(
+                            "Page change in {}: {:?}",
+                            current.display_name, current.window_title
+                        );
+                        self.start_page(&current, timestamp);
+                    }
                     return;
                 }
                 // Different app -- close old session, open new at same timestamp.
@@ -101,8 +195,15 @@ impl EventSink for SessionAggregator {
                 self.open_session(&AppInfo::idle(), idle_start);
             }
 
-            TrackedEvent::IdleEnded { current_app, timestamp, .. } => {
-                info!("Aggregator: IdleEnded - closing idle session, opening {}", current_app.display_name);
+            TrackedEvent::IdleEnded {
+                current_app,
+                timestamp,
+                ..
+            } => {
+                info!(
+                    "Aggregator: IdleEnded - closing idle session, opening {}",
+                    current_app.display_name
+                );
                 self.close_session(timestamp);
                 self.open_session(&current_app, timestamp);
             }
@@ -111,14 +212,15 @@ impl EventSink for SessionAggregator {
                 info!("Aggregator: GapDetected - closing dangling session at {timestamp}");
                 self.close_session(timestamp);
             }
-
         }
     }
 }
 
 impl Drop for SessionAggregator {
     fn drop(&mut self) {
-        self.close_session(Utc::now());
+        // A drop is not an observation. Keep the row open at its last durable
+        // checkpoint; lifecycle shutdown owns the eventual close/flush fence.
+        debug!("SessionAggregator dropped with last checkpoint preserved");
     }
 }
 
@@ -168,8 +270,15 @@ mod tests {
         let mut agg = SessionAggregator::new(db.clone());
 
         let code = AppInfo::new("C:/chrome.exe".into(), "chrome".into());
-        agg.accept(TrackedEvent::AppSwitched { previous: None, current: code, timestamp: chrono::Utc::now() });
-        agg.accept(TrackedEvent::IdleStarted { timestamp: chrono::Utc::now(), grace: std::time::Duration::from_secs(0) });
+        agg.accept(TrackedEvent::AppSwitched {
+            previous: None,
+            current: code,
+            timestamp: chrono::Utc::now(),
+        });
+        agg.accept(TrackedEvent::IdleStarted {
+            timestamp: chrono::Utc::now(),
+            grace: std::time::Duration::from_secs(0),
+        });
         agg.accept(TrackedEvent::IdleEnded {
             idle_duration: std::time::Duration::from_secs(120),
             current_app: AppInfo::new("C:/chrome.exe".into(), "chrome".into()),
@@ -178,25 +287,33 @@ mod tests {
 
         let today = chrono::Local::now().date_naive();
         let split = db.get_usage_split(today, today);
-        assert!(split.iter().all(|s| s.app_name != "__IDLE__"), "idle must not appear as app row");
+        assert!(
+            split.iter().all(|s| s.app_name != "__IDLE__"),
+            "idle must not appear as app row"
+        );
     }
     #[test]
     fn test_gap_detected_closes_session_at_gap_time() {
         let db = Arc::new(MemoryStore::new());
         let mut agg = SessionAggregator::new(db.clone());
         let code = AppInfo::new("C:/chrome.exe".into(), "chrome".into());
-        let t0 = chrono::Utc::now() - chrono::Duration::minutes(30);
+        let t0 = chrono::DateTime::parse_from_rfc3339("2026-01-15T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
         agg.accept(TrackedEvent::AppSwitched {
             previous: None,
             current: code,
             timestamp: t0,
         });
-        let gap = chrono::Utc::now() - chrono::Duration::minutes(10);
+        let gap = t0 + chrono::Duration::minutes(20);
         agg.accept(TrackedEvent::GapDetected { timestamp: gap });
-        let sessions = db.get_sessions_by_date(chrono::Local::now().date_naive());
-        let app = sessions.iter().find(|s| s.app_name == "chrome").expect("code session");
+        let sessions = db.get_sessions_by_date(t0.date_naive());
+        let app = sessions
+            .iter()
+            .find(|s| s.app_name == "chrome")
+            .expect("code session");
         let d = (app.ended_at.expect("closed") - app.started_at).num_seconds();
-        assert!((d - 1200).abs() < 60, "expected ~20min session, got {d}s");
+        assert_eq!(d, 1200, "expected exact 20min session, got {d}s");
     }
 
     #[test]
@@ -204,23 +321,89 @@ mod tests {
         let db = Arc::new(MemoryStore::new());
         let mut agg = SessionAggregator::new(db.clone());
         let code = AppInfo::new("C:/chrome.exe".into(), "chrome".into());
-        let t0 = chrono::Utc::now() - chrono::Duration::minutes(30);
+        let t0 = chrono::DateTime::parse_from_rfc3339("2026-01-15T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
         agg.accept(TrackedEvent::AppSwitched {
             previous: None,
             current: code,
             timestamp: t0,
         });
         agg.accept(TrackedEvent::IdleStarted {
-            timestamp: chrono::Utc::now(),
+            timestamp: t0 + chrono::Duration::minutes(30),
             grace: std::time::Duration::from_secs(300),
         });
-        let sessions = db.get_sessions_by_date(chrono::Local::now().date_naive());
-        let app = sessions.iter().find(|s| s.app_name == "chrome").expect("code session");
+        let sessions = db.get_sessions_by_date(t0.date_naive());
+        let app = sessions
+            .iter()
+            .find(|s| s.app_name == "chrome")
+            .expect("code session");
         let d = (app.ended_at.expect("closed") - app.started_at).num_seconds();
-        assert!((d - 1500).abs() < 60, "expected ~25min session (grace excluded), got {d}s");
+        assert_eq!(d, 1500, "expected exact 25min grace exclusion, got {d}s");
         assert!(
             sessions.iter().any(|s| s.is_idle && s.ended_at.is_none()),
             "idle session should still be open"
         );
+    }
+
+    #[test]
+    fn production_staging_is_pure_deterministic_and_mode_checked() {
+        let db = Arc::new(MemoryStore::new());
+        let agg = SessionAggregator::new(db);
+        let boundary = chrono::DateTime::parse_from_rfc3339("2026-01-15T10:10:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let start = boundary - chrono::Duration::minutes(10);
+        let state = ProducerCheckpointState::LegacyPreCutover {
+            legacy_observed_through: None,
+        };
+        let batch = CanonicalBatch {
+            intervals: vec![crate::contracts::accounting::AccountingInterval {
+                range: crate::contracts::accounting::UtcInterval::new(start, boundary).unwrap(),
+                state: crate::contracts::accounting::AccountingState::Active,
+                attribution: crate::contracts::accounting::AttributionIdentity {
+                    app_id: Some("fixture-app".into()),
+                    ..Default::default()
+                },
+                source_identity: "monitor:fixture".into(),
+                source_revision: 1,
+            }],
+            observed_through: start,
+        };
+
+        let first = agg
+            .stage_production_checkpoint(
+                &state,
+                CheckpointReason::FirstCutover,
+                boundary,
+                "producer:fixture",
+                1,
+                batch.clone(),
+            )
+            .unwrap();
+        let second = agg
+            .stage_production_checkpoint(
+                &state,
+                CheckpointReason::FirstCutover,
+                boundary,
+                "producer:fixture",
+                1,
+                batch.clone(),
+            )
+            .unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.batch.observed_through, boundary);
+        assert_eq!(agg.durable_observed_through(), None);
+        assert!(matches!(
+            agg.stage_production_checkpoint(
+                &state,
+                CheckpointReason::Heartbeat,
+                boundary,
+                "producer:fixture",
+                1,
+                batch,
+            ),
+            Err(ProductionCheckpointError::ModeConflict(_))
+        ));
     }
 }

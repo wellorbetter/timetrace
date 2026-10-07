@@ -3,11 +3,16 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import 'accounting.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `parse_date`, `setup_logging`
+// These functions are ignored because they are not marked as `pub`: `clean_exe_path`, `csv_field`, `map_current_snapshot_error`, `parse_date`, `parse_utc_boundary`, `setup_logging`, `validate_config_polling`
+// These functions are ignored because they have generic arguments: `current_accounting_snapshot`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AccountingSnapshot>>
+abstract class AccountingSnapshot implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TimeTraceApi>>
 abstract class TimeTraceApi implements RustOpaqueInterface {
@@ -27,9 +32,34 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
   /// Delete a diary entry by id.
   void deleteDiaryEntry({required PlatformInt64 id});
 
-  /// Export usage data for a date range as CSV.
-  /// Returns the CSV text (app, date, active_secs, idle_secs).
+  /// Export one canonical accounting snapshot as versioned CSV.
+  ///
+  /// The external String contract is preserved. Invalid input or an
+  /// unavailable snapshot produces a header-only document instead of
+  /// silently substituting today's date.
   String exportCsv({required String start, required String end});
+
+  /// Run canonical export on the FRB normal worker, preserving actual errors.
+  /// A legitimate partial/unknown snapshot remains successful canonical CSV;
+  /// the existing producer fence and snapshot degradation policy are unchanged.
+  Future<String> exportCsvAsync({required String start, required String end});
+
+  /// Query and map exactly one canonical accounting snapshot. Current reads
+  /// first use the accepted producer fence; historical reads remain durable
+  /// and side-effect free.
+  Future<AccountingSnapshotDto> getAccountingSnapshot({
+    required AccountingRangeRequest range,
+    required AccountingAsOfRequest asOf,
+  });
+
+  /// Fence the producer at one Current boundary, then query exactly one
+  /// canonical snapshot. A failed fence still queries at the producer-owned
+  /// boundary so the core ledger returns a partial snapshot with an unknown
+  /// tail after the last acknowledged watermark.
+  AccountingSnapshot getAccountingSnapshotCurrent({
+    required String startUtc,
+    required String endUtc,
+  });
 
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date});
@@ -90,6 +120,10 @@ abstract class TimeTraceApi implements RustOpaqueInterface {
 
   /// Overall recording statistics.
   StatsDto getStats({required String start, required String end});
+
+  /// Resolve the host's IANA time zone for canonical local-day queries.
+  static String getSystemIanaTimezone() =>
+      RustLib.instance.api.crateApiTimeTraceApiGetSystemIanaTimezone();
 
   /// Per-app active/idle split for a date range (dates as "YYYY-MM-DD").
   List<AppUsageDto> getUsageSplit({required String start, required String end});

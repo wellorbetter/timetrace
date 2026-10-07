@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/core/bridge/api_provider.dart';
+import 'package:timetrace_app/src/bridge/accounting.dart';
 import 'package:timetrace_app/src/core/i18n/l10n.dart';
 import 'package:timetrace_app/src/core/widgets/app_icon.dart';
+import '../../../../core/format/app_identity.dart';
+import '../../../../core/widgets/terminal_app_icon.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
-import 'package:timetrace_app/src/features/dashboard/providers/dashboard_provider.dart';
 
 /// Expandable app row with real icon; tap reveals per-page breakdown.
 class AppListTile extends ConsumerStatefulWidget {
-  const AppListTile({required this.app, super.key});
+  const AppListTile({required this.app, this.windows = const [], super.key});
 
   final AppUsageItem app;
+  final List<AttributionTotalDto> windows;
 
   @override
   ConsumerState<AppListTile> createState() => _AppListTileState();
@@ -25,15 +28,12 @@ class _AppListTileState extends ConsumerState<AppListTile> {
   Future<void> _toggle() async {
     setState(() {
       _expanded = !_expanded;
-      if (_expanded) _loading = true;
+      _loading = false;
     });
     if (_expanded) {
-      final api = ref.read(apiProvider);
-      final range = ref.read(dashboardRangeProvider);
-      final end = _rangeEnd(range);
-      final pages = api
-          .getWindowTitles(appName: widget.app.appName, date: end)
-          .map((p) => (p.title, p.seconds.toInt()))
+      final pages = widget.windows
+          .where((window) => window.parentId == widget.app.appName)
+          .map((window) => (window.id, window.seconds.toInt()))
           .toList();
       if (mounted) {
         setState(() {
@@ -44,23 +44,15 @@ class _AppListTileState extends ConsumerState<AppListTile> {
     }
   }
 
-  String _rangeEnd(DateRangeSelection sel) {
-    final d = sel.effectiveDay;
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    return fmt(d);
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = appColor(widget.app.appName);
     final l = L10n(ref.watch(localeProvider));
 
-    return Card(
+    return MaterialCard(
       margin: const EdgeInsets.symmetric(vertical: 3),
       elevation: 0,
-      color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
@@ -76,7 +68,13 @@ class _AppListTileState extends ConsumerState<AppListTile> {
                 children: [
                   // Real icon if available
                   if (widget.app.exePath != null)
-                    AppIcon(exePath: widget.app.exePath!, size: 32)
+                    AppIcon(
+                      exePath: widget.app.exePath!,
+                      appName: widget.app.appName,
+                      size: 32,
+                    )
+                  else if (isTerminalApp(widget.app.appName))
+                    const TerminalAppIcon(size: 32)
                   else
                     Container(
                       width: 32,
@@ -91,9 +89,11 @@ class _AppListTileState extends ConsumerState<AppListTile> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      widget.app.appName,
+                      appDisplayLabel(widget.app.appName),
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w500),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -124,10 +124,12 @@ class _AppListTileState extends ConsumerState<AppListTile> {
                   ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: Center(
-                          child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2))),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
                     )
                   : _PagesList(pages: _pages ?? []),
             ],

@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'accounting.dart';
 import 'api.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -64,7 +65,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1560329493;
+  int get rustContentHash => -713476408;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -101,6 +102,24 @@ abstract class RustLibApi extends BaseApi {
     required TimeTraceApi that,
     required String start,
     required String end,
+  });
+
+  Future<String> crateApiTimeTraceApiExportCsvAsync({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  });
+
+  Future<AccountingSnapshotDto> crateApiTimeTraceApiGetAccountingSnapshot({
+    required TimeTraceApi that,
+    required AccountingRangeRequest range,
+    required AccountingAsOfRequest asOf,
+  });
+
+  AccountingSnapshot crateApiTimeTraceApiGetAccountingSnapshotCurrent({
+    required TimeTraceApi that,
+    required String startUtc,
+    required String endUtc,
   });
 
   Int64List crateApiTimeTraceApiGetAppHourly({
@@ -182,6 +201,8 @@ abstract class RustLibApi extends BaseApi {
     required String start,
     required String end,
   });
+
+  String crateApiTimeTraceApiGetSystemIanaTimezone();
 
   List<AppUsageDto> crateApiTimeTraceApiGetUsageSplit({
     required TimeTraceApi that,
@@ -266,6 +287,15 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 id,
     required String content,
   });
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_AccountingSnapshot;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_AccountingSnapshot;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_AccountingSnapshotPtr;
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_TimeTraceApi;
@@ -478,6 +508,123 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateApiTimeTraceApiExportCsvAsync({
+    required TimeTraceApi that,
+    required String start,
+    required String end,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(start, serializer);
+          sse_encode_String(end, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_accounting_bridge_error,
+        ),
+        constMeta: kCrateApiTimeTraceApiExportCsvAsyncConstMeta,
+        argValues: [that, start, end],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiExportCsvAsyncConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_export_csv_async",
+        argNames: ["that", "start", "end"],
+      );
+
+  @override
+  Future<AccountingSnapshotDto> crateApiTimeTraceApiGetAccountingSnapshot({
+    required TimeTraceApi that,
+    required AccountingRangeRequest range,
+    required AccountingAsOfRequest asOf,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_accounting_range_request(range, serializer);
+          sse_encode_box_autoadd_accounting_as_of_request(asOf, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_accounting_snapshot_dto,
+          decodeErrorData: sse_decode_accounting_bridge_error,
+        ),
+        constMeta: kCrateApiTimeTraceApiGetAccountingSnapshotConstMeta,
+        argValues: [that, range, asOf],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiGetAccountingSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_get_accounting_snapshot",
+        argNames: ["that", "range", "asOf"],
+      );
+
+  @override
+  AccountingSnapshot crateApiTimeTraceApiGetAccountingSnapshotCurrent({
+    required TimeTraceApi that,
+    required String startUtc,
+    required String endUtc,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
+            that,
+            serializer,
+          );
+          sse_encode_String(startUtc, serializer);
+          sse_encode_String(endUtc, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiTimeTraceApiGetAccountingSnapshotCurrentConstMeta,
+        argValues: [that, startUtc, endUtc],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiTimeTraceApiGetAccountingSnapshotCurrentConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_get_accounting_snapshot_current",
+        argNames: ["that", "startUtc", "endUtc"],
+      );
+
+  @override
   Int64List crateApiTimeTraceApiGetAppHourly({
     required TimeTraceApi that,
     required String appName,
@@ -493,7 +640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(appName, serializer);
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_i_64_strict,
@@ -526,7 +673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(exePath, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_icon_dto,
@@ -555,7 +702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_config_dto,
@@ -590,7 +737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_dashboard_data_dto,
@@ -623,7 +770,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_day_detail_dto,
@@ -656,7 +803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_i_64_strict,
@@ -689,7 +836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -724,7 +871,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_record_string_string,
@@ -759,7 +906,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_diary_entry_dto,
@@ -794,7 +941,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_record_string_string,
@@ -830,7 +977,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -864,7 +1011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -899,7 +1046,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_u_32(hour, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_app_usage_dto,
@@ -930,7 +1077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_startup_dto,
@@ -965,7 +1112,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_stats_dto,
@@ -985,6 +1132,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiTimeTraceApiGetSystemIanaTimezone() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiTimeTraceApiGetSystemIanaTimezoneConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTimeTraceApiGetSystemIanaTimezoneConstMeta =>
+      const TaskConstMeta(
+        debugName: "TimeTraceApi_get_system_iana_timezone",
+        argNames: [],
+      );
+
+  @override
   List<AppUsageDto> crateApiTimeTraceApiGetUsageSplit({
     required TimeTraceApi that,
     required String start,
@@ -1000,7 +1172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(start, serializer);
           sse_encode_String(end, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_app_usage_dto,
@@ -1031,7 +1203,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_record_i_64_i_64,
@@ -1066,7 +1238,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(appName, serializer);
           sse_encode_String(date, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_page_dto,
@@ -1095,7 +1267,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1124,7 +1296,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1153,7 +1325,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -1188,7 +1360,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1221,7 +1393,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(path, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1254,7 +1426,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(command, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -1289,7 +1461,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_64,
@@ -1322,7 +1494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_config_dto(config, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1357,7 +1529,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(date, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1392,7 +1564,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_String(path, serializer);
           sse_encode_i_64(entryId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1427,7 +1599,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_bool(enabled, serializer);
           sse_encode_bool(minimized, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1460,7 +1632,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(paused, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1495,7 +1667,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_bool(enable, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1530,7 +1702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_i_64(id, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1550,6 +1722,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_AccountingSnapshot => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_AccountingSnapshot => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot;
+
+  RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_TimeTraceApi => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi;
 
@@ -1561,6 +1741,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return AnyhowException(raw as String);
+  }
+
+  @protected
+  AccountingSnapshot
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AccountingSnapshotImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -1582,6 +1771,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AccountingSnapshot
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AccountingSnapshotImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
   TimeTraceApi
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     dynamic raw,
@@ -1594,6 +1792,166 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
+  }
+
+  @protected
+  AccountingAsOfRequest dco_decode_accounting_as_of_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return AccountingAsOfRequest_Current();
+      case 1:
+        return AccountingAsOfRequest_At(asOfUtc: dco_decode_String(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  AccountingBridgeError dco_decode_accounting_bridge_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return AccountingBridgeError_InvalidUtcTimestamp(
+          field: dco_decode_String(raw[1]),
+          value: dco_decode_String(raw[2]),
+        );
+      case 1:
+        return AccountingBridgeError_InvalidLocalDate(
+          value: dco_decode_String(raw[1]),
+        );
+      case 2:
+        return AccountingBridgeError_InvalidDateRange(
+          start: dco_decode_String(raw[1]),
+          end: dco_decode_String(raw[2]),
+        );
+      case 3:
+        return AccountingBridgeError_InvalidRange(
+          startUtc: dco_decode_String(raw[1]),
+          endUtc: dco_decode_String(raw[2]),
+        );
+      case 4:
+        return AccountingBridgeError_AsOfBeforeStart(
+          asOfUtc: dco_decode_String(raw[1]),
+          startUtc: dco_decode_String(raw[2]),
+        );
+      case 5:
+        return AccountingBridgeError_FutureAsOf(
+          asOfUtc: dco_decode_String(raw[1]),
+          deadlineUtc: dco_decode_String(raw[2]),
+        );
+      case 6:
+        return AccountingBridgeError_InvalidTimeZone(
+          timezone: dco_decode_String(raw[1]),
+        );
+      case 7:
+        return AccountingBridgeError_InvalidLocalBoundary(
+          timezone: dco_decode_String(raw[1]),
+          boundary: dco_decode_String(raw[2]),
+        );
+      case 8:
+        return AccountingBridgeError_Storage(
+          message: dco_decode_String(raw[1]),
+        );
+      case 9:
+        return AccountingBridgeError_StaleRevision(
+          sourceIdentity: dco_decode_String(raw[1]),
+          incoming: dco_decode_i_64(raw[2]),
+          existing: dco_decode_i_64(raw[3]),
+        );
+      case 10:
+        return AccountingBridgeError_ProducerUnavailable(
+          message: dco_decode_String(raw[1]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  AccountingIntervalDto dco_decode_accounting_interval_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return AccountingIntervalDto(
+      startUtc: dco_decode_String(arr[0]),
+      endUtc: dco_decode_String(arr[1]),
+      state: dco_decode_accounting_state_dto(arr[2]),
+      appId: dco_decode_opt_String(arr[3]),
+      windowId: dco_decode_opt_String(arr[4]),
+      windowAppId: dco_decode_opt_String(arr[5]),
+      pageId: dco_decode_opt_String(arr[6]),
+      pageWindowId: dco_decode_opt_String(arr[7]),
+      sourceIdentity: dco_decode_String(arr[8]),
+      sourceRevision: dco_decode_i_64(arr[9]),
+    );
+  }
+
+  @protected
+  AccountingRangeRequest dco_decode_accounting_range_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return AccountingRangeRequest_Utc(
+          startUtc: dco_decode_String(raw[1]),
+          endUtc: dco_decode_String(raw[2]),
+        );
+      case 1:
+        return AccountingRangeRequest_LocalDate(
+          localDate: dco_decode_String(raw[1]),
+          timezone: dco_decode_String(raw[2]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  AccountingSnapshotDto dco_decode_accounting_snapshot_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    return AccountingSnapshotDto(
+      requestedStartUtc: dco_decode_String(arr[0]),
+      requestedEndUtc: dco_decode_String(arr[1]),
+      effectiveStartUtc: dco_decode_String(arr[2]),
+      effectiveEndUtc: dco_decode_String(arr[3]),
+      observedThroughUtc: dco_decode_String(arr[4]),
+      totals: dco_decode_accounting_totals_dto(arr[5]),
+      intervals: dco_decode_list_accounting_interval_dto(arr[6]),
+      apps: dco_decode_list_attribution_total_dto(arr[7]),
+      windows: dco_decode_list_attribution_total_dto(arr[8]),
+      pages: dco_decode_list_attribution_total_dto(arr[9]),
+      integrity: dco_decode_snapshot_integrity_dto(arr[10]),
+      timezone: dco_decode_opt_String(arr[11]),
+      localDate: dco_decode_opt_String(arr[12]),
+      hours: dco_decode_list_local_hour_bucket_dto(arr[13]),
+    );
+  }
+
+  @protected
+  AccountingStateDto dco_decode_accounting_state_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AccountingStateDto.values[raw as int];
+  }
+
+  @protected
+  AccountingTotalsDto dco_decode_accounting_totals_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return AccountingTotalsDto(
+      activeSeconds: dco_decode_i_64(arr[0]),
+      idleSeconds: dco_decode_i_64(arr[1]),
+      pausedSeconds: dco_decode_i_64(arr[2]),
+      privacyExcludedSeconds: dco_decode_i_64(arr[3]),
+      systemGapSeconds: dco_decode_i_64(arr[4]),
+      unknownSeconds: dco_decode_i_64(arr[5]),
+      accountedSeconds: dco_decode_i_64(arr[6]),
+    );
   }
 
   @protected
@@ -1611,9 +1969,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AttributionTotalDto dco_decode_attribution_total_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AttributionTotalDto(
+      id: dco_decode_String(arr[0]),
+      parentId: dco_decode_opt_String(arr[1]),
+      seconds: dco_decode_i_64(arr[2]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  AccountingAsOfRequest dco_decode_box_autoadd_accounting_as_of_request(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_accounting_as_of_request(raw);
+  }
+
+  @protected
+  AccountingRangeRequest dco_decode_box_autoadd_accounting_range_request(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_accounting_range_request(raw);
   }
 
   @protected
@@ -1711,6 +2098,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeI64(raw);
@@ -1736,9 +2129,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<AccountingIntervalDto> dco_decode_list_accounting_interval_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_accounting_interval_dto)
+        .toList();
+  }
+
+  @protected
   List<AppUsageDto> dco_decode_list_app_usage_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_app_usage_dto).toList();
+  }
+
+  @protected
+  List<AttributionTotalDto> dco_decode_list_attribution_total_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_attribution_total_dto)
+        .toList();
   }
 
   @protected
@@ -1751,6 +2162,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<DiaryEntryDto> dco_decode_list_diary_entry_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_diary_entry_dto).toList();
+  }
+
+  @protected
+  List<LocalHourBucketDto> dco_decode_list_local_hour_bucket_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_local_hour_bucket_dto)
+        .toList();
   }
 
   @protected
@@ -1790,6 +2209,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<StartupDto> dco_decode_list_startup_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_startup_dto).toList();
+  }
+
+  @protected
+  LocalHourBucketDto dco_decode_local_hour_bucket_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return LocalHourBucketDto(
+      stableId: dco_decode_String(arr[0]),
+      localDate: dco_decode_String(arr[1]),
+      localHour: dco_decode_u_32(arr[2]),
+      utcOffsetSeconds: dco_decode_i_32(arr[3]),
+      fold: dco_decode_u_8(arr[4]),
+      startUtc: dco_decode_String(arr[5]),
+      endUtc: dco_decode_String(arr[6]),
+      totals: dco_decode_accounting_totals_dto(arr[7]),
+      apps: dco_decode_list_attribution_total_dto(arr[8]),
+    );
   }
 
   @protected
@@ -1855,6 +2293,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('Expected 2 elements, got ${arr.length}');
     }
     return (dco_decode_String(arr[0]), dco_decode_String(arr[1]));
+  }
+
+  @protected
+  SnapshotIntegrityDto dco_decode_snapshot_integrity_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return SnapshotIntegrityDto.values[raw as int];
   }
 
   @protected
@@ -1924,6 +2368,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AccountingSnapshot
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AccountingSnapshotImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   TimeTraceApi
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     SseDeserializer deserializer,
@@ -1942,6 +2398,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return TimeTraceApiImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  AccountingSnapshot
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AccountingSnapshotImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1967,6 +2435,225 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AccountingAsOfRequest sse_decode_accounting_as_of_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return AccountingAsOfRequest_Current();
+      case 1:
+        var var_asOfUtc = sse_decode_String(deserializer);
+        return AccountingAsOfRequest_At(asOfUtc: var_asOfUtc);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  AccountingBridgeError sse_decode_accounting_bridge_error(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field = sse_decode_String(deserializer);
+        var var_value = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidUtcTimestamp(
+          field: var_field,
+          value: var_value,
+        );
+      case 1:
+        var var_value = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidLocalDate(value: var_value);
+      case 2:
+        var var_start = sse_decode_String(deserializer);
+        var var_end = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidDateRange(
+          start: var_start,
+          end: var_end,
+        );
+      case 3:
+        var var_startUtc = sse_decode_String(deserializer);
+        var var_endUtc = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidRange(
+          startUtc: var_startUtc,
+          endUtc: var_endUtc,
+        );
+      case 4:
+        var var_asOfUtc = sse_decode_String(deserializer);
+        var var_startUtc = sse_decode_String(deserializer);
+        return AccountingBridgeError_AsOfBeforeStart(
+          asOfUtc: var_asOfUtc,
+          startUtc: var_startUtc,
+        );
+      case 5:
+        var var_asOfUtc = sse_decode_String(deserializer);
+        var var_deadlineUtc = sse_decode_String(deserializer);
+        return AccountingBridgeError_FutureAsOf(
+          asOfUtc: var_asOfUtc,
+          deadlineUtc: var_deadlineUtc,
+        );
+      case 6:
+        var var_timezone = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidTimeZone(timezone: var_timezone);
+      case 7:
+        var var_timezone = sse_decode_String(deserializer);
+        var var_boundary = sse_decode_String(deserializer);
+        return AccountingBridgeError_InvalidLocalBoundary(
+          timezone: var_timezone,
+          boundary: var_boundary,
+        );
+      case 8:
+        var var_message = sse_decode_String(deserializer);
+        return AccountingBridgeError_Storage(message: var_message);
+      case 9:
+        var var_sourceIdentity = sse_decode_String(deserializer);
+        var var_incoming = sse_decode_i_64(deserializer);
+        var var_existing = sse_decode_i_64(deserializer);
+        return AccountingBridgeError_StaleRevision(
+          sourceIdentity: var_sourceIdentity,
+          incoming: var_incoming,
+          existing: var_existing,
+        );
+      case 10:
+        var var_message = sse_decode_String(deserializer);
+        return AccountingBridgeError_ProducerUnavailable(message: var_message);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  AccountingIntervalDto sse_decode_accounting_interval_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_startUtc = sse_decode_String(deserializer);
+    var var_endUtc = sse_decode_String(deserializer);
+    var var_state = sse_decode_accounting_state_dto(deserializer);
+    var var_appId = sse_decode_opt_String(deserializer);
+    var var_windowId = sse_decode_opt_String(deserializer);
+    var var_windowAppId = sse_decode_opt_String(deserializer);
+    var var_pageId = sse_decode_opt_String(deserializer);
+    var var_pageWindowId = sse_decode_opt_String(deserializer);
+    var var_sourceIdentity = sse_decode_String(deserializer);
+    var var_sourceRevision = sse_decode_i_64(deserializer);
+    return AccountingIntervalDto(
+      startUtc: var_startUtc,
+      endUtc: var_endUtc,
+      state: var_state,
+      appId: var_appId,
+      windowId: var_windowId,
+      windowAppId: var_windowAppId,
+      pageId: var_pageId,
+      pageWindowId: var_pageWindowId,
+      sourceIdentity: var_sourceIdentity,
+      sourceRevision: var_sourceRevision,
+    );
+  }
+
+  @protected
+  AccountingRangeRequest sse_decode_accounting_range_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_startUtc = sse_decode_String(deserializer);
+        var var_endUtc = sse_decode_String(deserializer);
+        return AccountingRangeRequest_Utc(
+          startUtc: var_startUtc,
+          endUtc: var_endUtc,
+        );
+      case 1:
+        var var_localDate = sse_decode_String(deserializer);
+        var var_timezone = sse_decode_String(deserializer);
+        return AccountingRangeRequest_LocalDate(
+          localDate: var_localDate,
+          timezone: var_timezone,
+        );
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  AccountingSnapshotDto sse_decode_accounting_snapshot_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_requestedStartUtc = sse_decode_String(deserializer);
+    var var_requestedEndUtc = sse_decode_String(deserializer);
+    var var_effectiveStartUtc = sse_decode_String(deserializer);
+    var var_effectiveEndUtc = sse_decode_String(deserializer);
+    var var_observedThroughUtc = sse_decode_String(deserializer);
+    var var_totals = sse_decode_accounting_totals_dto(deserializer);
+    var var_intervals = sse_decode_list_accounting_interval_dto(deserializer);
+    var var_apps = sse_decode_list_attribution_total_dto(deserializer);
+    var var_windows = sse_decode_list_attribution_total_dto(deserializer);
+    var var_pages = sse_decode_list_attribution_total_dto(deserializer);
+    var var_integrity = sse_decode_snapshot_integrity_dto(deserializer);
+    var var_timezone = sse_decode_opt_String(deserializer);
+    var var_localDate = sse_decode_opt_String(deserializer);
+    var var_hours = sse_decode_list_local_hour_bucket_dto(deserializer);
+    return AccountingSnapshotDto(
+      requestedStartUtc: var_requestedStartUtc,
+      requestedEndUtc: var_requestedEndUtc,
+      effectiveStartUtc: var_effectiveStartUtc,
+      effectiveEndUtc: var_effectiveEndUtc,
+      observedThroughUtc: var_observedThroughUtc,
+      totals: var_totals,
+      intervals: var_intervals,
+      apps: var_apps,
+      windows: var_windows,
+      pages: var_pages,
+      integrity: var_integrity,
+      timezone: var_timezone,
+      localDate: var_localDate,
+      hours: var_hours,
+    );
+  }
+
+  @protected
+  AccountingStateDto sse_decode_accounting_state_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return AccountingStateDto.values[inner];
+  }
+
+  @protected
+  AccountingTotalsDto sse_decode_accounting_totals_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_activeSeconds = sse_decode_i_64(deserializer);
+    var var_idleSeconds = sse_decode_i_64(deserializer);
+    var var_pausedSeconds = sse_decode_i_64(deserializer);
+    var var_privacyExcludedSeconds = sse_decode_i_64(deserializer);
+    var var_systemGapSeconds = sse_decode_i_64(deserializer);
+    var var_unknownSeconds = sse_decode_i_64(deserializer);
+    var var_accountedSeconds = sse_decode_i_64(deserializer);
+    return AccountingTotalsDto(
+      activeSeconds: var_activeSeconds,
+      idleSeconds: var_idleSeconds,
+      pausedSeconds: var_pausedSeconds,
+      privacyExcludedSeconds: var_privacyExcludedSeconds,
+      systemGapSeconds: var_systemGapSeconds,
+      unknownSeconds: var_unknownSeconds,
+      accountedSeconds: var_accountedSeconds,
+    );
+  }
+
+  @protected
   AppUsageDto sse_decode_app_usage_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_appName = sse_decode_String(deserializer);
@@ -1982,9 +2669,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AttributionTotalDto sse_decode_attribution_total_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_parentId = sse_decode_opt_String(deserializer);
+    var var_seconds = sse_decode_i_64(deserializer);
+    return AttributionTotalDto(
+      id: var_id,
+      parentId: var_parentId,
+      seconds: var_seconds,
+    );
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  AccountingAsOfRequest sse_decode_box_autoadd_accounting_as_of_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_accounting_as_of_request(deserializer));
+  }
+
+  @protected
+  AccountingRangeRequest sse_decode_box_autoadd_accounting_range_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_accounting_range_request(deserializer));
   }
 
   @protected
@@ -2093,6 +2811,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getPlatformInt64();
@@ -2120,6 +2844,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<AccountingIntervalDto> sse_decode_list_accounting_interval_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AccountingIntervalDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_accounting_interval_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<AppUsageDto> sse_decode_list_app_usage_dto(
     SseDeserializer deserializer,
   ) {
@@ -2129,6 +2867,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <AppUsageDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_app_usage_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AttributionTotalDto> sse_decode_list_attribution_total_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AttributionTotalDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_attribution_total_dto(deserializer));
     }
     return ans_;
   }
@@ -2157,6 +2909,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <DiaryEntryDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_diary_entry_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<LocalHourBucketDto> sse_decode_list_local_hour_bucket_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <LocalHourBucketDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_local_hour_bucket_dto(deserializer));
     }
     return ans_;
   }
@@ -2228,6 +2994,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_startup_dto(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  LocalHourBucketDto sse_decode_local_hour_bucket_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_stableId = sse_decode_String(deserializer);
+    var var_localDate = sse_decode_String(deserializer);
+    var var_localHour = sse_decode_u_32(deserializer);
+    var var_utcOffsetSeconds = sse_decode_i_32(deserializer);
+    var var_fold = sse_decode_u_8(deserializer);
+    var var_startUtc = sse_decode_String(deserializer);
+    var var_endUtc = sse_decode_String(deserializer);
+    var var_totals = sse_decode_accounting_totals_dto(deserializer);
+    var var_apps = sse_decode_list_attribution_total_dto(deserializer);
+    return LocalHourBucketDto(
+      stableId: var_stableId,
+      localDate: var_localDate,
+      localHour: var_localHour,
+      utcOffsetSeconds: var_utcOffsetSeconds,
+      fold: var_fold,
+      startUtc: var_startUtc,
+      endUtc: var_endUtc,
+      totals: var_totals,
+      apps: var_apps,
+    );
   }
 
   @protected
@@ -2304,6 +3097,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SnapshotIntegrityDto sse_decode_snapshot_integrity_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return SnapshotIntegrityDto.values[inner];
+  }
+
+  @protected
   StartupDto sse_decode_startup_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_i_64(deserializer);
@@ -2365,18 +3167,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    AccountingSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AccountingSnapshotImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
   }
 
   @protected
@@ -2407,6 +3216,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAccountingSnapshot(
+    AccountingSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AccountingSnapshotImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTimeTraceApi(
     TimeTraceApi self,
     SseSerializer serializer,
@@ -2425,6 +3247,182 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_accounting_as_of_request(
+    AccountingAsOfRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case AccountingAsOfRequest_Current():
+        sse_encode_i_32(0, serializer);
+      case AccountingAsOfRequest_At(asOfUtc: final asOfUtc):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(asOfUtc, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_accounting_bridge_error(
+    AccountingBridgeError self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case AccountingBridgeError_InvalidUtcTimestamp(
+        field: final field,
+        value: final value,
+      ):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(field, serializer);
+        sse_encode_String(value, serializer);
+      case AccountingBridgeError_InvalidLocalDate(value: final value):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(value, serializer);
+      case AccountingBridgeError_InvalidDateRange(
+        start: final start,
+        end: final end,
+      ):
+        sse_encode_i_32(2, serializer);
+        sse_encode_String(start, serializer);
+        sse_encode_String(end, serializer);
+      case AccountingBridgeError_InvalidRange(
+        startUtc: final startUtc,
+        endUtc: final endUtc,
+      ):
+        sse_encode_i_32(3, serializer);
+        sse_encode_String(startUtc, serializer);
+        sse_encode_String(endUtc, serializer);
+      case AccountingBridgeError_AsOfBeforeStart(
+        asOfUtc: final asOfUtc,
+        startUtc: final startUtc,
+      ):
+        sse_encode_i_32(4, serializer);
+        sse_encode_String(asOfUtc, serializer);
+        sse_encode_String(startUtc, serializer);
+      case AccountingBridgeError_FutureAsOf(
+        asOfUtc: final asOfUtc,
+        deadlineUtc: final deadlineUtc,
+      ):
+        sse_encode_i_32(5, serializer);
+        sse_encode_String(asOfUtc, serializer);
+        sse_encode_String(deadlineUtc, serializer);
+      case AccountingBridgeError_InvalidTimeZone(timezone: final timezone):
+        sse_encode_i_32(6, serializer);
+        sse_encode_String(timezone, serializer);
+      case AccountingBridgeError_InvalidLocalBoundary(
+        timezone: final timezone,
+        boundary: final boundary,
+      ):
+        sse_encode_i_32(7, serializer);
+        sse_encode_String(timezone, serializer);
+        sse_encode_String(boundary, serializer);
+      case AccountingBridgeError_Storage(message: final message):
+        sse_encode_i_32(8, serializer);
+        sse_encode_String(message, serializer);
+      case AccountingBridgeError_StaleRevision(
+        sourceIdentity: final sourceIdentity,
+        incoming: final incoming,
+        existing: final existing,
+      ):
+        sse_encode_i_32(9, serializer);
+        sse_encode_String(sourceIdentity, serializer);
+        sse_encode_i_64(incoming, serializer);
+        sse_encode_i_64(existing, serializer);
+      case AccountingBridgeError_ProducerUnavailable(message: final message):
+        sse_encode_i_32(10, serializer);
+        sse_encode_String(message, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_accounting_interval_dto(
+    AccountingIntervalDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.startUtc, serializer);
+    sse_encode_String(self.endUtc, serializer);
+    sse_encode_accounting_state_dto(self.state, serializer);
+    sse_encode_opt_String(self.appId, serializer);
+    sse_encode_opt_String(self.windowId, serializer);
+    sse_encode_opt_String(self.windowAppId, serializer);
+    sse_encode_opt_String(self.pageId, serializer);
+    sse_encode_opt_String(self.pageWindowId, serializer);
+    sse_encode_String(self.sourceIdentity, serializer);
+    sse_encode_i_64(self.sourceRevision, serializer);
+  }
+
+  @protected
+  void sse_encode_accounting_range_request(
+    AccountingRangeRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case AccountingRangeRequest_Utc(
+        startUtc: final startUtc,
+        endUtc: final endUtc,
+      ):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(startUtc, serializer);
+        sse_encode_String(endUtc, serializer);
+      case AccountingRangeRequest_LocalDate(
+        localDate: final localDate,
+        timezone: final timezone,
+      ):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(localDate, serializer);
+        sse_encode_String(timezone, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_accounting_snapshot_dto(
+    AccountingSnapshotDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.requestedStartUtc, serializer);
+    sse_encode_String(self.requestedEndUtc, serializer);
+    sse_encode_String(self.effectiveStartUtc, serializer);
+    sse_encode_String(self.effectiveEndUtc, serializer);
+    sse_encode_String(self.observedThroughUtc, serializer);
+    sse_encode_accounting_totals_dto(self.totals, serializer);
+    sse_encode_list_accounting_interval_dto(self.intervals, serializer);
+    sse_encode_list_attribution_total_dto(self.apps, serializer);
+    sse_encode_list_attribution_total_dto(self.windows, serializer);
+    sse_encode_list_attribution_total_dto(self.pages, serializer);
+    sse_encode_snapshot_integrity_dto(self.integrity, serializer);
+    sse_encode_opt_String(self.timezone, serializer);
+    sse_encode_opt_String(self.localDate, serializer);
+    sse_encode_list_local_hour_bucket_dto(self.hours, serializer);
+  }
+
+  @protected
+  void sse_encode_accounting_state_dto(
+    AccountingStateDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_accounting_totals_dto(
+    AccountingTotalsDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.activeSeconds, serializer);
+    sse_encode_i_64(self.idleSeconds, serializer);
+    sse_encode_i_64(self.pausedSeconds, serializer);
+    sse_encode_i_64(self.privacyExcludedSeconds, serializer);
+    sse_encode_i_64(self.systemGapSeconds, serializer);
+    sse_encode_i_64(self.unknownSeconds, serializer);
+    sse_encode_i_64(self.accountedSeconds, serializer);
+  }
+
+  @protected
   void sse_encode_app_usage_dto(AppUsageDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.appName, serializer);
@@ -2434,9 +3432,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_attribution_total_dto(
+    AttributionTotalDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_opt_String(self.parentId, serializer);
+    sse_encode_i_64(self.seconds, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_accounting_as_of_request(
+    AccountingAsOfRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_accounting_as_of_request(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_accounting_range_request(
+    AccountingRangeRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_accounting_range_request(self, serializer);
   }
 
   @protected
@@ -2524,6 +3551,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putPlatformInt64(self);
@@ -2547,6 +3580,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_accounting_interval_dto(
+    List<AccountingIntervalDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_accounting_interval_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_app_usage_dto(
     List<AppUsageDto> self,
     SseSerializer serializer,
@@ -2555,6 +3600,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_app_usage_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_attribution_total_dto(
+    List<AttributionTotalDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_attribution_total_dto(item, serializer);
     }
   }
 
@@ -2579,6 +3636,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_diary_entry_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_local_hour_bucket_dto(
+    List<LocalHourBucketDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_local_hour_bucket_dto(item, serializer);
     }
   }
 
@@ -2645,6 +3714,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_startup_dto(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_local_hour_bucket_dto(
+    LocalHourBucketDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.stableId, serializer);
+    sse_encode_String(self.localDate, serializer);
+    sse_encode_u_32(self.localHour, serializer);
+    sse_encode_i_32(self.utcOffsetSeconds, serializer);
+    sse_encode_u_8(self.fold, serializer);
+    sse_encode_String(self.startUtc, serializer);
+    sse_encode_String(self.endUtc, serializer);
+    sse_encode_accounting_totals_dto(self.totals, serializer);
+    sse_encode_list_attribution_total_dto(self.apps, serializer);
   }
 
   @protected
@@ -2722,6 +3808,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_snapshot_integrity_dto(
+    SnapshotIntegrityDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_startup_dto(StartupDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.id, serializer);
@@ -2768,12 +3863,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
   }
+}
 
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
+@sealed
+class AccountingSnapshotImpl extends RustOpaque implements AccountingSnapshot {
+  // Not to be used by end users
+  AccountingSnapshotImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  AccountingSnapshotImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_AccountingSnapshot,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_AccountingSnapshot,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_AccountingSnapshotPtr,
+  );
 }
 
 @sealed
@@ -2819,12 +3932,50 @@ class TimeTraceApiImpl extends RustOpaque implements TimeTraceApi {
   void deleteDiaryEntry({required PlatformInt64 id}) => RustLib.instance.api
       .crateApiTimeTraceApiDeleteDiaryEntry(that: this, id: id);
 
-  /// Export usage data for a date range as CSV.
-  /// Returns the CSV text (app, date, active_secs, idle_secs).
+  /// Export one canonical accounting snapshot as versioned CSV.
+  ///
+  /// The external String contract is preserved. Invalid input or an
+  /// unavailable snapshot produces a header-only document instead of
+  /// silently substituting today's date.
   String exportCsv({required String start, required String end}) => RustLib
       .instance
       .api
       .crateApiTimeTraceApiExportCsv(that: this, start: start, end: end);
+
+  /// Run canonical export on the FRB normal worker, preserving actual errors.
+  /// A legitimate partial/unknown snapshot remains successful canonical CSV;
+  /// the existing producer fence and snapshot degradation policy are unchanged.
+  Future<String> exportCsvAsync({required String start, required String end}) =>
+      RustLib.instance.api.crateApiTimeTraceApiExportCsvAsync(
+        that: this,
+        start: start,
+        end: end,
+      );
+
+  /// Query and map exactly one canonical accounting snapshot. Current reads
+  /// first use the accepted producer fence; historical reads remain durable
+  /// and side-effect free.
+  Future<AccountingSnapshotDto> getAccountingSnapshot({
+    required AccountingRangeRequest range,
+    required AccountingAsOfRequest asOf,
+  }) => RustLib.instance.api.crateApiTimeTraceApiGetAccountingSnapshot(
+    that: this,
+    range: range,
+    asOf: asOf,
+  );
+
+  /// Fence the producer at one Current boundary, then query exactly one
+  /// canonical snapshot. A failed fence still queries at the producer-owned
+  /// boundary so the core ledger returns a partial snapshot with an unknown
+  /// tail after the last acknowledged watermark.
+  AccountingSnapshot getAccountingSnapshotCurrent({
+    required String startUtc,
+    required String endUtc,
+  }) => RustLib.instance.api.crateApiTimeTraceApiGetAccountingSnapshotCurrent(
+    that: this,
+    startUtc: startUtc,
+    endUtc: endUtc,
+  );
 
   /// Hourly active-seconds for one app on a date (24 buckets).
   Int64List getAppHourly({required String appName, required String date}) =>

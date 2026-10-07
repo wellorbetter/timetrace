@@ -1,0 +1,203 @@
+{
+  "fixture_version": 1,
+  "time_policy": {
+    "timestamp_format": "RFC3339",
+    "fixture_offset": "+00:00",
+    "canonical_bucket_offset": "+00:00",
+    "current_clock_reads": false,
+    "determinism": "Active rows form a complete 24-hour periodic schedule, so legacy Local hour buckets are invariant across fixed execution-machine UTC offsets; canonical pre-migration calculation uses +00:00 explicitly."
+  },
+  "hash_scope": {
+    "sql_sha256": "Exact UTF-8 bytes of p0_legacy_semantics.sql with LF line endings.",
+    "expected_snapshot_sha256": "Canonical JSON of the snapshot object only, with object keys sorted recursively and no insignificant whitespace."
+  },
+  "hashes": {
+    "sql_sha256": "03a4acbed1996450eb67556f1e328105c63fc8614fa0cf4f0525b9f421411899",
+    "expected_snapshot_sha256": "9315998e8ff961b00e7cd6cb426a7a25ec72b00e31fd9457b69aba2b5d1fae37"
+  },
+  "snapshot": {
+    "date": "2024-01-15",
+    "daily_app_summary": [
+      {
+        "app_id": "app-alpha",
+        "active_seconds": 14400,
+        "session_count": 24,
+        "rank": 1
+      },
+      {
+        "app_id": "app-beta",
+        "active_seconds": 7200,
+        "session_count": 24,
+        "rank": 2
+      }
+    ],
+    "usage_split": [
+      {
+        "app_id": "app-alpha",
+        "active_seconds": 14400,
+        "idle_seconds": 0
+      },
+      {
+        "app_id": "app-beta",
+        "active_seconds": 7200,
+        "idle_seconds": 0
+      }
+    ],
+    "window_summary": [
+      {
+        "app_id": "app-alpha",
+        "windows": [
+          {
+            "window_id": "window-alpha-primary",
+            "seconds": 9600
+          },
+          {
+            "window_id": "window-alpha-secondary",
+            "seconds": 4800
+          }
+        ]
+      },
+      {
+        "app_id": "app-beta",
+        "windows": [
+          {
+            "window_id": "window-beta-primary",
+            "seconds": 7200
+          }
+        ]
+      }
+    ],
+    "hourly_active_seconds": [
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900,
+      900
+    ],
+    "app_hourly": [
+      {
+        "app_id": "app-alpha",
+        "seconds": [
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600,
+          600
+        ]
+      },
+      {
+        "app_id": "app-beta",
+        "seconds": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ]
+      }
+    ],
+    "idle_samples": [
+      {
+        "started_at": "2024-01-15T12:30:00+00:00",
+        "duration_seconds": 900
+      }
+    ],
+    "cross_day_sessions": [
+      {
+        "app_id": "app-alpha",
+        "date_key": "2024-01-15",
+        "started_at": "2024-01-15T23:55:00+00:00",
+        "ended_at": "2024-01-16T00:05:00+00:00",
+        "duration_seconds": 600
+      }
+    ],
+    "diary_relations": {
+      "entries": [
+        {
+          "entry_id": 103,
+          "date": "2024-01-16",
+          "status": "published"
+        },
+        {
+          "entry_id": 102,
+          "date": "2024-01-15",
+          "status": "draft"
+        },
+        {
+          "entry_id": 101,
+          "date": "2024-01-15",
+          "status": "published"
+        }
+      ],
+      "images": [
+        {
+          "image_token": "image-token-alpha",
+          "date": "2024-01-15",
+          "entry_id": 102
+        },
+        {
+          "image_token": "image-token-beta",
+          "date": "2024-01-16",
+          "entry_id": 103
+        }
+      ]
+    }
+  }
+}

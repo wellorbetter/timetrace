@@ -47,6 +47,8 @@ dependencies:
   file_picker: ^11.0.3
   lunar: ^1.7.8
   flutter_markdown: ^0.7.7+1
+  ffi: ^2.2.0
+  win32: ^5.15.0
 
 dev_dependencies:
   flutter_test:
@@ -76,9 +78,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  shaders:
+    - shaders/card_refraction.frag
 
   assets:
     - assets/icon.ico
+    - assets/icon_preview.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

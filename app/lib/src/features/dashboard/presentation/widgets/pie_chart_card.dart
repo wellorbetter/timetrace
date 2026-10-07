@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/material/material.dart';
 import 'package:timetrace_app/src/core/format.dart';
 import 'package:timetrace_app/src/features/dashboard/domain/dashboard_state.dart';
 import 'package:timetrace_app/src/features/dashboard/presentation/widgets/app_color.dart';
@@ -21,7 +22,7 @@ class PieChartCard extends StatelessWidget {
     final rest = apps.skip(5).toList();
     final restSec = rest.fold<int>(0, (s, a) => s + a.activeSeconds);
 
-    return Card(
+    return MaterialCard(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: LayoutBuilder(

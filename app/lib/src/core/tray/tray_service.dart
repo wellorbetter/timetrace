@@ -1,15 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:ffi';
+import 'dart:ui';
+import 'package:ffi/ffi.dart';
+import 'package:win32/win32.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
+import '../router/app_router.dart';
+import 'tray_panel.dart';
+import '../window/window_presentation.dart';
 
 /// Manages the Windows system tray icon and its interactions.
-class TrayService with TrayListener {
-  TrayService(this._ref);
+class TrayService with TrayListener, WindowListener {
+  TrayService(this._ref, {WindowPresentation? presentation})
+    : _presentation = presentation ?? _ref.read(windowPresentationProvider);
 
   final WidgetRef _ref;
   bool _paused = false;
+  bool _changingWindow = false;
+  bool _disposed = false;
+  bool _panel = false;
+  final WindowPresentation _presentation;
 
   // Tray context menu icons (16x16 base64 PNG).
   static const String _kIconShow =
@@ -23,10 +35,9 @@ class TrayService with TrayListener {
 
   Future<void> init() async {
     trayManager.addListener(this);
-    await trayManager.setIcon(
-      'assets/icon.ico',
-      isTemplate: false,
-    );
+    windowManager.addListener(this);
+    _paused = _ref.read(apiProvider).isTrackingPaused();
+    await trayManager.setIcon('assets/icon.ico', isTemplate: false);
     await trayManager.setToolTip('TimeTrace — 应用使用追踪');
     await _updateMenu();
     AppLogger.log('tray initialized');
@@ -44,9 +55,9 @@ class TrayService with TrayListener {
           MenuItem.separator(),
           MenuItem(
             key: 'show',
-            label: '显示窗口',
+            label: '打开工作台',
             icon: _kIconShow,
-            onClick: (_) => _showWindow(),
+            onClick: (_) => openWorkspace(),
           ),
           MenuItem(
             key: 'pause',
@@ -67,14 +78,115 @@ class TrayService with TrayListener {
   }
 
   Future<void> _showWindow() async {
+    await dismissPanel();
+    if (_disposed) return;
     await windowManager.show();
+    if (_disposed) return;
     await windowManager.focus();
   }
 
-  Future<void> _togglePause() async {
-    _paused = !_paused;
+  Future<void> openWorkspace() async {
+    await _showWindow();
+    if (!_disposed) _ref.read(appRouterProvider).go('/dashboard');
+  }
+
+  Future<void> openSettings() async {
+    await _showWindow();
+    if (!_disposed) _ref.read(appRouterProvider).push('/settings');
+  }
+
+  Future<void> showPanel() async {
+    if (_disposed || _changingWindow) return;
+    if (_panel) { await dismissPanel(); return; }
+    _changingWindow = true;
     try {
-      _ref.read(apiProvider).setTrackingPaused(paused: _paused);
+      final opened = await _presentation.enterPanel((mainBounds) async {
+        final anchor = await trayManager.getBounds() ?? mainBounds;
+        final ratio = windowManager.getDevicePixelRatio();
+        final rect = calloc<RECT>();
+        final monitorInfo = calloc<MONITORINFO>();
+        late Rect work;
+        try {
+          rect.ref
+            ..left = (anchor.left * ratio).round()
+            ..top = (anchor.top * ratio).round()
+            ..right = (anchor.right * ratio).round()
+            ..bottom = (anchor.bottom * ratio).round();
+          monitorInfo.ref.cbSize = sizeOf<MONITORINFO>();
+          final monitor = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST);
+          if (GetMonitorInfo(monitor, monitorInfo) == 0) {
+            throw StateError('Monitor unavailable');
+          }
+          final area = monitorInfo.ref.rcWork;
+          work = Rect.fromLTRB(
+            area.left / ratio, area.top / ratio,
+            area.right / ratio, area.bottom / ratio,
+          );
+        } finally {
+          calloc.free(rect);
+          calloc.free(monitorInfo);
+        }
+        return trayPanelBounds(work, anchor);
+      });
+      if (_disposed) return;
+      if (!opened) {
+        AppLogger.log('tray panel could not open');
+        await windowManager.show();
+        return;
+      }
+      _panel = true;
+      _ref.read(trayPanelVisibleProvider.notifier).setVisible(true);
+      _ref.invalidate(trayOverviewProvider);
+      await windowManager.show();
+      if (_disposed) return;
+      await windowManager.focus();
+    } catch (_) {
+      if (_disposed) return;
+      AppLogger.log('tray panel could not open');
+      await _presentation.leavePanel();
+      if (_disposed) return;
+      _panel = false;
+      _ref.read(trayPanelVisibleProvider.notifier).setVisible(false);
+      await windowManager.show();
+    } finally {
+      _changingWindow = false;
+    }
+  }
+
+  Future<void> dismissPanel() async {
+    if (!_panel || _changingWindow) return;
+    _changingWindow = true;
+    try {
+      await _presentation.leavePanel();
+      if (_disposed) return;
+      _panel = false;
+      _ref.read(trayPanelVisibleProvider.notifier).setVisible(false);
+    } finally {
+      _changingWindow = false;
+    }
+  }
+
+  @override
+  void onWindowBlur() {
+    if (_panel && !_changingWindow) dismissPanel();
+  }
+
+  void dispose() {
+    _disposed = true;
+    trayManager.removeListener(this);
+    windowManager.removeListener(this);
+  }
+
+  Future<void> togglePaused() async {
+    await _togglePause();
+    _ref.invalidate(trayOverviewProvider);
+  }
+
+  Future<void> _togglePause() async {
+    try {
+      final api = _ref.read(apiProvider);
+      api.setTrackingPaused(paused: !api.isTrackingPaused());
+      _paused = api.isTrackingPaused();
       AppLogger.log('tracking ${_paused ? 'paused' : 'resumed'} via tray');
     } catch (e) {
       AppLogger.log('tray pause failed: $e');
@@ -93,7 +205,7 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    _showWindow();
+    showPanel();
   }
 
   @override
@@ -110,5 +222,6 @@ class TrayExitNotifier extends Notifier<bool> {
   void requestExit() => state = true;
 }
 
-final trayExitProvider =
-    NotifierProvider<TrayExitNotifier, bool>(TrayExitNotifier.new);
+final trayExitProvider = NotifierProvider<TrayExitNotifier, bool>(
+  TrayExitNotifier.new,
+);

@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "time_unit": "seconds",
+  "interval_semantics": "utc_half_open",
+  "privacy": "synthetic_only",
+  "tzdb_version": "2025b",
+  "clock": {
+    "utc_epoch": "2026-01-15T00:00:00Z",
+    "monotonic_epoch_ms": 0,
+    "mapping": "utc_epoch_plus_monotonic_ms",
+    "event_time": "business_boundary_utc",
+    "processing_time": "delivery_time_utc"
+  },
+  "defaults": {
+    "poll_period_seconds": 3,
+    "checkpoint_period_seconds": 10,
+    "idle_threshold_seconds": 300,
+    "query_deadline_seconds": 4
+  },
+  "shorthand": {
+    "observation_series": "expand start <= t < end at every_seconds; each observation is successful, processing_time=event_time, sequence=base_sequence+index unless overridden",
+    "checkpoint_series": "expand start <= t < end at every_seconds; each successful checkpoint uses its event_time as candidate observed_through",
+    "all_expanded_events_require": ["event_time", "processing_time", "sequence"]
+  },
+  "scenarios": [
+    {
+      "id": "active_idle_one_hour",
+      "timezone": "UTC",
+      "range": ["2026-01-15T10:00:00Z", "2026-01-15T11:00:00Z"],
+      "observation_series": [{"start": "2026-01-15T10:00:00Z", "end": "2026-01-15T11:00:00Z", "every_seconds": 3, "base_sequence": 1000, "app": "editor.synthetic", "window": "editor-main", "attribution": "resolved"}],
+      "checkpoint_series": [{"start": "2026-01-15T10:00:10Z", "end": "2026-01-15T11:00:01Z", "every_seconds": 10, "base_sequence": 100000}],
+      "events": [{"kind": "last_input", "event_time": "2026-01-15T10:45:00Z", "processing_time": "2026-01-15T10:45:00Z", "sequence": 50000}],
+      "query": {"kind": "at", "value": "2026-01-15T11:00:00Z"}
+    },
+    {
+      "id": "closed_40_open_20",
+      "timezone": "UTC",
+      "range": ["2026-01-15T10:00:00Z", "2026-01-15T11:00:00Z"],
+      "durable_records": [
+        {"source_id": "closed-1", "state": "active", "start": "2026-01-15T10:00:00Z", "end": "2026-01-15T10:40:00Z", "app": "editor.synthetic"},
+        {"source_id": "open-1", "state": "active", "start": "2026-01-15T10:40:00Z", "end": null, "observed_through": "2026-01-15T11:00:00Z", "app": "browser.synthetic"}
+      ],
+      "query": {"kind": "at", "value": "2026-01-15T11:00:00Z"}
+    },
+    {
+      "id": "pause_resume",
+      "timezone": "UTC",
+      "range": ["2026-01-15T13:00:00Z", "2026-01-15T13:30:00Z"],
+      "observation_series": [
+        {"start": "2026-01-15T13:00:00Z", "end": "2026-01-15T13:10:00Z", "every_seconds": 3, "base_sequence": 200000, "app": "editor.synthetic", "attribution": "resolved"},
+        {"start": "2026-01-15T13:21:00Z", "end": "2026-01-15T13:30:00Z", "every_seconds": 3, "base_sequence": 210000, "app": "editor.synthetic", "attribution": "resolved"}
+      ],
+      "events": [
+        {"kind": "pause_requested", "command_id": "pause-1", "event_time": "2026-01-15T13:10:00Z", "processing_time": "2026-01-15T13:10:00Z", "sequence": 220000},
+        {"kind": "pause_committed", "command_id": "pause-1", "event_time": "2026-01-15T13:10:00Z", "processing_time": "2026-01-15T13:10:01Z", "sequence": 220001},
+        {"kind": "resume_requested", "command_id": "resume-1", "event_time": "2026-01-15T13:20:00Z", "processing_time": "2026-01-15T13:20:00Z", "sequence": 220002},
+        {"kind": "resume_committed", "command_id": "resume-1", "event_time": "2026-01-15T13:20:00Z", "processing_time": "2026-01-15T13:20:01Z", "sequence": 220003}
+      ]
+    },
+    {
+      "id": "normal_stop",
+      "timezone": "UTC",
+      "range": ["2026-01-15T13:30:00Z", "2026-01-15T13:45:00Z"],
+      "observation_series": [{"start": "2026-01-15T13:30:00Z", "end": "2026-01-15T13:40:00Z", "every_seconds": 3, "base_sequence": 230000, "app": "editor.synthetic", "attribution": "resolved"}],
+      "events": [
+        {"kind": "stop_requested", "command_id": "stop-1", "event_time": "2026-01-15T13:40:00Z", "processing_time": "2026-01-15T13:40:00Z", "sequence": 240000},
+        {"kind": "checkpoint_committed", "revision": 40, "observed_through": "2026-01-15T13:40:00Z", "event_time": "2026-01-15T13:40:00Z", "processing_time": "2026-01-15T13:40:01Z", "sequence": 240001},
+        {"kind": "monitor_joined", "command_id": "stop-1", "event_time": "2026-01-15T13:40:00Z", "processing_time": "2026-01-15T13:40:02Z", "sequence": 240002},
+        {"kind": "stop_acknowledged", "command_id": "stop-1", "event_time": "2026-01-15T13:40:00Z", "processing_time": "2026-01-15T13:40:02Z", "sequence": 240003},
+        {"kind": "process_started", "run_id": "next-run", "event_time": "2026-01-15T13:45:00Z", "processing_time": "2026-01-15T13:45:00Z", "sequence": 240004}
+      ]
+    },
+    {
+      "id": "continuity_and_attribution",
+      "timezone": "UTC",
+      "range": ["2026-01-15T12:00:00Z", "2026-01-15T12:20:00Z"],
+      "observation_series": [
+        {"start": "2026-01-15T12:00:00Z", "end": "2026-01-15T12:00:06Z", "every_seconds": 3, "base_sequence": 300000, "app": "editor.synthetic", "attribution_by_index": ["resolved", "unavailable"]},
+        {"start": "2026-01-15T12:10:00Z", "end": "2026-01-15T12:15:00Z", "every_seconds": 3, "base_sequence": 310000, "app": "browser.synthetic", "attribution": "resolved"},
+        {"start": "2026-01-15T12:19:00Z", "end": "2026-01-15T12:20:00Z", "every_seconds": 3, "base_sequence": 320000, "app": "terminal.synthetic", "attribution": "resolved"}
+      ],
+      "events": [
+        {"kind": "poll_stall", "event_time": "2026-01-15T12:00:07Z", "processing_time": "2026-01-15T12:00:08Z", "sequence": 330000, "last_success_event_time": "2026-01-15T12:00:03Z"},
+        {"kind": "suspend_started", "pair_id": "power-1", "event_time": "2026-01-15T12:15:00Z", "processing_time": "2026-01-15T12:15:00Z", "sequence": 330001},
+        {"kind": "resume_observed", "pair_id": "power-1", "event_time": "2026-01-15T12:18:00Z", "processing_time": "2026-01-15T12:18:00Z", "sequence": 330002},
+        {"kind": "sample_unavailable", "reason": "probe_failed", "event_time": "2026-01-15T12:18:01Z", "processing_time": "2026-01-15T12:18:01Z", "sequence": 330003}
+      ]
+    },
+    {
+      "id": "crash_unknown_tail",
+      "timezone": "UTC",
+      "range": ["2026-01-15T14:00:00Z", "2026-01-15T14:31:00Z"],
+      "durable_records": [{"state": "active", "start": "2026-01-15T14:00:00Z", "end": "2026-01-15T14:10:00Z", "app": "editor.synthetic"}],
+      "durable_observed_through": "2026-01-15T14:10:00Z",
+      "kill_variants": ["2026-01-15T14:10:01Z", "2026-01-15T14:19:59Z"],
+      "restart_at_metadata": "2026-01-15T14:30:00Z",
+      "events": [
+        {"kind": "sample_unavailable", "event_time": "2026-01-15T14:30:01Z", "processing_time": "2026-01-15T14:30:01Z", "sequence": 400000},
+        {"kind": "foreground_observed", "app": "editor.synthetic", "attribution": "resolved", "event_time": "2026-01-15T14:31:00Z", "processing_time": "2026-01-15T14:31:00Z", "sequence": 400001}
+      ]
+    },
+    {
+      "id": "checkpoint_failure_then_kill",
+      "timezone": "UTC",
+      "range": ["2026-01-15T15:00:00Z", "2026-01-15T15:31:00Z"],
+      "observation_series": [{"start": "2026-01-15T15:00:00Z", "end": "2026-01-15T15:25:00Z", "every_seconds": 3, "base_sequence": 410000, "app": "editor.synthetic", "attribution": "resolved"}],
+      "events": [
+        {"kind": "checkpoint_committed", "revision": 10, "observed_through": "2026-01-15T15:10:00Z", "event_time": "2026-01-15T15:10:00Z", "processing_time": "2026-01-15T15:10:00Z", "sequence": 420000},
+        {"kind": "checkpoint_failed", "revision": 20, "candidate_observed_through": "2026-01-15T15:20:00Z", "event_time": "2026-01-15T15:20:00Z", "processing_time": "2026-01-15T15:20:00Z", "sequence": 420001},
+        {"kind": "process_killed", "event_time": "2026-01-15T15:25:00Z", "processing_time": "2026-01-15T15:25:00Z", "sequence": 420002},
+        {"kind": "process_started", "event_time": "2026-01-15T15:30:00Z", "processing_time": "2026-01-15T15:30:00Z", "sequence": 420003},
+        {"kind": "foreground_observed", "app": "editor.synthetic", "attribution": "resolved", "event_time": "2026-01-15T15:31:00Z", "processing_time": "2026-01-15T15:31:00Z", "sequence": 420004}
+      ]
+    },
+    {
+      "id": "cross_midnight",
+      "timezone": "UTC",
+      "durable_records": [{"state": "active", "start": "2026-01-15T23:50:00Z", "end": "2026-01-16T00:10:00Z", "app": "editor.synthetic"}],
+      "queries": [{"local_date": "2026-01-15", "as_of": "2026-01-17T00:00:00Z"}, {"local_date": "2026-01-16", "as_of": "2026-01-17T00:00:00Z"}]
+    },
+    {
+      "id": "legacy_migration_restart",
+      "timezone": "UTC",
+      "range": ["2026-01-15T15:00:00Z", "2026-01-15T16:00:00Z"],
+      "cutover_at": "2026-01-15T16:00:00Z",
+      "migration_version": 1,
+      "legacy_rows": [
+        {"source_id": "usage-1", "app": "editor.synthetic", "start": "2026-01-15T15:00:00Z", "end": "2026-01-15T15:30:00Z", "is_idle": false},
+        {"source_id": "usage-2", "app": "__IDLE__", "start": "2026-01-15T15:30:00Z", "end": "2026-01-15T15:40:00Z", "is_idle": true},
+        {"source_id": "usage-3", "app": "browser.synthetic", "start": "2026-01-15T15:40:00Z", "end": null, "is_idle": false}
+      ],
+      "native_rows": [{"source_id": "native-1", "state": "active", "start": "2026-01-15T15:20:00Z", "end": "2026-01-15T15:25:00Z", "app": "editor.synthetic"}],
+      "migration_attempts": [
+        {"run": 1, "committed_cursor": "usage-2", "then": "interrupted"},
+        {"run": 2, "resume_after_cursor": "usage-2", "committed_cursor": "usage-3", "then": "completed"},
+        {"run": 3, "then": "repeat_completed_migration"}
+      ]
+    },
+    {
+      "id": "as_of_matrix",
+      "timezone": "UTC",
+      "range": ["2026-01-15T17:59:00Z", "2026-01-15T18:00:00Z"],
+      "request_now": "2026-01-15T18:00:00Z",
+      "durable_observed_through": "2026-01-15T17:59:50Z",
+      "durable_records": [{"state": "active", "start": "2026-01-15T17:59:00Z", "end": "2026-01-15T17:59:50Z", "app": "editor.synthetic"}],
+      "queries": [
+        {"id": "future", "kind": "at", "value": "2026-01-15T18:00:01Z"},
+        {"id": "historical", "kind": "at", "value": "2026-01-15T17:59:30Z"},
+        {"id": "current_success", "kind": "current", "sample": {"result": "success", "event_time": "2026-01-15T18:00:00Z"}, "commit": "success"},
+        {"id": "current_sample_failed", "kind": "current", "sample": {"result": "failed", "event_time": "2026-01-15T18:00:00Z"}},
+        {"id": "current_sample_timeout", "kind": "current", "sample": {"result": "timeout", "deadline": "2026-01-15T18:00:04Z"}},
+        {"id": "current_commit_failure", "kind": "current", "sample": {"result": "success", "event_time": "2026-01-15T18:00:00Z"}, "commit": "failure"},
+        {"id": "current_read_failure", "kind": "current", "read": "failure"}
+      ]
+    },
+    {"id": "invalid_ranges", "timezone": "UTC", "queries": [{"id": "reversed", "range": ["2026-01-15T19:00:00Z", "2026-01-15T18:00:00Z"]}, {"id": "invalid_date", "local_date": "2026-02-30"}, {"id": "invalid_timezone", "local_date": "2026-01-15", "timezone": "Mars/Olympus"}]},
+    {"id": "dst_spring_forward", "timezone": "America/New_York", "local_date": "2026-03-08", "bucket_fixture": "dst_buckets.json#spring_forward"},
+    {"id": "dst_fall_back", "timezone": "America/New_York", "local_date": "2026-11-01", "bucket_fixture": "dst_buckets.json#fall_back"}
+  ]
+}

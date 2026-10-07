@@ -10,16 +10,27 @@ pub mod error;
 pub mod storage;
 
 pub use config::AppConfig;
+pub use contracts::accounting::{
+    AccountingClock, AccountingError, AccountingInterval, AccountingQuery, AccountingSignal,
+    AccountingSnapshot, AccountingState, AccountingStore, AccountingTotals, ActiveAttribution,
+    AttributionIdentity, AttributionTotal, CanonicalBatch, CheckpointAck, CheckpointReason,
+    FixedAccountingClock, LifecycleEvidence, LocalDayProjection, LocalHourBucket,
+    ProducerCheckpointState, ProductionCheckpoint, ProductionCheckpointError, RecoveryPoint,
+    SnapshotIntegrity, SystemAccountingClock, UtcInterval,
+};
 pub use contracts::events::{AppInfo, EventSink, EventSource, EventSourceHandle, TrackedEvent};
 pub use contracts::idle::IdleDetector;
 pub use contracts::process::{ProcessInfo, ProcessQuery, ProcessStatus};
 pub use contracts::startup::{DisableResult, StartupEntryRecord, StartupScanner};
-pub use contracts::storage::{AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord};
-pub use contracts::window::WindowResolver;
-pub use engine::{
-    run_monitor_loop, SessionAggregator, SysinfoProcessQuery,
-    Win32IdleDetector, Win32WindowResolver, WindowsStartupScanner,
+pub use contracts::storage::{
+    AppMetaRecord, AppUsageSplit, AppUsageSummary, DataStore, SessionRecord,
 };
+pub use contracts::window::WindowResolver;
 pub use engine::startup_win32::{is_self_start_enabled, set_self_start_enabled};
+pub use engine::{
+    AccountingQueryService, AccountingReducer, ActiveAttributionProjector, IanaLocalDayProjection,
+    SessionAggregator, SysinfoProcessQuery, Win32IdleDetector, Win32WindowResolver,
+    WindowsStartupScanner, run_monitor_loop,
+};
 pub use error::AppError;
 pub use storage::SqliteStore;

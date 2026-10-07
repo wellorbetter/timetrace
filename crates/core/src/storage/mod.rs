@@ -1,3 +1,4 @@
+pub mod accounting;
 pub mod schema;
 pub mod sqlite;
 

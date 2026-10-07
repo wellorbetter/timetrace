@@ -1,21 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/bridge/api.dart';
 import 'package:timetrace_app/src/core/bridge/api_provider.dart';
 import 'package:timetrace_app/src/core/logging/app_logger.dart';
-
-/// Day detail for the calendar view (stats + timeline + diary).
-final calendarDayProvider =
-    FutureProvider.autoDispose.family<DayDetailDto, DateTime>((ref, date) async {
-  final api = ref.read(apiProvider);
-  final d =
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  try {
-    return api.getDayDetail(date: d);
-  } catch (e) {
-    AppLogger.log('getDayDetail failed: $e');
-    rethrow;
-  }
-});
 
 /// Save diary for a date and invalidate so the day view reloads.
 Future<void> saveDiary(WidgetRef ref, DateTime date, String content) async {
@@ -24,33 +9,9 @@ Future<void> saveDiary(WidgetRef ref, DateTime date, String content) async {
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   try {
     api.setDiary(date: d, content: content);
-    ref.invalidate(calendarDayProvider(date));
     AppLogger.log('diary saved: $d');
   } catch (e) {
     AppLogger.log('diary save failed: $e');
     rethrow;
   }
 }
-
-/// Hourly activity for a day (24 ints) — for the heatmap.
-final dayHourlyProvider =
-    FutureProvider.autoDispose.family<List<int>, String>((ref, date) async {
-  final api = ref.read(apiProvider);
-  return api.getDayHourly(date: date).map((e) => e.toInt()).toList();
-});
-
-/// Aggregated usage for a date range (week/month summary panel).
-final rangeSummaryProvider = FutureProvider.autoDispose
-    .family<List<DaySessionDto>, (String, String)>((ref, range) async {
-  final api = ref.read(apiProvider);
-  final split = api.getUsageSplit(start: range.$1, end: range.$2);
-  // Convert aggregated split to DaySessionDto-like rows (app, duration).
-  return split
-      .map((s) => DaySessionDto(
-            appName: s.appName,
-            isIdle: false,
-            durationSecs: s.activeSeconds,
-            startedAt: '',
-          ))
-      .toList();
-});

@@ -1,5 +1,6 @@
 #include "win32_window.h"
 
+#include <algorithm>
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -132,12 +133,39 @@ bool Win32Window::Create(const std::wstring& title,
                               static_cast<LONG>(origin.y)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
-  double scale_factor = dpi / 96.0;
+  double scale_factor = (dpi == 0 ? 96 : dpi) / 96.0;
+
+  // Initial outer bounds only. Later user resize and WM_DPICHANGED retain
+  // their existing native behavior; never reapply this preferred size.
+  MONITORINFO info{};
+  info.cbSize = sizeof(info);
+  RECT work{};
+  if (GetMonitorInfo(monitor, &info) &&
+      info.rcWork.right > info.rcWork.left &&
+      info.rcWork.bottom > info.rcWork.top) {
+    work = info.rcWork;
+  } else if (!SystemParametersInfo(SPI_GETWORKAREA, 0, &work, 0) ||
+             work.right <= work.left || work.bottom <= work.top) {
+    // Initialized finite primary-screen fallback if work area is unavailable.
+    work = {0, 0, (std::max)(1, GetSystemMetrics(SM_CXSCREEN)),
+                   (std::max)(1, GetSystemMetrics(SM_CYSCREEN))};
+  }
+  const int work_width = work.right - work.left;
+  const int work_height = work.bottom - work.top;
+  const int width = (std::min)(work_width,
+      (std::max)(1, Scale(size.width, scale_factor)));
+  const int height = (std::min)(work_height,
+      (std::max)(1, Scale(size.height, scale_factor)));
+  const int x = (std::max)(static_cast<int>(work.left),
+      (std::min)(Scale(target_point.x, scale_factor),
+                 static_cast<int>(work.right) - width));
+  const int y = (std::max)(static_cast<int>(work.top),
+      (std::min)(Scale(target_point.y, scale_factor),
+                 static_cast<int>(work.bottom) - height));
 
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      x, y, width, height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {

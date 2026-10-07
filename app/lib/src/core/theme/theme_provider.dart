@@ -1,20 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
+import '../preferences/ui_preferences_controller.dart';
 
 /// Dark mode preference (Riverpod 3).
 class ThemeNotifier extends Notifier<bool> {
   @override
-  bool build() => UiPreferencesStore.read()['dark'] == true;
+  bool build() =>
+      ref.read(uiPreferencesControllerProvider.notifier).read()['dark'] == true;
 
   void toggle() {
     state = !state;
-    UiPreferencesStore.update({'dark': state});
+    ref.read(uiPreferencesControllerProvider.notifier).patch('theme', {
+      'dark': state,
+    });
   }
 
   void set(bool value) {
     state = value;
-    UiPreferencesStore.update({'dark': value});
+    ref.read(uiPreferencesControllerProvider.notifier).patch('theme', {
+      'dark': value,
+    });
   }
 }
 
-final themeModeProvider = NotifierProvider<ThemeNotifier, bool>(ThemeNotifier.new);
+final themeModeProvider = NotifierProvider<ThemeNotifier, bool>(
+  ThemeNotifier.new,
+);

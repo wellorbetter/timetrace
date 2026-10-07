@@ -36,7 +36,7 @@ class L10n {
   String get idleThreshold => locale == AppLocale.zh ? '空闲阈值' : 'Idle threshold';
   String get seconds => locale == AppLocale.zh ? '秒' : 's';
   String get minutes => locale == AppLocale.zh ? '分钟' : 'min';
-  String get data => locale == AppLocale.zh ? '数据' : 'Data';
+  String get data => locale == AppLocale.zh ? '工作台' : 'Workspace';
   String get clearData => locale == AppLocale.zh ? '清除全部数据' : 'Clear all data';
   String get clearDataConfirm =>
       locale == AppLocale.zh ? '确定清除全部记录？此操作不可恢复。' : 'Clear all records? This cannot be undone.';

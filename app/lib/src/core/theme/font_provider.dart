@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timetrace_app/src/core/preferences/ui_preferences_store.dart';
+import '../preferences/ui_preferences_controller.dart';
 
 /// A selectable font (system fonts available on Windows).
 class AppFont {
-  const AppFont({required this.name, required this.family, required this.preview});
+  const AppFont({
+    required this.name,
+    required this.family,
+    required this.preview,
+  });
 
   final String name; // display name
   final String family; // font family for Flutter
@@ -11,7 +15,11 @@ class AppFont {
 
   static const all = [
     AppFont(name: 'Segoe UI', family: 'Segoe UI', preview: 'TimeTrace 使用统计'),
-    AppFont(name: '微软雅黑 UI', family: 'Microsoft YaHei UI', preview: 'TimeTrace 使用统计'),
+    AppFont(
+      name: '微软雅黑 UI',
+      family: 'Microsoft YaHei UI',
+      preview: 'TimeTrace 使用统计',
+    ),
     AppFont(name: '微软雅黑', family: 'Microsoft YaHei', preview: 'TimeTrace 使用统计'),
     AppFont(name: '等线', family: 'DengXian', preview: 'TimeTrace 使用统计'),
     AppFont(name: '宋体', family: 'SimSun', preview: 'TimeTrace 使用统计'),
@@ -32,13 +40,18 @@ class AppFont {
 class FontNotifier extends Notifier<AppFont> {
   @override
   AppFont build() {
-    final value = UiPreferencesStore.read()['fontName'];
-    return AppFont.byName(value as String?) ?? AppFont.defaultFont;
+    final value = ref
+        .read(uiPreferencesControllerProvider.notifier)
+        .read()['fontName'];
+    return AppFont.byName(value is String ? value : null) ??
+        AppFont.defaultFont;
   }
 
   void select(AppFont font) {
     state = font;
-    UiPreferencesStore.update({'fontName': font.name});
+    ref.read(uiPreferencesControllerProvider.notifier).patch('font', {
+      'fontName': font.name,
+    });
   }
 }
 

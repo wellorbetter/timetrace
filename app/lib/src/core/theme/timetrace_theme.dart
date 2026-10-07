@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Material 3 theme with day/night + seasonal accent.
+/// Material 3 theme with day/night and the approved quiet moss accent.
 /// Font family is passed in from the font preference provider.
 class TimetraceTheme {
   static Color _seasonalAccent() {
-    final month = DateTime.now().month;
-    switch (month) {
-      case 3: case 4: case 5: return const Color(0xFF00897B);
-      case 6: case 7: case 8: return const Color(0xFF1976D2);
-      case 9: case 10: case 11: return const Color(0xFFEF6C00);
-      default: return const Color(0xFF3949AB);
-    }
+    return const Color(0xFF506B48);
   }
 
   static ThemeData _base(Brightness brightness, {required String fontFamily}) {
@@ -35,6 +29,13 @@ class TimetraceTheme {
     );
     return base.copyWith(
       textTheme: textTheme,
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: textTheme.bodyMedium,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface.withValues(alpha: 0.78),
         elevation: 0,
@@ -46,7 +47,9 @@ class TimetraceTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
