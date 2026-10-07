@@ -1,91 +1,94 @@
-<p align="center">
-  <img src="app/assets/icon_preview.png" width="96" alt="TimeTrace">
-</p>
+<p align="center"><img src="app/assets/icon_preview.png" width="96" alt="TimeTrace"></p>
 
-<h1 align="center">TimeTrace</h1>
+# TimeTrace
 
-<p align="center">
-  本地优先的 Windows 使用统计 + 日记应用
-  <br>
-  <b>Rust</b> 核心 + <b>Flutter</b> UI · 100% 本地运行，无网络、无遥测
-</p>
+一款开源的电脑使用统计与日记工具。看看每天、每周、每月把时间花在哪些软件上，也可以查某个小时的使用情况，比如这一小时打了多久 LOL、浏览器用了多久。
 
-<p align="center">
-  <a href="README_EN.md">English</a>
-  ·
-  <a href="https://github.com/wellorbetter/timetrace/releases">
-    <img src="https://img.shields.io/github/v/release/wellorbetter/timetrace" alt="Release">
-  </a>
-  ·
-  <img src="https://github.com/wellorbetter/timetrace/actions/workflows/ci.yml/badge.svg" alt="CI">
-</p>
+Rust 核心 + Flutter 桌面界面，基础记录保存在本地，AI 总结可选。
 
----
+[English](README_EN.md) · [下载预览版](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1) · [所有版本](https://github.com/wellorbetter/timetrace/releases) · [反馈问题](https://github.com/wellorbetter/timetrace/issues)
 
-## 功能特性
+![TimeTrace 工作台：日历、数据与日记](docs/screenshots/v1.2-workbench.png)
 
-- **使用统计** — 自动记录前台应用活跃时长；自动识别空闲、锁屏与睡眠，不计入活跃时间
-- **应用图标** — 实时识别前台应用与图标；系统托盘常驻，右键菜单快速控制
-- **数据仪表盘** — 柱状图 / 饼图 / 24h 时段分布 / 当日汇总 / 应用分布轮播，与日历联动
-- **日记** — 朋友圈式日记：Markdown 编辑、图片相册、草稿自动保存、按天分组折叠
-- **设置** — 监控参数、排除应用、开机启动、启动最小化、主题/字体/背景与仪表盘顺序均可配置并持久化
-- **背景与应用选择** — 支持本地背景图、透明度调节、运行中进程筛选和应用图标展示
+## v1.2 这次改了什么
 
-## 截图
+这次主要重新整理了界面和工作台：把日历、数据轮播和日记放在一起，组件可以按自己的习惯调整；新增时间流，按时段回看应用使用记录。任务清单、番茄钟、倒计时和每日诗词也放进了组件里，计时记录通过小弹窗查看。背景、主题、材质和设置入口也做了调整。
 
-| | |
-| --- | --- |
-| ![柱状图](docs/screenshots/dashboard-bar.png) | ![饼图](docs/screenshots/dashboard-pie.png) |
-| ![当日汇总](docs/screenshots/dashboard-summary.png) | ![应用分布](docs/screenshots/dashboard-apps.png) |
-| ![时段分布](docs/screenshots/dashboard-hourly.png) | |
+目前是 **Windows 预览版**，部分目录打开与窗口布局细节仍在完善，欢迎反馈。
 
-## 技术栈
+## 可以用来做什么
 
-| 模块 | 说明 |
-| --- | --- |
-| `crates/core` | Rust 核心：Win32 事件钩子监控、空闲/睡眠检测、SQLite 存储 |
-| `bridge` | flutter_rust_bridge 跨语言绑定 |
-| `app/` | Flutter UI：Riverpod 3 + Material 3，Windows 桌面 |
+- **看使用情况**：小时、日、周、月和自定义范围；柱状图、饼图、应用明细与时段分布。
+- **按时间回看**：从时间流查看用了哪些应用、用了多久，再展开具体记录。
+- **记录一天**：本地 Markdown 日记、图片，以及可选的 AI 总结。
+- **摆自己的工作台**：调整组件布局，使用任务清单、番茄钟、倒计时和每日诗词。
+- **调整桌面体验**：背景、主题、字体、材质、托盘、开机启动和排除应用等设置。
 
-## 构建
+## 界面
 
-### 环境要求
+### 时间流：按时段回看软件使用
 
-- Windows 10/11
-- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows)（stable 渠道）
-- [Rust 工具链](https://rustup.rs/)（`cargo` 需在 PATH 中，构建时自动编译 Rust 桥接库）
-- Visual Studio 2022（含「使用 C++ 的桌面开发」工作负载）
+![时间流](docs/screenshots/v1.2-time-flow.png)
 
-### 命令
+### 数据视图：时长、汇总、应用明细与时段分布
 
-```bash
-# 1) Rust workspace 测试
-cargo test --workspace
+![当天使用汇总](docs/screenshots/v1.2-usage-summary.png)
 
-# 2) Flutter 静态分析
-cd app && flutter analyze --no-fatal-infos
+![应用明细](docs/screenshots/v1.2-app-details.png)
 
-# 3) Windows Release 构建（自动编译并拷贝 timetrace_bridge.dll）
-cd app && flutter build windows --release
-# 产物：app/build/windows/x64/runner/Release/
+![时段分布](docs/screenshots/v1.2-hourly.png)
 
-# 4) Flutter 测试
-cd app && flutter test
+### 展开时间段，查看具体使用记录
+
+![时间流详情](docs/screenshots/v1.2-time-flow-details.png)
+
+### AI 总结：根据使用记录整理一天
+
+![AI 总结预览](docs/screenshots/v1.2-ai-summary.png)
+
+### 外观设置：主题、语言和字体
+
+![外观设置](docs/screenshots/v1.2-appearance.png)
+
+以上截图由作者选定，用于展示当前 Windows 界面。截图背景由作者自行选择，不是安装包的默认背景。
+
+## 下载与使用
+
+下载 [v1.2.0-preview.1](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1) 的 `TimeTrace-v1.2.0-preview.1-windows-x64.zip`，完整解压后运行 `Release/timetrace_app.exe`。适用于 Windows 10 / 11 x64。
+
+更新前退出旧版并备份自己的记录，不要同时运行多份记录进程。Windows 文件属性目前仍显示旧的 `1.0.1`，请以 Release 标签和下载文件名识别这次预览版。
+
+这次没有新的 macOS 包；历史版本的 macOS 包不代表本次界面已验证。
+
+## 隐私与 AI
+
+基础活动记录和日记保存在本地，不需要注册账号。启用并触发 AI 总结时，必要内容会发送到自己配置的模型服务，遵循该服务的隐私与计费规则。不配置 AI 也可以使用统计和本地日记。诗词可能访问公共接口，因此不是“完全不联网”的应用。
+
+数据库、日记图片、应用路径和窗口标题可能包含私人信息，请自行备份，反馈问题时不要上传 Key 或私人记录。
+
+## 源码与构建
+
+本预览版从早期基线重新整理，源码位于 [release/v1.2.0-preview.1](https://github.com/wellorbetter/timetrace/tree/release/v1.2.0-preview.1)，不是 main 上旧界面的合并版。复现本预览版请使用该分支或同名标签。
+
+Windows 构建需要 Flutter、Rust 和 Visual Studio 的“使用 C++ 的桌面开发”工具链。常规入口：
+
+```powershell
+git switch release/v1.2.0-preview.1
+cd app
+flutter pub get
+flutter build windows --release --no-tree-shake-icons
 ```
 
-## 下载
+测试与静态检查可运行 `flutter analyze`、`flutter test` 及对应 Rust 测试。预览版仍有测试导入问题，构建成功不代表全量回归通过。
 
-- 最新版本：<https://github.com/wellorbetter/timetrace/releases>
-- 下载 `TimeTrace-vX.Y.Z-windows-x64.zip`，解压后直接运行 `timetrace_app.exe`，无需安装。
+| 模块 | 职责 |
+| --- | --- |
+| `crates/core` | 应用监控、时间记录与 SQLite 存储 |
+| `bridge` | Rust / Flutter 跨语言绑定 |
+| `app` | Flutter 桌面界面 |
 
-## 开发过程
+## 开发与许可
 
-全程 vibe coding：前期用 DeepSeek V4 Flash + Pi 快速搭出原型，后期切换到 Codex 持续做性能与交互优化。
+前期使用 DeepSeek + Pi 搭出原型，后续通过 Codex 持续调整界面与交互。欢迎提 issue，也欢迎 Star。
 
-## 隐私
-
-所有数据只保存在本地 SQLite（`%APPDATA%\TimeTrace\time.db`），不上传任何内容。
-
-## License
-
-[MIT](LICENSE)
+[MIT](LICENSE)。第三方组件保留各自许可；截图中的个人背景不作为可再分发的默认素材。

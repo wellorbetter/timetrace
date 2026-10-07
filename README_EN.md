@@ -1,91 +1,90 @@
-<p align="center">
-  <img src="app/assets/icon_preview.png" width="96" alt="TimeTrace">
-</p>
+# TimeTrace
 
-<h1 align="center">TimeTrace</h1>
+An open-source desktop activity tracker and journal, built with Rust and Flutter. Review which applications you used and how long you spent in them, by hour, day, week, month, or a custom range. Basic records stay local; AI summaries are optional.
 
-<p align="center">
-  Local-first Windows time tracking &amp; journal app
-  <br>
-  <b>Rust</b> core + <b>Flutter</b> UI · 100% local, no network, no telemetry
-</p>
+[中文](README.md) · [Windows preview](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1) · [All releases](https://github.com/wellorbetter/timetrace/releases) · [Issues](https://github.com/wellorbetter/timetrace/issues)
 
-<p align="center">
-  <a href="README.md">中文</a>
-  ·
-  <a href="https://github.com/wellorbetter/timetrace/releases">
-    <img src="https://img.shields.io/github/v/release/wellorbetter/timetrace" alt="Release">
-  </a>
-  ·
-  <img src="https://github.com/wellorbetter/timetrace/actions/workflows/ci.yml/badge.svg" alt="CI">
-</p>
+![Calendar, data and journal workspace](docs/screenshots/v1.2-workbench.png)
 
----
+## What's new in the v1.2 preview
+
+The interface has been reorganized around a customizable workspace: calendar, rotating data views and journal, with task lists, Pomodoro, countdown and poetry widgets. The activity timeline lets you review applications by time segment. Timer history opens in a small dialog. Background, material, theme and settings controls have also been adjusted.
+
+This is a **Windows preview**, not a fully validated stable release. Some folder-opening and window-layout issues remain.
 
 ## Features
 
-- **Usage stats** — tracks foreground app active time; auto-detects idle, lock screen and sleep, excluded from active time
-- **App icons** — resolves the foreground app and its icon in real time; lives in the system tray with a quick right-click menu
-- **Dashboard** — bar chart / donut chart / 24h hourly distribution / daily summary / app distribution carousel, synced with the calendar
-- **Journal** — social-feed style diary: Markdown editing, image albums, auto-saved drafts, grouped & collapsible by day
-- **Settings** — monitoring parameters, excluded apps, startup/minimize behavior, and persistent theme/font/background/dashboard preferences
-- **Background & app picker** — local background images with opacity control, running-process selection, and executable icons
+- Activity statistics: time ranges, bar and pie charts, application details and hourly distribution.
+- Timeline: review applications and durations by time segment.
+- Local journal: Markdown, images and optional AI summaries.
+- Workspace widgets: tasks, Pomodoro, countdown and poetry.
+- Desktop preferences: background, theme, fonts, materials, tray, startup and excluded applications.
 
 ## Screenshots
 
-| | |
-| --- | --- |
-| ![Bar chart](docs/screenshots/dashboard-bar.png) | ![Donut chart](docs/screenshots/dashboard-pie.png) |
-| ![Daily summary](docs/screenshots/dashboard-summary.png) | ![App distribution](docs/screenshots/dashboard-apps.png) |
-| ![Hourly distribution](docs/screenshots/dashboard-hourly.png) | |
+### Activity timeline
 
-## Tech Stack
+![Activity timeline](docs/screenshots/v1.2-time-flow.png)
 
-| Module | Description |
-| --- | --- |
-| `crates/core` | Rust core: Win32 event-hook monitoring, idle/sleep detection, SQLite storage |
-| `bridge` | flutter_rust_bridge bindings |
-| `app/` | Flutter UI: Riverpod 3 + Material 3, Windows desktop |
+### Daily activity summary
 
-## Build
+![Daily summary](docs/screenshots/v1.2-usage-summary.png)
 
-### Prerequisites
+### Application details and hourly distribution
 
-- Windows 10/11
-- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows) (stable channel)
-- [Rust toolchain](https://rustup.rs/) (`cargo` must be on PATH; the Rust bridge is built automatically)
-- Visual Studio 2022 (Desktop development with C++ workload)
+![Application details](docs/screenshots/v1.2-app-details.png)
 
-### Commands
+![Hourly distribution](docs/screenshots/v1.2-hourly.png)
 
-```bash
-# 1) Rust workspace tests
-cargo test --workspace
+### Expanded timeline records
 
-# 2) Flutter static analysis
-cd app && flutter analyze --no-fatal-infos
+![Timeline details](docs/screenshots/v1.2-time-flow-details.png)
 
-# 3) Windows Release build (compiles & copies timetrace_bridge.dll automatically)
-cd app && flutter build windows --release
-# Output: app/build/windows/x64/runner/Release/
+### AI summary preview
 
-# 4) Flutter tests
-cd app && flutter test
-```
+![AI summary](docs/screenshots/v1.2-ai-summary.png)
+
+### Appearance settings
+
+![Theme, language and fonts](docs/screenshots/v1.2-appearance.png)
+
+The owner selected these screenshots to show the current Windows interface. The wallpaper is user-selected and is not bundled as a default.
 
 ## Download
 
-- Latest release: <https://github.com/wellorbetter/timetrace/releases>
-- Grab `TimeTrace-vX.Y.Z-windows-x64.zip`, unzip and run `timetrace_app.exe` — no install needed.
+Get `TimeTrace-v1.2.0-preview.1-windows-x64.zip` from the [preview release](https://github.com/wellorbetter/timetrace/releases/tag/v1.2.0-preview.1), extract the complete archive and run `Release/timetrace_app.exe`. Windows 10 / 11 x64.
 
-## How It Was Built
+Exit the old version and back up your records before updating. Do not run multiple recording instances. Windows file properties still report the older `1.0.1`; identify this preview by its release tag and archive name.
 
-Vibe-coded end to end: prototyped with DeepSeek V4 Flash + Pi, then polished with Codex for performance and UX.
+There is no new macOS build in this release. Historical macOS packages do not validate the current interface.
 
 ## Privacy
 
-All data stays in local SQLite (`%APPDATA%\TimeTrace\time.db`); nothing is uploaded.
+Basic activity records and journals are stored locally, without requiring an account. When enabled and triggered, AI summaries send necessary content to your configured model service, subject to its privacy policy and pricing. Statistics and local journaling work without AI. Poetry may access a public service, so this is not a completely offline application.
+
+Databases, journal images, executable paths and window titles may contain private information. Back them up and do not include keys or private records in issue reports.
+
+## Source and build
+
+This preview was developed from an earlier baseline. Use [release/v1.2.0-preview.1](https://github.com/wellorbetter/timetrace/tree/release/v1.2.0-preview.1) or its corresponding tag, rather than assuming main contains this interface.
+
+Windows builds require Flutter, Rust and Visual Studio with Desktop development with C++:
+
+```powershell
+git switch release/v1.2.0-preview.1
+cd app
+flutter pub get
+flutter build windows --release --no-tree-shake-icons
+```
+
+Run `flutter analyze`, `flutter test` and the relevant Rust tests for diagnostics. Test import errors remain in the preview; a successful release build is not evidence of a complete passing regression suite.
+
+| Module | Responsibility |
+| --- | --- |
+| `crates/core` | Activity tracking and SQLite storage |
+| `bridge` | Rust / Flutter bindings |
+| `app` | Flutter desktop interface |
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party components retain their licenses. The personal wallpaper shown in screenshots is not distributed as a reusable default asset.
